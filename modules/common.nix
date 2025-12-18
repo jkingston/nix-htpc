@@ -42,5 +42,11 @@
 
   networking.networkmanager.enable = true;
 
+  # Useful tools
+  environment.systemPackages = with pkgs; [
+    termscp  # TUI file transfer (SFTP/SCP/FTP)
+    zellij   # Terminal multiplexer for persistent sessions
+  ];
+
   system.stateVersion = "25.11";
 }
