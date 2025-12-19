@@ -44,7 +44,7 @@
 
   # Useful tools
   environment.systemPackages = with pkgs; [
-    termscp  # TUI file transfer (SFTP/SCP/FTP)
+    lftp     # File transfer with parallel downloads and queue
     zellij   # Terminal multiplexer for persistent sessions
   ];
 
