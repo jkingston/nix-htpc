@@ -40,6 +40,9 @@
   # Enable flakes for future updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # Allow running dynamically linked binaries (e.g., from uv, cargo, etc.)
+  programs.nix-ld.enable = true;
+
   networking.networkmanager.enable = true;
 
   # Useful tools
