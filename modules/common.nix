@@ -43,6 +43,9 @@
   # Allow running dynamically linked binaries (e.g., from uv, cargo, etc.)
   programs.nix-ld.enable = true;
 
+  # Terminfo for modern terminals (ghostty, kitty, foot, etc.)
+  environment.enableAllTerminfo = true;
+
   networking.networkmanager.enable = true;
 
   # Useful tools
