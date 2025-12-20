@@ -46,6 +46,9 @@
   # Terminfo for modern terminals (ghostty, kitty, foot, etc.)
   environment.enableAllTerminfo = true;
 
+  # Accept COLORTERM from SSH clients for truecolor support in TUI apps
+  services.openssh.settings.AcceptEnv = "COLORTERM TERM";
+
   networking.networkmanager.enable = true;
 
   # Useful tools
