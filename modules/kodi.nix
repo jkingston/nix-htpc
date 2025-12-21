@@ -12,7 +12,6 @@ let
 
   kodiWithAddons = kodiFixed.withPackages (kodiPkgs: with kodiPkgs; [
     jellyfin
-    jellycon
     inputstream-adaptive
   ]);
 in
