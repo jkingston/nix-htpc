@@ -26,9 +26,8 @@
     };
 
     users.admin = {
-      mutable = false;
+      mutable = true;
       permissions.isAdministrator = true;
-      password = "jellyfin";
     };
 
     libraries = {
