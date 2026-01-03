@@ -16,13 +16,10 @@
       };
     };
 
-    # Per-addon settings
-    addonSettings = {
-      "plugin.video.jellyfin" = {
-        server = "http://localhost:8096";
-        startupDelay = "20";  # Wait for Jellyfin container + USB mount
-      };
-    };
+    # Note: Jellyfin addon settings are NOT managed by Home Manager.
+    # The addon stores auth tokens, sync state, and SyncInstallRunDone flag
+    # in settings.xml. Home Manager would overwrite these on every rebuild,
+    # causing the setup wizard to re-appear. Configure via Kodi UI on first run.
 
     # Media library sources
     sources = {

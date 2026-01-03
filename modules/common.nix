@@ -1,5 +1,8 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 {
+  # Allow unfree packages (Steam, emulators, codecs, etc.)
+  nixpkgs.config.allowUnfree = true;
+
   # Use latest stable kernel for best hardware support
   boot.kernelPackages = pkgs.linuxPackages_latest;
 

@@ -12,13 +12,9 @@
       url = "github:nix-community/home-manager/release-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    declarative-jellyfin = {
-      url = "github:Sveske-Juice/declarative-jellyfin";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, disko, nixos-hardware, home-manager, declarative-jellyfin, ... }@inputs: {
+  outputs = { self, nixpkgs, disko, nixos-hardware, home-manager, ... }@inputs: {
     nixosConfigurations = {
       htpc-server = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -31,7 +27,6 @@
           ./modules/home.nix
           ./modules/kodi.nix
           ./modules/cec.nix
-          # ./modules/jellyfin.nix  # Disabled: nixpkgs Jellyfin build broken
           ./modules/jellyfin-container.nix
           ./modules/media-mount.nix
         ];
