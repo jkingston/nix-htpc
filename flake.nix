@@ -31,7 +31,8 @@
           ./modules/home.nix
           ./modules/kodi.nix
           ./modules/cec.nix
-          ./modules/jellyfin.nix
+          # ./modules/jellyfin.nix  # Disabled: nixpkgs Jellyfin build broken
+          ./modules/jellyfin-container.nix
           ./modules/media-mount.nix
         ];
       };

@@ -19,7 +19,8 @@
     # Per-addon settings
     addonSettings = {
       "plugin.video.jellyfin" = {
-        server_address = "http://localhost:8096";
+        server = "http://localhost:8096";
+        startupDelay = "20";  # Wait for Jellyfin container + USB mount
       };
     };
 

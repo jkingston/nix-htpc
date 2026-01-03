@@ -6,10 +6,11 @@
   time.timeZone = "Europe/London";
   i18n.defaultLocale = "en_GB.UTF-8";
 
-  # HTPC user
+  # HTPC user (auto-login via greetd, no password needed)
   users.users.htpc = {
     isNormalUser = true;
     extraGroups = [ "video" "audio" "render" "input" ];
+    hashedPassword = "!";  # Locked password (auto-login via greetd)
   };
 
   # Zram swap (compressed RAM - quieter than disk swap, ideal for HTPC)
@@ -30,6 +31,7 @@
   services.avahi = {
     enable = true;
     nssmdns4 = true;  # Enable .local resolution for IPv4
+    allowInterfaces = [ "enp1s0" ];  # Only announce on main ethernet (not podman/veth)
     publish = {
       enable = true;
       addresses = true;     # Publish hostname.local

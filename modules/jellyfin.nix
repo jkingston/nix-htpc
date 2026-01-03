@@ -27,6 +27,7 @@
 
     users.admin = {
       mutable = true;
+      password = "";  # Empty password - set via Jellyfin UI since mutable=true
       permissions.isAdministrator = true;
     };
 
