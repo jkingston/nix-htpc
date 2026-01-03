@@ -13,7 +13,7 @@
       volumes = [
         "/var/lib/jellyfin:/config"
         "/var/cache/jellyfin:/cache"
-        "/mnt/hdd/media:/media:ro"
+        "/mnt/hdd/media:/media"
       ];
       extraOptions = [
         "--device=/dev/dri:/dev/dri"  # VAAPI hardware acceleration
