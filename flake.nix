@@ -29,6 +29,7 @@
           ./modules/cec.nix
           ./modules/jellyfin-container.nix
           ./modules/media-mount.nix
+          ./modules/gaming.nix
         ];
       };
       htpc-pi = nixpkgs.lib.nixosSystem {

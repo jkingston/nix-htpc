@@ -14,18 +14,55 @@ let
     jellyfin
     inputstream-adaptive
   ]);
+
+  # Steam session via gamescope (Valve's gaming compositor)
+  steamSession = pkgs.writeShellScript "steam-session" ''
+    export SDL_VIDEODRIVER=wayland
+    export XDG_SESSION_TYPE=wayland
+    exec ${pkgs.gamescope}/bin/gamescope \
+      -e -f --adaptive-sync --force-grab-cursor \
+      -- steam -tenfoot -steamos
+  '';
+
+  # Session selector - checks flag file to decide Kodi vs Steam
+  sessionSelector = pkgs.writeShellScript "htpc-session-selector" ''
+    SESSION_FILE="/tmp/htpc-session-request"
+    if [ -f "$SESSION_FILE" ]; then
+      SESSION=$(cat "$SESSION_FILE")
+      rm -f "$SESSION_FILE"
+    else
+      SESSION="kodi"
+    fi
+
+    case "$SESSION" in
+      steam) exec ${steamSession} ;;
+      *) exec ${kodiWithAddons}/bin/kodi-standalone ;;
+    esac
+  '';
+
+  # Launcher script for Kodi to invoke (switches to Steam session)
+  steamLauncher = pkgs.writeShellScriptBin "steam-launcher" ''
+    echo "steam" > /tmp/htpc-session-request
+    ${pkgs.curl}/bin/curl -s -X POST -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"Application.Quit","id":1}' \
+      http://localhost:8080/jsonrpc
+  '';
+
 in
 {
-  # Auto-login to Kodi session via greetd
+  # Auto-login to HTPC session via greetd (Kodi by default, Steam if requested)
   services.greetd = {
     enable = true;
     settings = {
       default_session = {
-        command = "${kodiWithAddons}/bin/kodi-standalone";
+        command = "${sessionSelector}";
         user = "htpc";
       };
     };
   };
+
+  # Steam launcher available system-wide for Kodi to invoke
+  environment.systemPackages = [ steamLauncher ];
 
   # Open firewall for Kodi remote apps
   networking.firewall.allowedTCPPorts = [ 8080 ];
