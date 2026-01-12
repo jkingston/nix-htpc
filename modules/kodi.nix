@@ -15,10 +15,33 @@ let
     inputstream-adaptive
   ]);
 
+  # Generate 4K splash images for session transitions
+  mkSplash = text: pkgs.runCommand "splash-${builtins.replaceStrings [" " "..."] ["-" ""] text}.png" {
+    buildInputs = [ pkgs.imagemagick ];
+  } ''
+    magick -size 3840x2160 xc:black \
+      -font "DejaVu-Sans" -pointsize 72 -fill white \
+      -gravity center -annotate 0 "${text}" \
+      $out
+  '';
+  steamSplash = mkSplash "Loading Steam...";
+  kodiSplash = mkSplash "Loading Kodi...";
+
   # Steam session via gamescope (Valve's gaming compositor)
   steamSession = pkgs.writeShellScript "steam-session" ''
+    # Show splash on framebuffer during Steam startup (~15-20s)
+    ${pkgs.fbida}/bin/fbi -T 1 -d /dev/fb0 --noverbose -a ${steamSplash} 2>/dev/null &
+    SPLASH_PID=$!
+
+    # CEC wake - ensure TV stays on during session switch
+    ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec0 --image-view-on 2>/dev/null || true
+
     export SDL_VIDEODRIVER=wayland
     export XDG_SESSION_TYPE=wayland
+
+    # Kill splash after gamescope takes over
+    (sleep 5 && kill $SPLASH_PID 2>/dev/null) &
+
     exec ${pkgs.gamescope}/bin/gamescope \
       -e -f --adaptive-sync --force-grab-cursor \
       -- steam -tenfoot -steamos
@@ -36,7 +59,19 @@ let
 
     case "$SESSION" in
       steam) exec ${steamSession} ;;
-      *) exec ${kodiWithAddons}/bin/kodi-standalone ;;
+      *)
+        # Only show fbi splash if Plymouth isn't running (i.e., session switch, not boot)
+        if ! ${pkgs.plymouth}/bin/plymouth --ping 2>/dev/null; then
+          ${pkgs.fbida}/bin/fbi -T 1 -d /dev/fb0 --noverbose -a ${kodiSplash} 2>/dev/null &
+          SPLASH_PID=$!
+          (sleep 10 && kill $SPLASH_PID 2>/dev/null) &
+        fi
+
+        # CEC wake - ensure TV stays on during session switch
+        ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec0 --image-view-on 2>/dev/null || true
+
+        exec ${kodiWithAddons}/bin/kodi-standalone
+        ;;
     esac
   '';
 
