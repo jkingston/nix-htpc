@@ -30,6 +30,21 @@
     pulse.enable = true;
   };
 
+  # Bluetooth for game controllers
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+    settings = {
+      General = {
+        Experimental = true;      # Battery status support
+        FastConnectable = true;   # Faster reconnection
+      };
+      Policy = {
+        AutoEnable = true;
+      };
+    };
+  };
+
   # Avahi/mDNS for .local hostname resolution (Bonjour)
   services.avahi = {
     enable = true;
