@@ -50,8 +50,65 @@ let
     exec ${retroarchWithCores}/bin/retroarch -f -L "$CORE_PATH" "$@"
   '';
 
+  # Launcher script for Steam to invoke (switches to Kodi session)
+  kodiLauncher = pkgs.writeShellScriptBin "kodi-launcher" ''
+    echo "kodi" > /tmp/htpc-session-request
+    # Shutdown Steam gracefully
+    ${pkgs.steam}/bin/steam -shutdown
+  '';
+
+  # Script to switch from Kodi to Steam when a controller connects
+  controllerSwitchScript = pkgs.writeShellScript "controller-switch-to-steam" ''
+    SESSION_FILE="/tmp/htpc-session-request"
+    KODI_API="http://localhost:8080/jsonrpc"
+
+    # Check if Kodi is currently running by pinging JSON-RPC
+    if ! ${pkgs.curl}/bin/curl -s -X POST \
+         -H "Content-Type: application/json" \
+         -d '{"jsonrpc":"2.0","method":"JSONRPC.Ping","id":1}' \
+         "$KODI_API" 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q '"result":"pong"'; then
+      # Kodi not running (probably in Steam already) - do nothing
+      exit 0
+    fi
+
+    # Check if we already requested a session switch (prevent double-trigger)
+    if [ -f "$SESSION_FILE" ]; then
+      exit 0
+    fi
+
+    # Request Steam session and quit Kodi
+    echo "steam" > "$SESSION_FILE"
+
+    # Send CEC wake to turn on TV (device is /dev/cec1 on this hardware)
+    ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec1 --image-view-on 2>/dev/null || true
+
+    # Tell Kodi to quit (greetd will restart with Steam)
+    ${pkgs.curl}/bin/curl -s -X POST \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"Application.Quit","id":1}' \
+      "$KODI_API" 2>/dev/null || true
+  '';
+
 in
 {
+  # udev rule: Trigger Steam switch when game controller connects
+  # Matches joystick devices (js0, js1, etc.) which are created for game controllers
+  services.udev.extraRules = ''
+    # Game controller connected - switch to Steam if in Kodi
+    ACTION=="add", SUBSYSTEM=="input", KERNEL=="js[0-9]*", TAG+="systemd", ENV{SYSTEMD_WANTS}="controller-switch-to-steam.service"
+  '';
+
+  # Systemd service triggered by udev when controller connects
+  systemd.services.controller-switch-to-steam = {
+    description = "Switch to Steam session when game controller connects";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${controllerSwitchScript}";
+      # Run as htpc user to access Kodi API
+      User = "htpc";
+    };
+  };
+
   # Steam with Proton support
   programs.steam = {
     enable = true;
@@ -87,6 +144,9 @@ in
     pcsx2Wrapper
     duckstationWrapper
     retroarchWrapper
+
+    # Session launcher for returning to Kodi from Steam
+    kodiLauncher
 
     # ROM management
     steam-rom-manager
