@@ -11,9 +11,10 @@ from urllib.parse import unquote
 
 from pier.core.constants import (
     DOWNLOAD_CHUNK_SIZE,
-    HTTP_TIMEOUT,
+    DOWNLOAD_TIMEOUT,
     MYRIENT_BASE_URL,
     SEARCH_RESULT_LIMIT,
+    USER_AGENT,
 )
 from pier.core.errors import UnknownSystemError
 from pier.core.http import AsyncHTTPClient
@@ -35,7 +36,11 @@ class MyrientBrowser(AsyncHTTPClient):
     """Browse and download ROMs from myrient.erista.me."""
 
     def __init__(self) -> None:
-        super().__init__(timeout=HTTP_TIMEOUT, follow_redirects=True)
+        super().__init__(
+            timeout=DOWNLOAD_TIMEOUT,
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+        )
         self.base_url = MYRIENT_BASE_URL
 
     async def list_directory(self, path: str) -> list[MyrientEntry]:

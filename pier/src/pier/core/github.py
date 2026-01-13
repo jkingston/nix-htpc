@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pier.core.constants import DOWNLOAD_CHUNK_SIZE, RELEASE_FETCH_LIMIT
+from pier.core.errors import ReleaseNotFoundError
 from pier.core.http import GitHubAPIClient
 
 
@@ -52,6 +53,8 @@ class GitHubClient(GitHubAPIClient):
     async def get_latest_release(self, repo: str) -> Release:
         """Get the latest release for a repository.
 
+        Falls back to first release if no stable release exists (all prereleases).
+
         Args:
             repo: Repository in "owner/repo" format
 
@@ -61,6 +64,14 @@ class GitHubClient(GitHubAPIClient):
         client = await self._get_client()
         url = f"{self.api_base}/repos/{repo}/releases/latest"
         response = await client.get(url)
+
+        # /releases/latest returns 404 if all releases are prereleases
+        if response.status_code == 404:
+            releases = await self.get_releases(repo)
+            if not releases:
+                raise ReleaseNotFoundError(repo)
+            return releases[0]
+
         response.raise_for_status()
         data = response.json()
 

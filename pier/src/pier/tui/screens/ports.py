@@ -1,5 +1,7 @@
 """Ports management screen."""
 
+import time
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
@@ -214,11 +216,19 @@ class PortsScreen(PierScreen):
             return
 
         # Create callbacks that update the progress screen
+        # Throttle progress updates to max 10/sec to avoid excessive cross-thread calls
+        last_progress_update = 0.0
+
         def on_status(message: str) -> None:
             self.app.call_from_thread(progress_screen.update_status, message)
 
         def on_progress(downloaded: int, total: int) -> None:
-            self.app.call_from_thread(progress_screen.update_progress, downloaded, total)
+            nonlocal last_progress_update
+            now = time.time()
+            # Only update UI max 10 times per second, or on completion
+            if now - last_progress_update >= 0.1 or downloaded >= total:
+                last_progress_update = now
+                self.app.call_from_thread(progress_screen.update_progress, downloaded, total)
 
         progress = ProgressReporter(on_status=on_status, on_progress=on_progress)
 
@@ -240,8 +250,9 @@ class PortsScreen(PierScreen):
                 progress_screen.mark_complete, False, f"Installation failed: {e}"
             )
         except Exception as e:
+            error_details = f"{type(e).__name__}: {e}"
             self.app.call_from_thread(
-                progress_screen.mark_complete, False, f"Error: {e}"
+                progress_screen.mark_complete, False, f"Error: {error_details}"
             )
         finally:
             self.app.call_from_thread(self.refresh_table)

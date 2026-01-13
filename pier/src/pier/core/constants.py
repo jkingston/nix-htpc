@@ -66,6 +66,11 @@ ROM_EXTENSIONS = frozenset(
         ".rvz",
         ".gcm",
         ".wbfs",  # GameCube/Wii
+        ".cso",  # PSP compressed
+        ".nds",  # Nintendo DS
+        ".gdi",
+        ".cdi",
+        ".chd",  # Dreamcast
     }
 )
 
@@ -83,7 +88,7 @@ RETROARCH_SYSTEM_RAW = "https://raw.githubusercontent.com/Abdess/retroarch_syste
 # User agent
 # =============================================================================
 
-USER_AGENT = "pier-htpc"
+USER_AGENT = "curl/8.0 (pier-htpc)"
 
 # =============================================================================
 # Executables

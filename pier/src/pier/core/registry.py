@@ -62,6 +62,8 @@ class System:
     myrient_path: str  # Base path on myrient
     extensions: list[str]  # Valid file extensions
     libretro_name: str  # Name for libretro-thumbnails
+    emulator_wrapper: str = ""  # Wrapper script (e.g., "dolphin-wrapper")
+    emulator_args: str = ""  # Args for wrapper (e.g., RetroArch core name)
 
 
 # System definitions
@@ -72,6 +74,8 @@ SYSTEMS: dict[str, System] = {
         myrient_path="No-Intro/Nintendo%20-%20Nintendo%2064%20(BigEndian)",
         extensions=[".z64", ".n64", ".v64"],
         libretro_name="Nintendo - Nintendo 64",
+        emulator_wrapper="retroarch-wrapper",
+        emulator_args="mupen64plus_next",
     ),
     "snes": System(
         id="snes",
@@ -79,6 +83,8 @@ SYSTEMS: dict[str, System] = {
         myrient_path="No-Intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System",
         extensions=[".sfc", ".smc"],
         libretro_name="Nintendo - Super Nintendo Entertainment System",
+        emulator_wrapper="retroarch-wrapper",
+        emulator_args="snes9x",
     ),
     "nes": System(
         id="nes",
@@ -86,6 +92,8 @@ SYSTEMS: dict[str, System] = {
         myrient_path="No-Intro/Nintendo%20-%20Nintendo%20Entertainment%20System%20(Headered)",
         extensions=[".nes"],
         libretro_name="Nintendo - Nintendo Entertainment System",
+        emulator_wrapper="retroarch-wrapper",
+        emulator_args="mesen",
     ),
     "gba": System(
         id="gba",
@@ -93,6 +101,8 @@ SYSTEMS: dict[str, System] = {
         myrient_path="No-Intro/Nintendo%20-%20Game%20Boy%20Advance",
         extensions=[".gba"],
         libretro_name="Nintendo - Game Boy Advance",
+        emulator_wrapper="retroarch-wrapper",
+        emulator_args="mgba",
     ),
     "genesis": System(
         id="genesis",
@@ -100,6 +110,8 @@ SYSTEMS: dict[str, System] = {
         myrient_path="No-Intro/Sega%20-%20Mega%20Drive%20-%20Genesis",
         extensions=[".md", ".bin", ".gen"],
         libretro_name="Sega - Mega Drive - Genesis",
+        emulator_wrapper="retroarch-wrapper",
+        emulator_args="genesis_plus_gx",
     ),
     "ps1": System(
         id="ps1",
@@ -107,6 +119,7 @@ SYSTEMS: dict[str, System] = {
         myrient_path="Redump/Sony%20-%20PlayStation",
         extensions=[".bin", ".cue", ".iso"],
         libretro_name="Sony - PlayStation",
+        emulator_wrapper="duckstation-wrapper",
     ),
     "ps2": System(
         id="ps2",
@@ -114,6 +127,7 @@ SYSTEMS: dict[str, System] = {
         myrient_path="Redump/Sony%20-%20PlayStation%202",
         extensions=[".iso", ".bin", ".cue"],
         libretro_name="Sony - PlayStation 2",
+        emulator_wrapper="pcsx2-wrapper",
     ),
     "gc": System(
         id="gc",
@@ -121,6 +135,7 @@ SYSTEMS: dict[str, System] = {
         myrient_path="Redump/Nintendo%20-%20GameCube%20-%20NKit%20RVZ",
         extensions=[".rvz", ".iso", ".gcm"],
         libretro_name="Nintendo - GameCube",
+        emulator_wrapper="dolphin-wrapper",
     ),
     "wii": System(
         id="wii",
@@ -128,6 +143,31 @@ SYSTEMS: dict[str, System] = {
         myrient_path="Redump/Nintendo%20-%20Wii%20-%20NKit%20RVZ",
         extensions=[".rvz", ".iso", ".wbfs"],
         libretro_name="Nintendo - Wii",
+        emulator_wrapper="dolphin-wrapper",
+    ),
+    "psp": System(
+        id="psp",
+        name="PlayStation Portable",
+        myrient_path="Redump/Sony%20-%20PlayStation%20Portable",
+        extensions=[".iso", ".cso"],
+        libretro_name="Sony - PlayStation Portable",
+        emulator_wrapper="ppsspp-wrapper",
+    ),
+    "nds": System(
+        id="nds",
+        name="Nintendo DS",
+        myrient_path="No-Intro/Nintendo%20-%20Nintendo%20DS%20(Decrypted)",
+        extensions=[".nds"],
+        libretro_name="Nintendo - Nintendo DS",
+        emulator_wrapper="melonds-wrapper",
+    ),
+    "dreamcast": System(
+        id="dreamcast",
+        name="Sega Dreamcast",
+        myrient_path="Redump/Sega%20-%20Dreamcast",
+        extensions=[".gdi", ".cdi", ".chd"],
+        libretro_name="Sega - Dreamcast",
+        emulator_wrapper="flycast-wrapper",
     ),
 }
 

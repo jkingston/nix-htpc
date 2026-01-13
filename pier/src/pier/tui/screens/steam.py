@@ -6,7 +6,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Button, DataTable, Footer, Header, Static
 
 from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
-from pier.core.registry import get_port
+from pier.core.registry import get_port, get_system
 from pier.tui.screens.base import PierScreen
 
 
@@ -133,8 +133,17 @@ class SteamScreen(PierScreen):
             if self.library.is_linked_to_steam(port_id)
         )
 
+        # Count ROMs
+        total_roms = sum(len(roms) for roms in self.library.downloaded_roms.values())
+        linked_roms = sum(
+            1
+            for system, roms in self.library.downloaded_roms.items()
+            for rom in roms
+            if self.library.is_linked_to_steam(f"rom:{system}:{rom}")
+        )
+
         info = self.query_one("#steam-info", Static)
-        info.update(f"Ports: {linked_ports}/{total_ports} linked to Steam | Press Space to toggle")
+        info.update(f"Ports: {linked_ports}/{total_ports} | ROMs: {linked_roms}/{total_roms} | Press Space to toggle")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection."""
@@ -188,8 +197,10 @@ class SteamScreen(PierScreen):
 
         try:
             steam = SteamLibrary()
-            synced = 0
+            synced_ports = 0
+            synced_roms = 0
 
+            # Sync installed ports
             for port_id, info in self.library.installed_ports.items():
                 if self.library.is_linked_to_steam(port_id):
                     port = get_port(port_id)
@@ -203,9 +214,47 @@ class SteamScreen(PierScreen):
                                 launch_options=f'"{exe_path}"',
                                 tags=[PIER_TAG, PORTS_TAG],
                             )
-                            synced += 1
+                            synced_ports += 1
 
-            self.app.call_from_thread(self.notify_success, f"Synced {synced} shortcuts to Steam")
+            # Sync downloaded ROMs with their emulator wrappers
+            for system_id, roms in self.library.downloaded_roms.items():
+                system = get_system(system_id)
+                if not system or not system.emulator_wrapper:
+                    continue
+
+                for rom_name in roms:
+                    rom_id = f"rom:{system_id}:{rom_name}"
+                    if not self.library.is_linked_to_steam(rom_id):
+                        continue
+
+                    rom_path = self.config.roms_dir / system_id / rom_name
+                    if not rom_path.exists():
+                        continue
+
+                    # Build launch options based on wrapper type
+                    wrapper = system.emulator_wrapper
+                    if system.emulator_args:
+                        # RetroArch: wrapper takes core name then ROM
+                        launch_options = f'{system.emulator_args} "{rom_path}"'
+                    else:
+                        # Standalone emulator: just the ROM path
+                        launch_options = f'"{rom_path}"'
+
+                    # Game name without extension
+                    game_name = rom_path.stem
+
+                    steam.add_shortcut(
+                        app_name=game_name,
+                        exe=f"/run/current-system/sw/bin/{wrapper}",
+                        start_dir=str(rom_path.parent),
+                        launch_options=launch_options,
+                        tags=[PIER_TAG, system.name],
+                    )
+                    synced_roms += 1
+
+            total = synced_ports + synced_roms
+            msg = f"Synced {total} shortcuts ({synced_ports} ports, {synced_roms} ROMs)"
+            self.app.call_from_thread(self.notify_success, msg)
         except FileNotFoundError:
             self.app.call_from_thread(
                 self.notify_error,

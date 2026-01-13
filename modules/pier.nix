@@ -10,11 +10,19 @@
 
     # Pier wrapper script
     (pkgs.writeShellScriptBin "pier" ''
+      # Use shared venv location so non-root users can run pier
+      export UV_PROJECT_ENVIRONMENT="/var/lib/pier/.venv"
       cd /etc/nixos/pier && exec ${pkgs.uv}/bin/uv run pier "$@"
     '')
 
     # steam-run is required for running AppImages and non-Nix binaries
     pkgs.steam-run
+  ];
+
+  # Create shared venv directory with appropriate permissions
+  # 0775 allows users group to write (htpc is in users group)
+  systemd.tmpfiles.rules = [
+    "d /var/lib/pier 0775 root users -"
   ];
 
   # Auto-update timer (runs weekly)

@@ -50,6 +50,24 @@ let
     exec ${retroarchWithCores}/bin/retroarch -f -L "$CORE_PATH" "$@"
   '';
 
+  # PPSSPP (PSP) wrapper
+  ppssppWrapper = pkgs.writeShellScriptBin "ppsspp-wrapper" ''
+    # PPSSPP wrapper for Steam - standalone is much better than RetroArch core
+    exec ${pkgs.ppsspp}/bin/ppsspp --fullscreen "$@"
+  '';
+
+  # melonDS (Nintendo DS) wrapper
+  melondsWrapper = pkgs.writeShellScriptBin "melonds-wrapper" ''
+    # melonDS wrapper for Steam - standalone with better features than RetroArch
+    exec ${pkgs.melonDS}/bin/melonDS --fullscreen "$@"
+  '';
+
+  # Flycast (Dreamcast/Naomi/Atomiswave) wrapper
+  flycastWrapper = pkgs.writeShellScriptBin "flycast-wrapper" ''
+    # Flycast wrapper for Steam
+    exec ${pkgs.flycast}/bin/flycast --config window:fullscreen=yes "$@"
+  '';
+
   # Launcher script for Steam to invoke (switches to Kodi session)
   kodiLauncher = pkgs.writeShellScriptBin "kodi-launcher" ''
     echo "kodi" > /tmp/htpc-session-request
@@ -135,6 +153,9 @@ in
     dolphin-emu     # GameCube / Wii
     pcsx2           # PS2
     duckstation     # PS1
+    ppsspp          # PSP
+    melonDS         # Nintendo DS
+    flycast         # Dreamcast / Naomi / Atomiswave
 
     # RetroArch (2D consoles)
     retroarchWithCores
@@ -144,6 +165,9 @@ in
     pcsx2Wrapper
     duckstationWrapper
     retroarchWrapper
+    ppssppWrapper
+    melondsWrapper
+    flycastWrapper
 
     # Session launcher for returning to Kodi from Steam
     kodiLauncher

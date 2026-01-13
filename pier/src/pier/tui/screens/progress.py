@@ -216,6 +216,8 @@ class InstallProgressScreen(ModalScreen[bool]):
 
     def update_steps(self) -> None:
         """Update step display."""
+        if not self.is_mounted:
+            return
         for step in self.progress.steps:
             widget = self.query_one(f"#step-{step.name}", Static)
             widget.update(self._format_step(step))
@@ -223,6 +225,8 @@ class InstallProgressScreen(ModalScreen[bool]):
 
     def update_progress(self, downloaded: int, total: int) -> None:
         """Update progress bar."""
+        if not self.is_mounted:
+            return
         if total > 0:
             pct = (downloaded / total) * 100
             self.progress.progress = downloaded / total
@@ -246,6 +250,8 @@ class InstallProgressScreen(ModalScreen[bool]):
     def update_status(self, message: str) -> None:
         """Update status message and log."""
         self.progress.log(message)
+        if not self.is_mounted:
+            return
 
         status = self.query_one("#status-text", Static)
         status.update(message)
@@ -285,6 +291,8 @@ class InstallProgressScreen(ModalScreen[bool]):
     def mark_complete(self, success: bool, message: str) -> None:
         """Mark installation as complete."""
         self._complete = True
+        if not self.is_mounted:
+            return
 
         status = self.query_one("#status-text", Static)
         if success:
