@@ -7,6 +7,7 @@ from textual.widgets import Button, DataTable, Footer, Header, Static
 
 from pier.core.registry import get_port, list_ports
 from pier.tui.screens.base import PierScreen
+from pier.tui.screens.progress import InstallProgress, InstallProgressScreen
 
 
 class PortsScreen(PierScreen):
@@ -173,8 +174,16 @@ class PortsScreen(PierScreen):
             self.notify_warning(f"{port.name} is already installed")
             return
 
-        self.notify_info(f"Installing {port.name}... (this may take a while)")
-        self.run_worker(self._install_port(self._selected_port_id), exclusive=True)
+        # Create progress tracker and modal
+        progress = InstallProgress.for_port_install(port.name)
+        progress_screen = InstallProgressScreen(progress)
+
+        # Push modal and start install
+        self.app.push_screen(progress_screen)
+        self.run_worker(
+            self._install_port_with_progress(self._selected_port_id, progress_screen),
+            exclusive=True,
+        )
 
     def action_update(self) -> None:
         """Update the selected port."""
@@ -193,27 +202,46 @@ class PortsScreen(PierScreen):
         self.notify_info(f"Checking for updates to {port.name}...")
         self.run_worker(self._update_port(self._selected_port_id), exclusive=True)
 
-    async def _install_port(self, port_id: str) -> None:
-        """Worker to install a port."""
-        from pier.core.installer import InstallError, PortInstaller
+    async def _install_port_with_progress(
+        self, port_id: str, progress_screen: InstallProgressScreen
+    ) -> None:
+        """Worker to install a port with progress reporting."""
+        from pier.core.installer import InstallError, PortInstaller, ProgressReporter
 
         port = get_port(port_id)
         if not port:
             return
 
+        # Create callbacks that update the progress screen
+        def on_status(message: str) -> None:
+            self.app.call_from_thread(progress_screen.update_status, message)
+
+        def on_progress(downloaded: int, total: int) -> None:
+            self.app.call_from_thread(progress_screen.update_progress, downloaded, total)
+
+        progress = ProgressReporter(on_status=on_status, on_progress=on_progress)
+
         try:
-            installer = PortInstaller(config=self.config, library=self.library)
+            installer = PortInstaller(
+                config=self.config, library=self.library, progress=progress
+            )
             await installer.install(
                 port_id,
                 with_mods=self.config.install_hd_textures,
                 add_to_steam=self.config.auto_add_to_steam,
                 fetch_artwork=self.config.auto_fetch_artwork,
             )
-            self.app.call_from_thread(self.notify_success, f"Successfully installed {port.name}!")
+            self.app.call_from_thread(
+                progress_screen.mark_complete, True, f"Successfully installed {port.name}!"
+            )
         except InstallError as e:
-            self.app.call_from_thread(self.notify_error, f"Installation failed: {e}")
+            self.app.call_from_thread(
+                progress_screen.mark_complete, False, f"Installation failed: {e}"
+            )
         except Exception as e:
-            self.app.call_from_thread(self.notify_error, f"Error: {e}")
+            self.app.call_from_thread(
+                progress_screen.mark_complete, False, f"Error: {e}"
+            )
         finally:
             self.app.call_from_thread(self.refresh_table)
 
