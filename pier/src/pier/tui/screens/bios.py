@@ -158,25 +158,25 @@ class BiosScreen(PierScreen):
         try:
             paths = await self.manager.download_recommended()
             if paths:
-                self.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
+                self.app.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
             else:
-                self.call_from_thread(
+                self.app.call_from_thread(
                     self.notify_info, "All recommended BIOS files already present"
                 )
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Error: {e}")
+            self.app.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
-            self.call_from_thread(self.refresh_table)
+            self.app.call_from_thread(self.refresh_table)
 
     async def _download_all(self) -> None:
         """Worker to download all BIOS files."""
         try:
             paths = await self.manager.download_all()
             if paths:
-                self.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
+                self.app.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
             else:
-                self.call_from_thread(self.notify_info, "All BIOS files already present")
+                self.app.call_from_thread(self.notify_info, "All BIOS files already present")
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Error: {e}")
+            self.app.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
-            self.call_from_thread(self.refresh_table)
+            self.app.call_from_thread(self.refresh_table)

@@ -205,11 +205,11 @@ class SteamScreen(PierScreen):
                             )
                             synced += 1
 
-            self.call_from_thread(self.notify_success, f"Synced {synced} shortcuts to Steam")
+            self.app.call_from_thread(self.notify_success, f"Synced {synced} shortcuts to Steam")
         except FileNotFoundError:
-            self.call_from_thread(
+            self.app.call_from_thread(
                 self.notify_error,
                 "Steam not found. Has Steam been run at least once?",
             )
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Sync failed: {e}")
+            self.app.call_from_thread(self.notify_error, f"Sync failed: {e}")

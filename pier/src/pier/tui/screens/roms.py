@@ -132,14 +132,14 @@ class RomsScreen(PierScreen):
             # Filter to only files (not directories)
             self._entries = [e for e in entries if not e.is_directory]
             self._filtered_entries = self._entries
-            self.call_from_thread(self._populate_table)
-            self.call_from_thread(
+            self.app.call_from_thread(self._populate_table)
+            self.app.call_from_thread(
                 self._update_status,
                 f"Found {len(self._entries)} ROMs for {SYSTEMS[self._current_system].name}",
             )
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Error loading ROMs: {e}")
-            self.call_from_thread(self._update_status, f"Error: {e}")
+            self.app.call_from_thread(self.notify_error, f"Error loading ROMs: {e}")
+            self.app.call_from_thread(self._update_status, f"Error: {e}")
         finally:
             await browser.close()
             self._loading = False
@@ -251,9 +251,9 @@ class RomsScreen(PierScreen):
             self.library.add_rom(self._current_system, path.name)
             self.library.save(self.config.pier_dir)
 
-            self.call_from_thread(self.notify_success, f"Downloaded: {path.name}")
-            self.call_from_thread(self._populate_table)
+            self.app.call_from_thread(self.notify_success, f"Downloaded: {path.name}")
+            self.app.call_from_thread(self._populate_table)
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Download failed: {e}")
+            self.app.call_from_thread(self.notify_error, f"Download failed: {e}")
         finally:
             await browser.close()

@@ -209,13 +209,13 @@ class PortsScreen(PierScreen):
                 add_to_steam=self.config.auto_add_to_steam,
                 fetch_artwork=self.config.auto_fetch_artwork,
             )
-            self.call_from_thread(self.notify_success, f"Successfully installed {port.name}!")
+            self.app.call_from_thread(self.notify_success, f"Successfully installed {port.name}!")
         except InstallError as e:
-            self.call_from_thread(self.notify_error, f"Installation failed: {e}")
+            self.app.call_from_thread(self.notify_error, f"Installation failed: {e}")
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Error: {e}")
+            self.app.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
-            self.call_from_thread(self.refresh_table)
+            self.app.call_from_thread(self.refresh_table)
 
     async def _update_port(self, port_id: str) -> None:
         """Worker to update a port."""
@@ -231,12 +231,12 @@ class PortsScreen(PierScreen):
 
             if update_info:
                 current, new = update_info
-                self.call_from_thread(self.notify_info, f"Updating {port.name}: {current} -> {new}")
+                self.app.call_from_thread(self.notify_info, f"Updating {port.name}: {current} -> {new}")
                 await installer.update(port_id)
-                self.call_from_thread(self.notify_success, f"Successfully updated {port.name}!")
+                self.app.call_from_thread(self.notify_success, f"Successfully updated {port.name}!")
             else:
-                self.call_from_thread(self.notify_info, f"{port.name} is already up to date")
+                self.app.call_from_thread(self.notify_info, f"{port.name} is already up to date")
         except Exception as e:
-            self.call_from_thread(self.notify_error, f"Update failed: {e}")
+            self.app.call_from_thread(self.notify_error, f"Update failed: {e}")
         finally:
-            self.call_from_thread(self.refresh_table)
+            self.app.call_from_thread(self.refresh_table)
