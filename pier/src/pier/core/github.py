@@ -1,9 +1,9 @@
 """GitHub releases API for fetching ports."""
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from pier.core.constants import DOWNLOAD_CHUNK_SIZE, RELEASE_FETCH_LIMIT
 from pier.core.http import GitHubAPIClient

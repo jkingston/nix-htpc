@@ -5,8 +5,8 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static
 
-from pier.core.registry import SYSTEMS, list_systems
 from pier.core.myrient import MyrientBrowser, MyrientEntry
+from pier.core.registry import SYSTEMS, list_systems
 from pier.tui.screens.base import PierScreen
 
 
@@ -135,7 +135,7 @@ class RomsScreen(PierScreen):
             self.call_from_thread(self._populate_table)
             self.call_from_thread(
                 self._update_status,
-                f"Found {len(self._entries)} ROMs for {SYSTEMS[self._current_system].name}"
+                f"Found {len(self._entries)} ROMs for {SYSTEMS[self._current_system].name}",
             )
         except Exception as e:
             self.call_from_thread(self.notify_error, f"Error loading ROMs: {e}")
@@ -176,10 +176,7 @@ class RomsScreen(PierScreen):
             self._filtered_entries = self._entries
         else:
             query_lower = query.lower()
-            self._filtered_entries = [
-                e for e in self._entries
-                if query_lower in e.name.lower()
-            ]
+            self._filtered_entries = [e for e in self._entries if query_lower in e.name.lower()]
         self._populate_table()
         if query:
             self._update_status(f"Found {len(self._filtered_entries)} matching ROMs")
@@ -202,17 +199,13 @@ class RomsScreen(PierScreen):
         """Handle row selection."""
         if event.row_key:
             path = str(event.row_key.value)
-            self._selected_entry = next(
-                (e for e in self._filtered_entries if e.path == path), None
-            )
+            self._selected_entry = next((e for e in self._filtered_entries if e.path == path), None)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Handle row highlight."""
         if event.row_key:
             path = str(event.row_key.value)
-            self._selected_entry = next(
-                (e for e in self._filtered_entries if e.path == path), None
-            )
+            self._selected_entry = next((e for e in self._filtered_entries if e.path == path), None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

@@ -1,38 +1,35 @@
 """Port installation logic."""
 
 import asyncio
-import os
 import shutil
 import stat
 import subprocess
 import tarfile
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
+from pier.core.artwork import ArtworkManager
 from pier.core.config import Config, Library
+from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
+from pier.core.errors import (
+    AssetGenerationError,
+    ExecutableNotFoundError,
+    InstallError,
+    ROMHashMismatchError,
+    UnknownPortError,
+    UnknownSystemError,
+    UnsafeArchiveError,
+)
+from pier.core.github import GitHubClient
+from pier.core.myrient import MyrientBrowser, verify_hash
 from pier.core.registry import (
-    PORTS,
     SYSTEMS,
     AssetGenerator,
-    Mod,
     Port,
     get_port,
 )
-from pier.core.myrient import MyrientBrowser, verify_hash
-from pier.core.github import GitHubClient, ReleaseAsset
-from pier.core.steam import SteamLibrary, generate_grid_id
-from pier.core.artwork import ArtworkManager
-from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
-from pier.core.errors import (
-    InstallError,
-    ROMHashMismatchError,
-    AssetGenerationError,
-    ExecutableNotFoundError,
-    UnsafeArchiveError,
-    UnknownPortError,
-    UnknownSystemError,
-)
+from pier.core.steam import SteamLibrary
 
 
 class ProgressReporter:
@@ -43,8 +40,8 @@ class ProgressReporter:
         on_status: Callable[[str], None] | None = None,
         on_progress: Callable[[int, int], None] | None = None,
     ):
-        self.on_status = on_status or (lambda s: None)
-        self.on_progress = on_progress or (lambda d, t: None)
+        self.on_status = on_status or (lambda _s: None)
+        self.on_progress = on_progress or (lambda _d, _t: None)
 
     def status(self, message: str):
         """Report a status message."""
@@ -185,9 +182,7 @@ class PortInstaller:
 
             self.progress.status(f"Downloading {port.name} {release.tag_name}...")
 
-            download_path = await github.download_asset(
-                asset, port_dir, self.progress.progress
-            )
+            download_path = await github.download_asset(asset, port_dir, self.progress.progress)
         finally:
             await github.close()
 
@@ -199,9 +194,7 @@ class PortInstaller:
 
         return executable_path
 
-    def _extract_and_find_executable(
-        self, download_path: Path, port_dir: Path, port: Port
-    ) -> Path:
+    def _extract_and_find_executable(self, download_path: Path, port_dir: Path, port: Port) -> Path:
         """Extract downloaded archive and find the executable."""
         suffix = download_path.suffix.lower()
 

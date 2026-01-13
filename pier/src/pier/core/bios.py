@@ -2,18 +2,18 @@
 
 import asyncio
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable
 
 import httpx
 
 from pier.core.config import Config
 from pier.core.constants import (
+    DOWNLOAD_CHUNK_SIZE,
     DOWNLOAD_TIMEOUT,
     HASH_CHUNK_SIZE,
-    DOWNLOAD_CHUNK_SIZE,
     RETROARCH_SYSTEM_RAW,
 )
 from pier.core.errors import BIOSHashMismatchError, UnknownBIOSError
@@ -231,13 +231,9 @@ class BiosManager(AsyncHTTPClient):
 
         actual_md5 = compute_md5(path)
         if actual_md5.lower() == bios.md5.lower():
-            return BiosCheckResult(
-                bios=bios, status=BiosStatus.VALID, actual_md5=actual_md5
-            )
+            return BiosCheckResult(bios=bios, status=BiosStatus.VALID, actual_md5=actual_md5)
         else:
-            return BiosCheckResult(
-                bios=bios, status=BiosStatus.INVALID, actual_md5=actual_md5
-            )
+            return BiosCheckResult(bios=bios, status=BiosStatus.INVALID, actual_md5=actual_md5)
 
     def check_all(self) -> list[BiosCheckResult]:
         """Check all BIOS files in the registry.

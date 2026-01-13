@@ -4,17 +4,16 @@ import binascii
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from pier.core.constants import PIER_TAG as _PIER_TAG, STEAM_USERDATA_PATHS
+from pier.core.constants import PIER_TAG as _PIER_TAG
+from pier.core.constants import STEAM_USERDATA_PATHS
 from pier.core.errors import SteamNotFoundError, SteamUserNotFoundError
 
-
 # VDF binary format constants
-VDF_TYPE_NONE = b'\x00'
-VDF_TYPE_STRING = b'\x01'
-VDF_TYPE_INT32 = b'\x02'
-VDF_TYPE_END = b'\x08'
+VDF_TYPE_NONE = b"\x00"
+VDF_TYPE_STRING = b"\x01"
+VDF_TYPE_INT32 = b"\x02"
+VDF_TYPE_END = b"\x08"
 
 
 @dataclass
@@ -45,7 +44,7 @@ def generate_appid(exe: str, app_name: str) -> int:
     The exe should include quotes (as stored in shortcuts.vdf).
     """
     key = exe + app_name
-    crc = binascii.crc32(key.encode('utf-8')) & 0xffffffff
+    crc = binascii.crc32(key.encode("utf-8")) & 0xFFFFFFFF
     appid = (crc | 0x80000000) ^ 0xFFFFFFFF
     if appid > 0x7FFFFFFF:
         appid -= 0x100000000
@@ -58,8 +57,8 @@ def generate_grid_id(exe: str, app_name: str) -> int:
     This is the same CRC32 calculation but kept unsigned for file naming.
     """
     key = exe + app_name
-    crc = binascii.crc32(key.encode('utf-8')) & 0xffffffff
-    return (crc | 0x80000000)
+    crc = binascii.crc32(key.encode("utf-8")) & 0xFFFFFFFF
+    return crc | 0x80000000
 
 
 def find_steam_userdata() -> Path:
@@ -108,23 +107,23 @@ class VDFReader:
     def read_byte(self) -> bytes:
         """Read a single byte."""
         if self.pos >= len(self.data):
-            return b''
+            return b""
         b = bytes([self.data[self.pos]])
         self.pos += 1
         return b
 
     def read_string(self) -> str:
         """Read a null-terminated string."""
-        end = self.data.find(b'\x00', self.pos)
+        end = self.data.find(b"\x00", self.pos)
         if end == -1:
             end = len(self.data)
-        s = self.data[self.pos:end].decode('utf-8', errors='replace')
+        s = self.data[self.pos : end].decode("utf-8", errors="replace")
         self.pos = end + 1
         return s
 
     def read_int32(self) -> int:
         """Read a 32-bit signed integer."""
-        val = struct.unpack('<i', self.data[self.pos:self.pos + 4])[0]
+        val = struct.unpack("<i", self.data[self.pos : self.pos + 4])[0]
         self.pos += 4
         return val
 
@@ -133,7 +132,7 @@ class VDFReader:
         result = {}
         while True:
             type_byte = self.read_byte()
-            if type_byte == VDF_TYPE_END or type_byte == b'':
+            if type_byte == VDF_TYPE_END or type_byte == b"":
                 break
 
             key = self.read_string()
@@ -163,12 +162,12 @@ class VDFWriter:
 
     def write_string(self, s: str):
         """Write a null-terminated string."""
-        self.data.extend(s.encode('utf-8'))
+        self.data.extend(s.encode("utf-8"))
         self.data.append(0)
 
     def write_int32(self, val: int):
         """Write a 32-bit signed integer."""
-        self.data.extend(struct.pack('<i', val))
+        self.data.extend(struct.pack("<i", val))
 
     def write_dict(self, d: dict, name: str | None = None):
         """Write a VDF dictionary."""
@@ -214,7 +213,7 @@ def load_shortcuts(path: Path | None = None) -> dict[str, dict]:
         data = path.read_bytes()
         reader = VDFReader(data)
         result = reader.read_dict()
-        return result.get('shortcuts', {})
+        return result.get("shortcuts", {})
     except (OSError, KeyError, struct.error):
         # File not readable, malformed VDF, or parsing error
         return {}
@@ -244,7 +243,7 @@ def save_shortcuts(shortcuts: dict[str, dict], path: Path | None = None):
     for key, shortcut in shortcuts.items():
         # Entry start: type byte + index key
         data.extend(VDF_TYPE_NONE)
-        data.extend(key.encode('utf-8'))
+        data.extend(key.encode("utf-8"))
         data.append(0)
 
         # Write shortcut fields
@@ -252,25 +251,25 @@ def save_shortcuts(shortcuts: dict[str, dict], path: Path | None = None):
             if isinstance(field_value, dict):
                 # Nested dict (e.g., tags)
                 data.extend(VDF_TYPE_NONE)
-                data.extend(field_key.encode('utf-8'))
+                data.extend(field_key.encode("utf-8"))
                 data.append(0)
                 for sub_key, sub_value in field_value.items():
                     data.extend(VDF_TYPE_STRING)
-                    data.extend(sub_key.encode('utf-8'))
+                    data.extend(sub_key.encode("utf-8"))
                     data.append(0)
-                    data.extend(str(sub_value).encode('utf-8'))
+                    data.extend(str(sub_value).encode("utf-8"))
                     data.append(0)
                 data.extend(VDF_TYPE_END)
             elif isinstance(field_value, int):
                 data.extend(VDF_TYPE_INT32)
-                data.extend(field_key.encode('utf-8'))
+                data.extend(field_key.encode("utf-8"))
                 data.append(0)
-                data.extend(struct.pack('<i', field_value))
+                data.extend(struct.pack("<i", field_value))
             else:
                 data.extend(VDF_TYPE_STRING)
-                data.extend(field_key.encode('utf-8'))
+                data.extend(field_key.encode("utf-8"))
                 data.append(0)
-                data.extend(str(field_value).encode('utf-8'))
+                data.extend(str(field_value).encode("utf-8"))
                 data.append(0)
 
         # Entry end
@@ -285,43 +284,43 @@ def save_shortcuts(shortcuts: dict[str, dict], path: Path | None = None):
 def shortcut_to_dict(shortcut: Shortcut) -> dict:
     """Convert a Shortcut to a VDF dictionary entry."""
     return {
-        'appid': shortcut.appid,
-        'AppName': shortcut.app_name,
-        'Exe': shortcut.exe,
-        'StartDir': shortcut.start_dir,
-        'icon': shortcut.icon,
-        'ShortcutPath': '',
-        'LaunchOptions': shortcut.launch_options,
-        'IsHidden': 1 if shortcut.is_hidden else 0,
-        'AllowDesktopConfig': 1 if shortcut.allow_desktop_config else 0,
-        'AllowOverlay': 1 if shortcut.allow_overlay else 0,
-        'OpenVR': 0,
-        'Devkit': 0,
-        'DevkitGameID': '',
-        'DevkitOverrideAppID': 0,
-        'LastPlayTime': 0,
-        'FlatpakAppID': '',
-        'tags': {str(i): tag for i, tag in enumerate(shortcut.tags)},
+        "appid": shortcut.appid,
+        "AppName": shortcut.app_name,
+        "Exe": shortcut.exe,
+        "StartDir": shortcut.start_dir,
+        "icon": shortcut.icon,
+        "ShortcutPath": "",
+        "LaunchOptions": shortcut.launch_options,
+        "IsHidden": 1 if shortcut.is_hidden else 0,
+        "AllowDesktopConfig": 1 if shortcut.allow_desktop_config else 0,
+        "AllowOverlay": 1 if shortcut.allow_overlay else 0,
+        "OpenVR": 0,
+        "Devkit": 0,
+        "DevkitGameID": "",
+        "DevkitOverrideAppID": 0,
+        "LastPlayTime": 0,
+        "FlatpakAppID": "",
+        "tags": {str(i): tag for i, tag in enumerate(shortcut.tags)},
     }
 
 
 def dict_to_shortcut(data: dict) -> Shortcut:
     """Convert a VDF dictionary entry to a Shortcut."""
     tags = []
-    if 'tags' in data and isinstance(data['tags'], dict):
-        tags = [data['tags'][k] for k in sorted(data['tags'].keys(), key=int)]
+    if "tags" in data and isinstance(data["tags"], dict):
+        tags = [data["tags"][k] for k in sorted(data["tags"].keys(), key=int)]
 
     return Shortcut(
-        appid=data.get('appid', 0),
-        app_name=data.get('AppName', ''),
-        exe=data.get('Exe', ''),
-        start_dir=data.get('StartDir', ''),
-        launch_options=data.get('LaunchOptions', ''),
-        icon=data.get('icon', ''),
+        appid=data.get("appid", 0),
+        app_name=data.get("AppName", ""),
+        exe=data.get("Exe", ""),
+        start_dir=data.get("StartDir", ""),
+        launch_options=data.get("LaunchOptions", ""),
+        icon=data.get("icon", ""),
         tags=tags,
-        is_hidden=bool(data.get('IsHidden', 0)),
-        allow_desktop_config=bool(data.get('AllowDesktopConfig', 1)),
-        allow_overlay=bool(data.get('AllowOverlay', 1)),
+        is_hidden=bool(data.get("IsHidden", 0)),
+        allow_desktop_config=bool(data.get("AllowDesktopConfig", 1)),
+        allow_overlay=bool(data.get("AllowOverlay", 1)),
     )
 
 

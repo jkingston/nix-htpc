@@ -2,10 +2,11 @@
 
 import asyncio
 import sys
+from collections.abc import Callable
 
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
 from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
@@ -13,7 +14,7 @@ from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
 console = Console()
 
 
-def make_download_progress(progress: Progress, task_id) -> callable:
+def make_download_progress(progress: Progress, task_id) -> Callable[[int, int], None]:
     """Create a download progress callback for a Progress task.
 
     Args:
@@ -23,10 +24,12 @@ def make_download_progress(progress: Progress, task_id) -> callable:
     Returns:
         A callback function that updates progress as bytes are downloaded
     """
+
     def callback(downloaded: int, total: int):
         if progress.tasks[task_id].total is None and total > 0:
             progress.update(task_id, total=total)
         progress.update(task_id, completed=downloaded)
+
     return callback
 
 
@@ -82,14 +85,15 @@ def list_cmd() -> None:
 @click.option("--no-artwork", is_flag=True, help="Don't fetch artwork")
 def install(port_id: str, no_mods: bool, no_steam: bool, no_artwork: bool) -> None:
     """Install a native game port."""
+    from pier.core.installer import InstallError, PortInstaller, ProgressReporter
     from pier.core.registry import get_port
-    from pier.core.installer import PortInstaller, InstallError, ProgressReporter
 
     port = get_port(port_id)
     if not port:
         console.print(f"[red]Unknown port: {port_id}[/red]")
         console.print("\nAvailable ports:")
         from pier.core.registry import list_ports
+
         for p in list_ports():
             console.print(f"  {p.id}: {p.name} ({p.game})")
         sys.exit(1)
@@ -148,8 +152,9 @@ def install(port_id: str, no_mods: bool, no_steam: bool, no_artwork: bool) -> No
 @click.option("--auto", is_flag=True, help="Non-interactive mode for systemd")
 def update(port_id: str | None, auto: bool) -> None:
     """Check for and apply updates."""
-    from pier.core.installer import check_updates_sync, PortInstaller, ProgressReporter
     import asyncio
+
+    from pier.core.installer import PortInstaller, check_updates_sync
 
     if port_id:
         # Update specific port
@@ -184,6 +189,7 @@ def update(port_id: str | None, auto: bool) -> None:
         console.print(table)
 
         if auto or click.confirm("Update all?"):
+
             async def _update_all():
                 installer = PortInstaller()
                 for port_id, _, _ in updates:
@@ -205,9 +211,10 @@ def roms() -> None:
 @click.option("--limit", "-n", default=50, help="Maximum results")
 def roms_list(system: str, limit: int) -> None:
     """List ROMs for a system from myrient."""
-    from pier.core.registry import SYSTEMS
-    from pier.core.myrient import MyrientBrowser
     import asyncio
+
+    from pier.core.myrient import MyrientBrowser
+    from pier.core.registry import SYSTEMS
 
     if system not in SYSTEMS:
         console.print(f"[red]Unknown system: {system}[/red]")
@@ -243,9 +250,10 @@ def roms_list(system: str, limit: int) -> None:
 @click.option("--limit", "-n", default=20, help="Maximum results")
 def roms_search(system: str, query: str, limit: int) -> None:
     """Search ROMs on myrient."""
-    from pier.core.registry import SYSTEMS
-    from pier.core.myrient import MyrientBrowser
     import asyncio
+
+    from pier.core.myrient import MyrientBrowser
+    from pier.core.registry import SYSTEMS
 
     if system not in SYSTEMS:
         console.print(f"[red]Unknown system: {system}[/red]")
@@ -281,11 +289,12 @@ def roms_search(system: str, query: str, limit: int) -> None:
 @click.argument("filename")
 def roms_download(system: str, filename: str) -> None:
     """Download a ROM from myrient."""
-    from pier.core.registry import SYSTEMS
-    from pier.core.myrient import MyrientBrowser
-    from pier.core.config import Config
     import asyncio
     from urllib.parse import quote
+
+    from pier.core.config import Config
+    from pier.core.myrient import MyrientBrowser
+    from pier.core.registry import SYSTEMS
 
     if system not in SYSTEMS:
         console.print(f"[red]Unknown system: {system}[/red]")
@@ -329,8 +338,8 @@ def steam() -> None:
 def steam_sync() -> None:
     """Sync all linked games to Steam."""
     from pier.core.config import Config, Library
-    from pier.core.steam import SteamLibrary
     from pier.core.registry import get_port
+    from pier.core.steam import SteamLibrary
 
     config = Config.load()
     library = Library.load(config.pier_dir)
@@ -383,8 +392,8 @@ def steam_link(game_id: str) -> None:
 def steam_unlink(game_id: str) -> None:
     """Remove a game from Steam library."""
     from pier.core.config import Config, Library
-    from pier.core.steam import SteamLibrary
     from pier.core.registry import get_port
+    from pier.core.steam import SteamLibrary
 
     config = Config.load()
     library = Library.load(config.pier_dir)
@@ -422,16 +431,19 @@ def config_set(key: str, value: str) -> None:
 
     if not hasattr(cfg, key):
         console.print(f"[red]Unknown config key: {key}[/red]")
-        console.print("Available keys: steamgriddb_api_key, auto_fetch_artwork, auto_add_to_steam, install_hd_textures")
+        console.print(
+            "Available keys: steamgriddb_api_key, auto_fetch_artwork, auto_add_to_steam, install_hd_textures"
+        )
         sys.exit(1)
 
     # Handle boolean values
+    parsed_value: str | bool = value
     if value.lower() in ("true", "1", "yes"):
-        value = True
+        parsed_value = True
     elif value.lower() in ("false", "0", "no"):
-        value = False
+        parsed_value = False
 
-    cfg.set(key, value)
+    cfg.set(key, parsed_value)
     cfg.save()
 
     console.print(f"[green]Set {key} = {value}[/green]")
@@ -542,7 +554,7 @@ def bios_list(system: str | None) -> None:
         files = get_bios_by_system(system.lower())
         if not files:
             console.print(f"[red]Unknown system: {system}[/red]")
-            systems = sorted(set(b.system for b in BIOS_REGISTRY))
+            systems = sorted({b.system for b in BIOS_REGISTRY})
             console.print(f"Available systems: {', '.join(systems)}")
             sys.exit(1)
     else:
@@ -576,14 +588,13 @@ def bios_download(filename: str | None, download_all: bool) -> None:
     Specify a filename to download a specific file.
     Use --all to download all known BIOS files.
     """
+
     from pier.core.bios import (
-        BiosManager,
-        get_bios_by_filename,
+        download_all_sync,
         download_bios_sync,
         download_recommended_sync,
-        download_all_sync,
+        get_bios_by_filename,
     )
-    import asyncio
 
     if filename:
         # Download specific file
@@ -603,10 +614,10 @@ def bios_download(filename: str | None, download_all: bool) -> None:
             console=console,
         ) as progress:
             task = progress.add_task("Downloading...", total=None)
-            on_progress = make_download_progress(progress, task)
+            progress_cb = make_download_progress(progress, task)
 
             try:
-                path = download_bios_sync(filename, on_progress)
+                path = download_bios_sync(filename, progress_cb)
                 console.print(f"[green]Downloaded:[/green] {path}")
             except ValueError as e:
                 console.print(f"[red]Error:[/red] {e}")
@@ -630,7 +641,9 @@ def bios_download(filename: str | None, download_all: bool) -> None:
                 nonlocal current_task, current_file
                 if filename != current_file:
                     current_file = filename
-                    current_task = progress.add_task(f"Downloading {filename}...", total=total or None)
+                    current_task = progress.add_task(
+                        f"Downloading {filename}...", total=total or None
+                    )
                 if current_task is not None:
                     if progress.tasks[current_task].total is None and total > 0:
                         progress.update(current_task, total=total)
@@ -661,7 +674,9 @@ def bios_download(filename: str | None, download_all: bool) -> None:
                 nonlocal current_task, current_file
                 if filename != current_file:
                     current_file = filename
-                    current_task = progress.add_task(f"Downloading {filename}...", total=total or None)
+                    current_task = progress.add_task(
+                        f"Downloading {filename}...", total=total or None
+                    )
                 if current_task is not None:
                     if progress.tasks[current_task].total is None and total > 0:
                         progress.update(current_task, total=total)

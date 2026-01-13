@@ -49,15 +49,25 @@ STEAM_USERDATA_PATHS = [
 ARCHIVE_EXTENSIONS = frozenset({".zip", ".tar", ".gz", ".tgz", ".xz"})
 APPIMAGE_EXTENSION = ".appimage"
 
-ROM_EXTENSIONS = frozenset({
-    ".z64", ".n64", ".v64",  # N64
-    ".sfc", ".smc",          # SNES
-    ".nes",                  # NES
-    ".gba",                  # GBA
-    ".md", ".bin", ".gen",   # Genesis
-    ".iso", ".cue",          # CD-based
-    ".rvz", ".gcm", ".wbfs", # GameCube/Wii
-})
+ROM_EXTENSIONS = frozenset(
+    {
+        ".z64",
+        ".n64",
+        ".v64",  # N64
+        ".sfc",
+        ".smc",  # SNES
+        ".nes",  # NES
+        ".gba",  # GBA
+        ".md",
+        ".bin",
+        ".gen",  # Genesis
+        ".iso",
+        ".cue",  # CD-based
+        ".rvz",
+        ".gcm",
+        ".wbfs",  # GameCube/Wii
+    }
+)
 
 # =============================================================================
 # URLs

@@ -95,7 +95,7 @@ class SteamScreen(PierScreen):
         table.clear()
 
         # Add installed ports
-        for port_id, info in self.library.installed_ports.items():
+        for port_id, _info in self.library.installed_ports.items():
             port = get_port(port_id)
             if port:
                 linked = self.library.is_linked_to_steam(port_id)
@@ -128,7 +128,8 @@ class SteamScreen(PierScreen):
         """Update the summary in the info label."""
         total_ports = len(self.library.installed_ports)
         linked_ports = sum(
-            1 for port_id in self.library.installed_ports
+            1
+            for port_id in self.library.installed_ports
             if self.library.is_linked_to_steam(port_id)
         )
 

@@ -4,20 +4,20 @@ import asyncio
 import hashlib
 import re
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-from urllib.parse import unquote, quote
+from urllib.parse import unquote
 
-from pier.core.registry import SYSTEMS, System
 from pier.core.constants import (
-    MYRIENT_BASE_URL,
-    HTTP_TIMEOUT,
     DOWNLOAD_CHUNK_SIZE,
+    HTTP_TIMEOUT,
+    MYRIENT_BASE_URL,
     SEARCH_RESULT_LIMIT,
 )
 from pier.core.errors import UnknownSystemError
 from pier.core.http import AsyncHTTPClient
+from pier.core.registry import SYSTEMS
 
 
 @dataclass
@@ -176,8 +176,22 @@ class MyrientBrowser(AsyncHTTPClient):
         """Extract a zip file and return the main ROM file."""
         with zipfile.ZipFile(zip_path, "r") as zf:
             # Find the ROM file (usually the largest file)
-            rom_extensions = {".z64", ".n64", ".v64", ".sfc", ".smc", ".nes", ".gba",
-                           ".md", ".bin", ".iso", ".cue", ".rvz", ".gcm", ".wbfs"}
+            rom_extensions = {
+                ".z64",
+                ".n64",
+                ".v64",
+                ".sfc",
+                ".smc",
+                ".nes",
+                ".gba",
+                ".md",
+                ".bin",
+                ".iso",
+                ".cue",
+                ".rvz",
+                ".gcm",
+                ".wbfs",
+            }
 
             rom_file = None
             for name in zf.namelist():
@@ -190,10 +204,11 @@ class MyrientBrowser(AsyncHTTPClient):
                 zf.extractall(dest_dir)
                 for name in zf.namelist():
                     return dest_dir / name
-
-            # Extract just the ROM file
-            zf.extract(rom_file, dest_dir)
-            return dest_dir / rom_file
+                raise ValueError("Downloaded ZIP file is empty")
+            else:
+                # Extract just the ROM file
+                zf.extract(rom_file, dest_dir)
+                return dest_dir / rom_file
 
     async def download_for_port(
         self,

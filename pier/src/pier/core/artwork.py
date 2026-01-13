@@ -4,13 +4,11 @@ import asyncio
 import io
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 from urllib.parse import quote
 
 import httpx
 from PIL import Image
 
-from pier.core.registry import SYSTEMS
 from pier.core.constants import HTTP_TIMEOUT, LIBRETRO_THUMBNAILS_BASE
 from pier.core.http import AsyncHTTPClient, SteamGridDBClient
 
@@ -228,8 +226,8 @@ class LibretroThumbnails(AsyncHTTPClient):
 
         # URL encode special characters but preserve spaces
         # libretro uses URL-encoded paths
-        encoded_system = quote(libretro_system, safe='')
-        encoded_name = quote(rom_name, safe='')
+        encoded_system = quote(libretro_system, safe="")
+        encoded_name = quote(rom_name, safe="")
 
         url = f"{self.base_url}/{encoded_system}/Named_Boxarts/{encoded_name}.png"
 
@@ -283,8 +281,8 @@ def resize_image(image_bytes: bytes, width: int, height: int) -> bytes:
     img = Image.open(io.BytesIO(image_bytes))
 
     # Convert to RGBA if needed
-    if img.mode != 'RGBA':
-        img = img.convert('RGBA')
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
 
     # Calculate scaling to fill the target dimensions
     img_ratio = img.width / img.height
@@ -309,7 +307,7 @@ def resize_image(image_bytes: bytes, width: int, height: int) -> bytes:
 
     # Save as PNG
     output = io.BytesIO()
-    img.save(output, format='PNG')
+    img.save(output, format="PNG")
     return output.getvalue()
 
 
@@ -349,7 +347,9 @@ class ArtworkManager:
 
         return ArtworkSet()
 
-    async def fetch_for_rom(self, system_id: str, rom_name: str, game_title: str | None = None) -> ArtworkSet:
+    async def fetch_for_rom(
+        self, system_id: str, rom_name: str, game_title: str | None = None
+    ) -> ArtworkSet:
         """Fetch artwork for a ROM.
 
         Tries libretro-thumbnails first, then SteamGridDB as fallback.
@@ -392,14 +392,14 @@ class ArtworkManager:
             (grid_path / f"{grid_id}p.png").write_bytes(artwork.grid)
 
         if artwork.hero:
-            ext = ".png" if artwork.hero[:8] == b'\x89PNG\r\n\x1a\n' else ".jpg"
+            ext = ".png" if artwork.hero[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg"
             (grid_path / f"{grid_id}_hero{ext}").write_bytes(artwork.hero)
 
         if artwork.logo:
             (grid_path / f"{grid_id}_logo.png").write_bytes(artwork.logo)
 
         if artwork.icon:
-            ext = ".png" if artwork.icon[:8] == b'\x89PNG\r\n\x1a\n' else ".ico"
+            ext = ".png" if artwork.icon[:8] == b"\x89PNG\r\n\x1a\n" else ".ico"
             (grid_path / f"{grid_id}_icon{ext}").write_bytes(artwork.icon)
 
 

@@ -5,7 +5,7 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Button, DataTable, Footer, Header, Static
 
-from pier.core.registry import list_ports, get_port
+from pier.core.registry import get_port, list_ports
 from pier.tui.screens.base import PierScreen
 
 
@@ -195,7 +195,7 @@ class PortsScreen(PierScreen):
 
     async def _install_port(self, port_id: str) -> None:
         """Worker to install a port."""
-        from pier.core.installer import PortInstaller, InstallError
+        from pier.core.installer import InstallError, PortInstaller
 
         port = get_port(port_id)
         if not port:
@@ -209,17 +209,11 @@ class PortsScreen(PierScreen):
                 add_to_steam=self.config.auto_add_to_steam,
                 fetch_artwork=self.config.auto_fetch_artwork,
             )
-            self.call_from_thread(
-                self.notify_success, f"Successfully installed {port.name}!"
-            )
+            self.call_from_thread(self.notify_success, f"Successfully installed {port.name}!")
         except InstallError as e:
-            self.call_from_thread(
-                self.notify_error, f"Installation failed: {e}"
-            )
+            self.call_from_thread(self.notify_error, f"Installation failed: {e}")
         except Exception as e:
-            self.call_from_thread(
-                self.notify_error, f"Error: {e}"
-            )
+            self.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
             self.call_from_thread(self.refresh_table)
 
@@ -237,20 +231,12 @@ class PortsScreen(PierScreen):
 
             if update_info:
                 current, new = update_info
-                self.call_from_thread(
-                    self.notify_info, f"Updating {port.name}: {current} -> {new}"
-                )
+                self.call_from_thread(self.notify_info, f"Updating {port.name}: {current} -> {new}")
                 await installer.update(port_id)
-                self.call_from_thread(
-                    self.notify_success, f"Successfully updated {port.name}!"
-                )
+                self.call_from_thread(self.notify_success, f"Successfully updated {port.name}!")
             else:
-                self.call_from_thread(
-                    self.notify_info, f"{port.name} is already up to date"
-                )
+                self.call_from_thread(self.notify_info, f"{port.name} is already up to date")
         except Exception as e:
-            self.call_from_thread(
-                self.notify_error, f"Update failed: {e}"
-            )
+            self.call_from_thread(self.notify_error, f"Update failed: {e}")
         finally:
             self.call_from_thread(self.refresh_table)

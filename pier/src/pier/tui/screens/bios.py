@@ -160,7 +160,9 @@ class BiosScreen(PierScreen):
             if paths:
                 self.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
             else:
-                self.call_from_thread(self.notify_info, "All recommended BIOS files already present")
+                self.call_from_thread(
+                    self.notify_info, "All recommended BIOS files already present"
+                )
         except Exception as e:
             self.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
