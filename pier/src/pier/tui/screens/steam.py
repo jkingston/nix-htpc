@@ -180,7 +180,7 @@ class SteamScreen(PierScreen):
     def action_sync(self) -> None:
         """Sync all linked games to Steam."""
         self.notify_info("Syncing shortcuts to Steam...")
-        self.run_worker(self._sync_to_steam(), exclusive=True)
+        self.run_worker(self._sync_to_steam(), exclusive=True, thread=True)
 
     async def _sync_to_steam(self) -> None:
         """Worker to sync shortcuts to Steam."""

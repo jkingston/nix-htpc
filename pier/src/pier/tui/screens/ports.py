@@ -178,11 +178,12 @@ class PortsScreen(PierScreen):
         progress = InstallProgress.for_port_install(port.name)
         progress_screen = InstallProgressScreen(progress)
 
-        # Push modal and start install
+        # Push modal and start install in a thread (needed for call_from_thread)
         self.app.push_screen(progress_screen)
         self.run_worker(
             self._install_port_with_progress(self._selected_port_id, progress_screen),
             exclusive=True,
+            thread=True,
         )
 
     def action_update(self) -> None:
@@ -200,7 +201,7 @@ class PortsScreen(PierScreen):
             return
 
         self.notify_info(f"Checking for updates to {port.name}...")
-        self.run_worker(self._update_port(self._selected_port_id), exclusive=True)
+        self.run_worker(self._update_port(self._selected_port_id), exclusive=True, thread=True)
 
     async def _install_port_with_progress(
         self, port_id: str, progress_screen: InstallProgressScreen

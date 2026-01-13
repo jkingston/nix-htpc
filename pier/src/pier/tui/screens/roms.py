@@ -122,7 +122,7 @@ class RomsScreen(PierScreen):
             return
         self._loading = True
         self._update_status(f"Loading {SYSTEMS[self._current_system].name} ROMs...")
-        self.run_worker(self._fetch_roms(), exclusive=True)
+        self.run_worker(self._fetch_roms(), exclusive=True, thread=True)
 
     async def _fetch_roms(self) -> None:
         """Worker to fetch ROMs from myrient."""
@@ -235,6 +235,7 @@ class RomsScreen(PierScreen):
         self.run_worker(
             self._download_rom(self._selected_entry),
             exclusive=True,
+            thread=True,
         )
 
     async def _download_rom(self, entry: MyrientEntry) -> None:

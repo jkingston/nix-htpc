@@ -146,12 +146,12 @@ class BiosScreen(PierScreen):
     def action_download_recommended(self) -> None:
         """Download recommended BIOS files."""
         self.notify_info("Downloading recommended BIOS files...")
-        self.run_worker(self._download_recommended(), exclusive=True)
+        self.run_worker(self._download_recommended(), exclusive=True, thread=True)
 
     def action_download_all(self) -> None:
         """Download all BIOS files."""
         self.notify_info("Downloading all BIOS files...")
-        self.run_worker(self._download_all(), exclusive=True)
+        self.run_worker(self._download_all(), exclusive=True, thread=True)
 
     async def _download_recommended(self) -> None:
         """Worker to download recommended BIOS files."""
