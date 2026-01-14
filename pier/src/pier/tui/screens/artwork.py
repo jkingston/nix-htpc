@@ -277,7 +277,11 @@ class ArtworkDialog(ModalScreen[bool]):
             self.query_one("#section-icon", ArtworkSection),
         ]
 
-        # Load cached options for each type
+        # Delay loading options until widgets are fully composed
+        self.call_after_refresh(self._load_cached_options)
+
+    def _load_cached_options(self) -> None:
+        """Load cached options for each section."""
         for section in self._sections:
             options = self._cache.get_options(self.game_id, section.art_type)
             selected = self._cache.get_selected_index(self.game_id, section.art_type)
