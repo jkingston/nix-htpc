@@ -19,6 +19,8 @@ from textual.widgets import (
     Static,
 )
 
+from pier.core.artwork import ArtworkSet, fetch_artwork_for_rom_sync
+from pier.core.artwork_cache import ArtworkCache
 from pier.core.config import CustomGame
 from pier.core.constants import (
     GAME_ID_CUSTOM_PREFIX,
@@ -28,7 +30,7 @@ from pier.core.constants import (
     STEAM_RUN_EXECUTABLE,
 )
 from pier.core.registry import SYSTEMS, get_port, get_system
-from pier.core.steam import SteamLibrary
+from pier.core.steam import Shortcut, SteamLibrary
 from pier.tui.screens.base import PierScreen
 
 
@@ -244,9 +246,10 @@ class SteamScreen(PierScreen):
         Binding("h", "toggle_hidden", "Hide/Show"),
         Binding("r", "remove", "Remove"),
         Binding("d", "delete", "Delete"),
-        Binding("a", "add_custom", "Add Custom"),
+        Binding("c", "add_custom", "Add Custom"),
         Binding("i", "install_game", "Install"),
         Binding("x", "scan_roms", "Scan ROMs"),
+        Binding("a", "artwork", "Artwork"),
     ]
 
     def __init__(self) -> None:
@@ -263,6 +266,7 @@ class SteamScreen(PierScreen):
             Static("", id="steam-summary"),
             Horizontal(
                 Button("Sync", id="btn-sync", variant="primary"),
+                Button("Artwork", id="btn-artwork", variant="default"),
                 Button("Hide/Show", id="btn-toggle", variant="default"),
                 Button("Remove", id="btn-remove", variant="default"),
                 Button("Delete", id="btn-delete", variant="warning"),
@@ -421,6 +425,8 @@ class SteamScreen(PierScreen):
         button_id = event.button.id
         if button_id == "btn-sync":
             self.action_sync()
+        elif button_id == "btn-artwork":
+            self.action_artwork()
         elif button_id == "btn-toggle":
             self.action_toggle_hidden()
         elif button_id == "btn-remove":
@@ -590,8 +596,12 @@ class SteamScreen(PierScreen):
             self.app.call_from_thread(
                 self.notify_warning, f"Synced {synced}, failed {failed}"
             )
+        elif synced > 0:
+            self.app.call_from_thread(
+                self.notify_success, f"Synced {synced} games (appear next Steam launch)"
+            )
         else:
-            self.app.call_from_thread(self.notify_success, f"Synced {synced} games to Steam")
+            self.app.call_from_thread(self.notify_info, "Nothing to sync")
 
         self.app.call_from_thread(self._load_entries)
 
@@ -609,13 +619,16 @@ class SteamScreen(PierScreen):
         if not exe_path:
             return
 
-        self._steam.add_shortcut(
+        shortcut = self._steam.add_shortcut(
             app_name=port.name,
             exe=STEAM_RUN_EXECUTABLE,
             start_dir=str(self.config.ports_dir / entry.game_id),
             launch_options=f'"{exe_path}"',
             tags=[PIER_TAG, PORTS_TAG],
         )
+
+        # Install artwork
+        self._install_artwork_for_shortcut(entry, shortcut, port.game)
 
     def _sync_rom(self, entry: GameEntry) -> None:
         """Sync a ROM to Steam."""
@@ -639,13 +652,17 @@ class SteamScreen(PierScreen):
             # Standalone emulator: just "rom_path"
             launch_options = f'"{entry.file_path}"'
 
-        self._steam.add_shortcut(
+        shortcut = self._steam.add_shortcut(
             app_name=entry.file_path.stem,  # Name without extension
             exe=f"/run/current-system/sw/bin/{system.emulator_wrapper}",
             start_dir=str(entry.file_path.parent),
             launch_options=launch_options,
             tags=[PIER_TAG, system.name],
         )
+
+        # Install artwork (use ROM filename without extension as title)
+        rom_name = entry.file_path.stem
+        self._install_artwork_for_shortcut(entry, shortcut, rom_name, system_id=system_id)
 
     def _sync_custom(self, entry: GameEntry) -> None:
         """Sync a custom game to Steam."""
@@ -666,10 +683,133 @@ class SteamScreen(PierScreen):
             exe = game.executable
             launch_options = game.launch_args
 
-        self._steam.add_shortcut(
+        shortcut = self._steam.add_shortcut(
             app_name=game.name,
             exe=exe,
             start_dir=game.start_dir,
             launch_options=launch_options,
             tags=[PIER_TAG, "Custom"],
+        )
+
+        # Install artwork
+        self._install_artwork_for_shortcut(entry, shortcut, game.name)
+
+    def _install_artwork_for_shortcut(
+        self,
+        entry: GameEntry,
+        shortcut: Shortcut,
+        game_title: str,
+        system_id: str | None = None,
+    ) -> None:
+        """Install artwork for a synced shortcut.
+
+        Checks cache first, then auto-fetches if enabled.
+
+        Args:
+            entry: The game entry
+            shortcut: The Steam shortcut
+            game_title: Title to search for artwork
+            system_id: Optional system ID for ROM artwork
+        """
+        if not self._steam:
+            return
+
+        cache = ArtworkCache(self.config.pier_dir)
+
+        # Check if we have cached artwork
+        if cache.has_selected(entry.game_id):
+            cached = cache.get_selected_artwork(entry.game_id)
+            self._steam.install_artwork_from_cache(shortcut, cached)
+            return
+
+        # Auto-fetch if enabled
+        if not self.config.auto_fetch_artwork:
+            return
+
+        # Fetch artwork
+        artwork: ArtworkSet | None = None
+
+        if system_id:
+            # ROM - try libretro first, then SteamGridDB
+            artwork = fetch_artwork_for_rom_sync(
+                system_id,
+                game_title,
+                game_title,
+                api_key=self.config.steamgriddb_api_key,
+            )
+        elif self.config.steamgriddb_api_key:
+            # Port or custom game - use SteamGridDB
+            from pier.core.artwork import fetch_artwork_for_port_sync
+
+            artwork = fetch_artwork_for_port_sync(
+                game_title,
+                api_key=self.config.steamgriddb_api_key,
+            )
+
+        if artwork and artwork.grid:
+            # Cache the artwork
+            cache.cache_option(entry.game_id, "grid", 0, artwork.grid)
+            cache.select_option(entry.game_id, "grid", 0)
+
+            if artwork.hero:
+                cache.cache_option(entry.game_id, "hero", 0, artwork.hero)
+                cache.select_option(entry.game_id, "hero", 0)
+
+            if artwork.logo:
+                cache.cache_option(entry.game_id, "logo", 0, artwork.logo)
+                cache.select_option(entry.game_id, "logo", 0)
+
+            if artwork.icon:
+                cache.cache_option(entry.game_id, "icon", 0, artwork.icon)
+                cache.select_option(entry.game_id, "icon", 0)
+
+            # Install to Steam
+            cached = cache.get_selected_artwork(entry.game_id)
+            self._steam.install_artwork_from_cache(shortcut, cached)
+
+    def action_artwork(self) -> None:
+        """Open artwork management dialog for selected game."""
+        if not self._selected_entry:
+            self.notify_warning("Select a game first")
+            return
+
+        if not self._steam:
+            self.notify_error("Steam not found")
+            return
+
+        # Get the game title for searching
+        entry = self._selected_entry
+        if entry.game_id.startswith(GAME_ID_ROM_PREFIX):
+            # ROM - use filename stem
+            game_title = entry.name
+        elif entry.game_id.startswith(GAME_ID_CUSTOM_PREFIX):
+            # Custom game
+            game_title = entry.name
+        else:
+            # Port - use the port's game name
+            port = get_port(entry.game_id)
+            game_title = port.game if port else entry.name
+
+        from pier.tui.screens.artwork import ArtworkDialog
+
+        steam = self._steam  # Capture for closure
+
+        def on_result(saved: bool | None) -> None:
+            if saved and steam:
+                self.notify_success(f"Artwork updated for {entry.name}")
+                # Re-install artwork to Steam if game is synced
+                if entry.status == GameStatus.IN_STEAM:
+                    shortcut = steam.find_shortcut(entry.name)
+                    if shortcut:
+                        cache = ArtworkCache(self.config.pier_dir)
+                        cached = cache.get_selected_artwork(entry.game_id)
+                        steam.install_artwork_from_cache(shortcut, cached)
+
+        self.app.push_screen(
+            ArtworkDialog(
+                game_id=entry.game_id,
+                game_title=game_title,
+                config=self.config,
+            ),
+            on_result,
         )

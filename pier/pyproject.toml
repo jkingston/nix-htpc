@@ -9,6 +9,8 @@ dependencies = [
     "click>=8.1.0",
     "rich>=13.0.0",
     "pillow>=10.0.0",
+    "vdf>=3.4",
+    "textual-image[textual]>=0.8.5",
 ]
 
 [project.scripts]

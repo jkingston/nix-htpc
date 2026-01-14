@@ -335,10 +335,19 @@ def steam() -> None:
 
 
 @steam.command("sync")
-def steam_sync() -> None:
-    """Sync all linked games to Steam."""
+@click.option("--auto", is_flag=True, help="Non-interactive mode (for scripts)")
+def steam_sync(auto: bool) -> None:
+    """Sync all games to Steam shortcuts.
+
+    Syncs ports, ROMs, and custom games that are not hidden.
+    Use --auto for non-interactive mode (scripts/services).
+    """
+    from pathlib import Path
+
     from pier.core.config import Config, Library
-    from pier.core.registry import get_port
+    from pier.core.constants import GAME_ID_ROM_PREFIX
+    from pier.core.errors import ShortcutVDFError
+    from pier.core.registry import get_port, get_system
     from pier.core.steam import SteamLibrary
 
     config = Config.load()
@@ -347,28 +356,127 @@ def steam_sync() -> None:
     try:
         steam = SteamLibrary()
     except FileNotFoundError:
+        if auto:
+            sys.exit(0)  # Silent exit if Steam not set up
         console.print("[red]Steam not found. Has Steam been run at least once?[/red]")
         sys.exit(1)
 
-    synced = 0
-    for port_id, info in library.installed_ports.items():
-        if library.is_linked_to_steam(port_id):
-            port = get_port(port_id)
-            if port:
-                exe_path = info.get("executable", "")
-                if exe_path:
-                    steam.add_shortcut(
-                        app_name=port.name,
-                        exe=STEAM_RUN_EXECUTABLE,
-                        start_dir=str(config.ports_dir / port_id),
-                        launch_options=f'"{exe_path}"',
-                        tags=[PIER_TAG, PORTS_TAG],
-                    )
-                    synced += 1
-                    console.print(f"  Synced: {port.name}")
+    # Validate we can read shortcuts.vdf before making changes
+    try:
+        steam.load()  # Just validate we can read the file
+    except ShortcutVDFError as e:
+        if auto:
+            print(f"pier: cannot read shortcuts.vdf: {e}", file=sys.stderr)
+            sys.exit(1)
+        console.print(f"[red]Cannot read shortcuts.vdf: {e}[/red]")
+        console.print("Is Steam running? Close it and try again.")
+        sys.exit(1)
 
-    console.print(f"[green]Synced {synced} shortcuts[/green]")
-    console.print("Restart Steam to see changes")
+    # Get existing pier shortcuts to avoid duplicates
+    existing_names: set[str] = set()
+    for shortcut in steam.list_pier_shortcuts():
+        existing_names.add(shortcut.app_name)
+
+    synced = 0
+
+    # Sync ports
+    for port_id, info in library.installed_ports.items():
+        if library.is_hidden_from_steam(port_id):
+            continue
+        port = get_port(port_id)
+        if not port:
+            continue
+        if port.name in existing_names:
+            continue
+        exe_path = info.get("executable", "")
+        if not exe_path:
+            continue
+
+        steam.add_shortcut(
+            app_name=port.name,
+            exe=STEAM_RUN_EXECUTABLE,
+            start_dir=str(config.ports_dir / port_id),
+            launch_options=f'"{exe_path}"',
+            tags=[PIER_TAG, PORTS_TAG],
+        )
+        synced += 1
+        if not auto:
+            console.print(f"  Synced: {port.name}")
+
+    # Sync ROMs
+    for system_id, roms in library.downloaded_roms.items():
+        system = get_system(system_id)
+        if not system or not system.emulator_wrapper:
+            continue
+
+        for rom_name in roms:
+            game_id = f"{GAME_ID_ROM_PREFIX}{system_id}:{rom_name}"
+            if library.is_hidden_from_steam(game_id):
+                continue
+
+            rom_path = config.roms_dir / system_id / rom_name
+            display_name = Path(rom_name).stem
+            if display_name in existing_names:
+                continue
+
+            # Build launch options
+            if system.emulator_args:
+                launch_options = f'{system.emulator_args} "{rom_path}"'
+            else:
+                launch_options = f'"{rom_path}"'
+
+            steam.add_shortcut(
+                app_name=display_name,
+                exe=f"/run/current-system/sw/bin/{system.emulator_wrapper}",
+                start_dir=str(rom_path.parent),
+                launch_options=launch_options,
+                tags=[PIER_TAG, system.name],
+            )
+            synced += 1
+            if not auto:
+                console.print(f"  Synced: {display_name}")
+
+    # Sync custom games
+    for game_id, game_data in library.custom_games.items():
+        if library.is_hidden_from_steam(game_id):
+            continue
+
+        name = game_data["name"]
+        if name in existing_names:
+            continue
+
+        exe = game_data.get("executable", "")
+        if not exe:
+            continue
+
+        if game_data.get("use_steam_run", False):
+            final_exe = STEAM_RUN_EXECUTABLE
+            launch_options = f'"{exe}"'
+            if game_data.get("launch_args"):
+                launch_options += f" {game_data['launch_args']}"
+        else:
+            final_exe = exe
+            launch_options = game_data.get("launch_args", "")
+
+        steam.add_shortcut(
+            app_name=name,
+            exe=final_exe,
+            start_dir=game_data.get("start_dir", ""),
+            launch_options=launch_options,
+            tags=[PIER_TAG, "Custom"],
+        )
+        synced += 1
+        if not auto:
+            console.print(f"  Synced: {name}")
+
+    if auto:
+        # Silent output for scripts
+        if synced > 0:
+            print(f"pier: synced {synced} games to Steam")
+    else:
+        console.print(f"[green]Synced {synced} games[/green]")
+        if synced > 0:
+            console.print("Changes will appear next time Steam starts")
 
 
 @steam.command("link")

@@ -29,10 +29,13 @@ class TestAppIdGeneration:
         id2 = generate_appid('"/path/to/game2"', "Game 2")
         assert id1 != id2
 
-    def test_generate_appid_is_signed_int(self):
-        """generate_appid should return a signed 32-bit integer."""
+    def test_generate_appid_is_unsigned_with_high_bit(self):
+        """generate_appid should return an unsigned 32-bit integer with high bit set."""
         appid = generate_appid('"/path/to/game"', "Test Game")
-        assert -2147483648 <= appid <= 2147483647
+        # Should be unsigned 32-bit
+        assert 0 <= appid <= 0xFFFFFFFF
+        # High bit should be set (marks as non-Steam game)
+        assert appid & 0x80000000
 
     def test_generate_grid_id_consistent(self):
         """generate_grid_id should return same ID for same inputs."""

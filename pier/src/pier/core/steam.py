@@ -5,15 +5,11 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import vdf
+
 from pier.core.constants import PIER_TAG as _PIER_TAG
 from pier.core.constants import STEAM_USERDATA_PATHS
-from pier.core.errors import SteamNotFoundError, SteamUserNotFoundError
-
-# VDF binary format constants
-VDF_TYPE_NONE = b"\x00"
-VDF_TYPE_STRING = b"\x01"
-VDF_TYPE_INT32 = b"\x02"
-VDF_TYPE_END = b"\x08"
+from pier.core.errors import ShortcutVDFError, SteamNotFoundError, SteamUserNotFoundError
 
 
 @dataclass
@@ -42,13 +38,12 @@ def generate_appid(exe: str, app_name: str) -> int:
 
     This matches Steam's internal algorithm for non-Steam game IDs.
     The exe should include quotes (as stored in shortcuts.vdf).
+    Returns an unsigned 32-bit integer as Steam expects.
     """
     key = exe + app_name
     crc = binascii.crc32(key.encode("utf-8")) & 0xFFFFFFFF
-    appid = (crc | 0x80000000) ^ 0xFFFFFFFF
-    if appid > 0x7FFFFFFF:
-        appid -= 0x100000000
-    return appid
+    # Set high bit to mark as non-Steam game, keep as unsigned
+    return (crc | 0x80000000) & 0xFFFFFFFF
 
 
 def generate_grid_id(exe: str, app_name: str) -> int:
@@ -122,8 +117,8 @@ class VDFReader:
         return s
 
     def read_int32(self) -> int:
-        """Read a 32-bit signed integer."""
-        val = struct.unpack("<i", self.data[self.pos : self.pos + 4])[0]
+        """Read a 32-bit unsigned integer."""
+        val = struct.unpack("<I", self.data[self.pos : self.pos + 4])[0]
         self.pos += 4
         return val
 
@@ -166,8 +161,8 @@ class VDFWriter:
         self.data.append(0)
 
     def write_int32(self, val: int):
-        """Write a 32-bit signed integer."""
-        self.data.extend(struct.pack("<i", val))
+        """Write a 32-bit unsigned integer."""
+        self.data.extend(struct.pack("<I", val & 0xFFFFFFFF))
 
     def write_dict(self, d: dict, name: str | None = None):
         """Write a VDF dictionary."""
@@ -202,21 +197,29 @@ def load_shortcuts(path: Path | None = None) -> dict[str, dict]:
 
     Returns:
         Dictionary of shortcuts indexed by string numbers
+
+    Raises:
+        ShortcutVDFError: If the file exists but cannot be parsed
     """
     if path is None:
         path = get_shortcuts_path()
 
     if not path.exists():
-        return {}
+        return {}  # No file is OK - means no shortcuts yet
 
     try:
         data = path.read_bytes()
-        reader = VDFReader(data)
-        result = reader.read_dict()
+    except OSError as e:
+        raise ShortcutVDFError("read", f"Cannot read {path}: {e}") from e
+
+    if not data:
+        return {}  # Empty file is OK
+
+    try:
+        result = vdf.binary_loads(data)
         return result.get("shortcuts", {})
-    except (OSError, KeyError, struct.error):
-        # File not readable, malformed VDF, or parsing error
-        return {}
+    except Exception as e:
+        raise ShortcutVDFError("parse", f"Cannot parse {path}: {e}") from e
 
 
 def save_shortcuts(shortcuts: dict[str, dict], path: Path | None = None):
@@ -231,60 +234,20 @@ def save_shortcuts(shortcuts: dict[str, dict], path: Path | None = None):
 
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build VDF binary format manually for shortcuts.vdf
-    # Format: \x00 "shortcuts" \x00 <entries> \x08 \x08
-    data = bytearray()
+    # Use the vdf library for correct binary format
+    data = vdf.binary_dumps({"shortcuts": shortcuts})
+    path.write_bytes(data)
 
-    # Root object start: type byte + key name
-    data.extend(VDF_TYPE_NONE)
-    data.extend(b"shortcuts\x00")
 
-    # Write each shortcut entry
-    for key, shortcut in shortcuts.items():
-        # Entry start: type byte + index key
-        data.extend(VDF_TYPE_NONE)
-        data.extend(key.encode("utf-8"))
-        data.append(0)
-
-        # Write shortcut fields
-        for field_key, field_value in shortcut.items():
-            if isinstance(field_value, dict):
-                # Nested dict (e.g., tags)
-                data.extend(VDF_TYPE_NONE)
-                data.extend(field_key.encode("utf-8"))
-                data.append(0)
-                for sub_key, sub_value in field_value.items():
-                    data.extend(VDF_TYPE_STRING)
-                    data.extend(sub_key.encode("utf-8"))
-                    data.append(0)
-                    data.extend(str(sub_value).encode("utf-8"))
-                    data.append(0)
-                data.extend(VDF_TYPE_END)
-            elif isinstance(field_value, int):
-                data.extend(VDF_TYPE_INT32)
-                data.extend(field_key.encode("utf-8"))
-                data.append(0)
-                data.extend(struct.pack("<i", field_value))
-            else:
-                data.extend(VDF_TYPE_STRING)
-                data.extend(field_key.encode("utf-8"))
-                data.append(0)
-                data.extend(str(field_value).encode("utf-8"))
-                data.append(0)
-
-        # Entry end
-        data.extend(VDF_TYPE_END)
-
-    # Root object end
-    data.extend(VDF_TYPE_END)
-
-    path.write_bytes(bytes(data))
+def _to_signed_int32(val: int) -> int:
+    """Convert unsigned int32 to signed for vdf library compatibility."""
+    return struct.unpack('<i', struct.pack('<I', val & 0xFFFFFFFF))[0]
 
 
 def shortcut_to_dict(shortcut: Shortcut) -> dict:
     """Convert a Shortcut to a VDF dictionary entry."""
     return {
-        "appid": shortcut.appid,
+        "appid": _to_signed_int32(shortcut.appid),
         "AppName": shortcut.app_name,
         "Exe": shortcut.exe,
         "StartDir": shortcut.start_dir,
@@ -472,3 +435,20 @@ class SteamLibrary:
         if icon:
             dest = self.grid_path / f"{grid_id}_icon{icon.suffix}"
             dest.write_bytes(icon.read_bytes())
+
+    def install_artwork_from_cache(self, shortcut: Shortcut, cached: "CachedArtwork") -> None:
+        """Install artwork from cache to Steam grid directory.
+
+        Args:
+            shortcut: The shortcut to install artwork for
+            cached: CachedArtwork with paths to cached image files
+        """
+        from pier.core.artwork_cache import CachedArtwork  # noqa: F811
+
+        self.install_artwork(
+            shortcut,
+            grid=cached.grid,
+            hero=cached.hero,
+            logo=cached.logo,
+            icon=cached.icon,
+        )

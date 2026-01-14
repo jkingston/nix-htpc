@@ -178,6 +178,8 @@ dependencies = [
     { name = "pillow" },
     { name = "rich" },
     { name = "textual" },
+    { name = "textual-image", extra = ["textual"] },
+    { name = "vdf" },
 ]
 
 [package.dev-dependencies]
@@ -195,6 +197,8 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "textual", specifier = ">=0.47.0" },
+    { name = "textual-image", extras = ["textual"], specifier = ">=0.8.5" },
+    { name = "vdf", specifier = ">=3.4" },
 ]
 
 [package.metadata.requires-dev]
@@ -418,6 +422,24 @@ wheels = [
 ]
 
 [[package]]
+name = "textual-image"
+version = "0.8.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/64/e5e49b639794f0ae426f6c19ca541af55b24a30e96df3b03e086688b8ec1/textual_image-0.8.5.tar.gz", hash = "sha256:43d4c0026a4f21fa255f41eac7b0fc1f7410a4c7bc9bf95b908bec901b0a8c3a", size = 109049, upload-time = "2025-12-26T18:38:08.709Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/0d/ca8367c100c09850379f83645abd60f47c051e6b1e7b64adb953bce96be9/textual_image-0.8.5-py3-none-any.whl", hash = "sha256:dffc85458ca8744bce3f17bddbf582b1e086eb52d111f1063753e8dd316fa45d", size = 109618, upload-time = "2025-12-26T18:38:07.11Z" },
+]
+
+[package.optional-dependencies]
+textual = [
+    { name = "textual" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -433,4 +455,13 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/91/7a/146a99696aee0609e3712f2b44c6274566bc368dfe8375191278045186b8/uc-micro-py-1.0.3.tar.gz", hash = "sha256:d321b92cff673ec58027c04015fcaa8bb1e005478643ff4a500882eaab88c48a", size = 6043, upload-time = "2024-02-09T16:52:01.654Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/37/87/1f677586e8ac487e29672e4b17455758fce261de06a0d086167bb760361a/uc_micro_py-1.0.3-py3-none-any.whl", hash = "sha256:db1dffff340817673d7b466ec86114a9dc0e9d4d9b5ba229d9d60e5c12600cd5", size = 6229, upload-time = "2024-02-09T16:52:00.371Z" },
+]
+
+[[package]]
+name = "vdf"
+version = "3.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/7f/74192f47d67c8bf3c47bf0d8487b3457614c2c98d58b6617721d217f3f79/vdf-3.4.tar.gz", hash = "sha256:fd5419f41e07a1009e5ffd027c7dcbe43d1f7e8ef453aeaa90d9d04b807de2af", size = 11132, upload-time = "2021-05-22T09:26:05.252Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/60/6456b687cf55cf60020dcd01f9bc51561c3cc84f05fd8e0feb71ce60f894/vdf-3.4-py2.py3-none-any.whl", hash = "sha256:68c1a125cc49e343d535af2dd25074e9cb0908c6607f073947c4a04bbe234534", size = 10357, upload-time = "2021-05-22T09:26:03.948Z" },
 ]

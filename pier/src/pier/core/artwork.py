@@ -23,6 +23,19 @@ class ArtworkSet:
     icon: bytes | None = None  # Icon
 
 
+@dataclass
+class ArtworkOption:
+    """A single artwork option from SteamGridDB."""
+
+    index: int
+    url: str
+    thumb_url: str | None = None
+    author: str | None = None
+    score: int = 0
+    style: str | None = None
+    image_bytes: bytes | None = None  # Lazy-loaded
+
+
 # Libretro thumbnail system name mapping
 LIBRETRO_SYSTEMS = {
     "n64": "Nintendo - Nintendo 64",
@@ -199,6 +212,125 @@ class SteamGridDB(SteamGridDBClient):
         )
 
         return ArtworkSet(grid=grid, hero=hero, logo=logo, icon=icon)
+
+    async def get_grid_options(self, game_id: int, limit: int = 10) -> list[ArtworkOption]:
+        """Get multiple grid image options (600x900) for a game.
+
+        Args:
+            game_id: SteamGridDB game ID
+            limit: Maximum number of options to return
+
+        Returns:
+            List of ArtworkOption (without image bytes loaded)
+        """
+        return await self._get_options("grids", game_id, limit, {"dimensions": "600x900", "types": "static"})
+
+    async def get_hero_options(self, game_id: int, limit: int = 10) -> list[ArtworkOption]:
+        """Get multiple hero image options (1920x620) for a game."""
+        return await self._get_options("heroes", game_id, limit)
+
+    async def get_logo_options(self, game_id: int, limit: int = 10) -> list[ArtworkOption]:
+        """Get multiple logo options for a game."""
+        return await self._get_options("logos", game_id, limit)
+
+    async def get_icon_options(self, game_id: int, limit: int = 10) -> list[ArtworkOption]:
+        """Get multiple icon options for a game."""
+        return await self._get_options("icons", game_id, limit)
+
+    async def _get_options(
+        self, endpoint: str, game_id: int, limit: int, extra_params: dict | None = None
+    ) -> list[ArtworkOption]:
+        """Get multiple artwork options from a SteamGridDB endpoint.
+
+        Args:
+            endpoint: API endpoint (grids, heroes, logos, icons)
+            game_id: SteamGridDB game ID
+            limit: Maximum options to return
+            extra_params: Additional query parameters
+
+        Returns:
+            List of ArtworkOption (without image bytes)
+        """
+        client = await self._get_client()
+        url = f"{self.api_base}/{endpoint}/game/{game_id}"
+        params = extra_params or {}
+
+        try:
+            response = await client.get(url, params=params)
+            if response.status_code != 200:
+                return []
+
+            data = response.json()
+            if not data.get("success") or not data.get("data"):
+                return []
+
+            options = []
+            for i, item in enumerate(data["data"][:limit]):
+                author_data = item.get("author")
+                author_name = author_data.get("name") if isinstance(author_data, dict) else None
+
+                options.append(ArtworkOption(
+                    index=i,
+                    url=item["url"],
+                    thumb_url=item.get("thumb"),
+                    author=author_name,
+                    score=item.get("score", 0),
+                    style=item.get("style"),
+                ))
+            return options
+        except (httpx.RequestError, KeyError, IndexError):
+            return []
+
+    async def download_option(self, option: ArtworkOption) -> bytes | None:
+        """Download image bytes for an artwork option.
+
+        Args:
+            option: ArtworkOption to download
+
+        Returns:
+            Image bytes, or None on failure
+        """
+        if option.image_bytes:
+            return option.image_bytes
+
+        client = await self._get_client()
+        try:
+            response = await client.get(option.url)
+            if response.status_code == 200:
+                option.image_bytes = response.content
+                return response.content
+        except httpx.RequestError:
+            pass
+
+        return None
+
+    async def fetch_all_options(self, title: str, limit: int = 10) -> tuple[int | None, dict[str, list[ArtworkOption]]]:
+        """Fetch all artwork options for a game.
+
+        Args:
+            title: Game title to search for
+            limit: Maximum options per type
+
+        Returns:
+            Tuple of (steamgriddb_game_id, dict of art_type -> options)
+        """
+        game_id = await self.search_game(title)
+        if not game_id:
+            return None, {}
+
+        grids, heroes, logos, icons = await asyncio.gather(
+            self.get_grid_options(game_id, limit),
+            self.get_hero_options(game_id, limit),
+            self.get_logo_options(game_id, limit),
+            self.get_icon_options(game_id, limit),
+        )
+
+        return game_id, {
+            "grid": grids,
+            "hero": heroes,
+            "logo": logos,
+            "icon": icons,
+        }
 
 
 class LibretroThumbnails(AsyncHTTPClient):
