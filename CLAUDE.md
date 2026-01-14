@@ -5,8 +5,8 @@
 To deploy changes to the HTPC server:
 
 ```bash
-# 1. Rsync files to server
-rsync -avz --exclude='.git' /Users/jack/workspace/nix-htpc/ root@htpc-server.local:/etc/nixos/
+# 1. Rsync files to server (--chmod ensures files are world-readable for pier)
+rsync -avz --chmod=a+rX --exclude='.git' /Users/jack/workspace/nix-htpc/ root@htpc-server.local:/etc/nixos/
 
 # 2. Rebuild on server
 ssh root@htpc-server.local 'cd /etc/nixos && nixos-rebuild switch --flake .#htpc-server'

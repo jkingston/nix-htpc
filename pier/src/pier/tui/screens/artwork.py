@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, ScrollableContainer
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Static
+from textual.widgets import Footer, Static
 
 from pier.core.artwork import SteamGridDB
 from pier.core.artwork_cache import ArtworkCache, ArtworkOptionMeta
@@ -182,30 +182,35 @@ class ArtworkDialog(ModalScreen[bool]):
         background: $surface;
         border: solid $primary;
         padding: 1 2;
+        layout: vertical;
     }
 
     #artwork-title {
         text-align: center;
         text-style: bold;
         width: 100%;
+        height: auto;
         padding-bottom: 1;
     }
 
     #artwork-sections {
         height: 1fr;
         width: 100%;
+        min-height: 10;
     }
 
     #artwork-info {
         text-align: center;
         color: $text-muted;
+        height: auto;
         padding: 1 0;
     }
 
     #artwork-actions {
         height: auto;
+        width: 100%;
         align: center middle;
-        margin-top: 1;
+        padding: 1 0;
     }
 
     #artwork-actions Button {
@@ -214,7 +219,14 @@ class ArtworkDialog(ModalScreen[bool]):
 
     #artwork-status {
         text-align: center;
-        padding-top: 1;
+        height: auto;
+        padding: 1 0;
+    }
+
+    #artwork-help {
+        text-align: center;
+        color: $text-muted;
+        height: auto;
     }
     """
 
@@ -250,13 +262,7 @@ class ArtworkDialog(ModalScreen[bool]):
                 id="artwork-sections",
             ),
             Static("", id="artwork-info"),
-            Horizontal(
-                Button("Fetch More", id="btn-fetch", variant="default"),
-                Button("Select", id="btn-select", variant="default"),
-                Button("Save & Apply", id="btn-save", variant="primary"),
-                Button("Cancel", id="btn-cancel", variant="default"),
-                id="artwork-actions",
-            ),
+            Static("[F] Fetch  [←→] Browse  [Enter] Select  [S] Save  [Esc] Cancel", id="artwork-help"),
             Static("", id="artwork-status"),
             id="artwork-container",
         )
@@ -412,14 +418,3 @@ class ArtworkDialog(ModalScreen[bool]):
         """Cancel without saving."""
         self.dismiss(False)
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
-        button_id = event.button.id
-        if button_id == "btn-fetch":
-            self.action_fetch()
-        elif button_id == "btn-select":
-            self.action_select()
-        elif button_id == "btn-save":
-            self.action_save()
-        elif button_id == "btn-cancel":
-            self.action_cancel()
