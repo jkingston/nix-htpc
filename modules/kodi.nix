@@ -27,14 +27,27 @@ let
   steamSplash = mkSplash "Loading Steam...";
   kodiSplash = mkSplash "Loading Kodi...";
 
+  # Sync pier games to Steam shortcuts before Steam starts
+  syncBeforeSteam = pkgs.writeShellScript "sync-before-steam" ''
+    STEAM_USERDATA="$HOME/.steam/steam/userdata"
+    if [ -d "$STEAM_USERDATA" ]; then
+      # Run pier steam sync (non-interactive, silent on errors)
+      /run/current-system/sw/bin/pier steam sync --auto 2>/dev/null || true
+    fi
+  '';
+
   # Steam session via gamescope (Valve's gaming compositor)
   steamSession = pkgs.writeShellScript "steam-session" ''
     # Show splash on framebuffer during Steam startup (~15-20s)
     ${pkgs.fbida}/bin/fbi -T 1 -d /dev/fb0 --noverbose -a ${steamSplash} 2>/dev/null &
     SPLASH_PID=$!
 
+    # Sync pier games to Steam shortcuts (runs during splash)
+    ${syncBeforeSteam}
+
     # CEC wake - ensure TV stays on during session switch
-    ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec0 --image-view-on 2>/dev/null || true
+    ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec1 --playback --osd-name="Steam" 2>/dev/null || true
+    ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec1 --to 0 --image-view-on 2>/dev/null || true
 
     export SDL_VIDEODRIVER=wayland
     export XDG_SESSION_TYPE=wayland
@@ -67,8 +80,8 @@ let
           (sleep 10 && kill $SPLASH_PID 2>/dev/null) &
         fi
 
-        # CEC wake - ensure TV stays on during session switch
-        ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec0 --image-view-on 2>/dev/null || true
+        # Reset CEC adapter state (fixes CEC not working after Steam session)
+        ${pkgs.v4l-utils}/bin/cec-ctl -d /dev/cec1 --clear 2>/dev/null || true
 
         exec ${kodiWithAddons}/bin/kodi-standalone
         ;;
