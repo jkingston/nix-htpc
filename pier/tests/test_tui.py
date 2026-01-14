@@ -142,5 +142,9 @@ class TestScreenBindings:
 
         bindings = {b.key for b in SteamScreen.BINDINGS}
         assert "escape" in bindings
-        assert "space" in bindings  # toggle
+        assert "h" in bindings  # hide/show toggle
         assert "s" in bindings  # sync
+        assert "r" in bindings  # remove
+        assert "d" in bindings  # delete
+        assert "a" in bindings  # add custom
+        assert "i" in bindings  # install

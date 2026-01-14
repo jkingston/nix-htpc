@@ -70,7 +70,8 @@ class TestLibrary:
         lib = Library()
         assert lib.installed_ports == {}
         assert lib.downloaded_roms == {}
-        assert lib.steam_links == {}
+        assert lib.hidden_from_steam == set()
+        assert lib.custom_games == {}
 
     def test_library_add_port(self):
         """Library should track installed ports."""
@@ -99,17 +100,31 @@ class TestLibrary:
 
         assert len(lib.downloaded_roms["n64"]) == 1
 
-    def test_library_steam_links(self):
-        """Library should track Steam link status."""
+    def test_library_hidden_from_steam(self):
+        """Library should track hidden from Steam status."""
         lib = Library()
 
-        assert lib.is_linked_to_steam("soh") is False
+        # Not hidden by default
+        assert lib.is_hidden_from_steam("soh") is False
 
-        lib.set_steam_link("soh", True)
-        assert lib.is_linked_to_steam("soh") is True
+        # Hide a game
+        lib.set_hidden_from_steam("soh", True)
+        assert lib.is_hidden_from_steam("soh") is True
 
-        lib.set_steam_link("soh", False)
-        assert lib.is_linked_to_steam("soh") is False
+        # Unhide a game
+        lib.set_hidden_from_steam("soh", False)
+        assert lib.is_hidden_from_steam("soh") is False
+
+    def test_library_backwards_compat_steam_links(self):
+        """Backwards-compat methods should work with inverted logic."""
+        lib = Library()
+
+        # is_linked_to_steam is inverse of is_hidden_from_steam
+        lib.set_hidden_from_steam("game", True)
+        assert lib.is_linked_to_steam("game") is False
+
+        lib.set_hidden_from_steam("game", False)
+        assert lib.is_linked_to_steam("game") is True
 
     def test_library_save_and_load(self, temp_dir: Path):
         """Library should round-trip through save/load."""
@@ -118,7 +133,7 @@ class TestLibrary:
         lib = Library()
         lib.add_port("soh", "1.0.0")
         lib.add_rom("n64", "Test.z64")
-        lib.set_steam_link("soh", True)
+        lib.set_hidden_from_steam("hidden_game", True)
         lib.save(pier_dir)
 
         # Verify file was created
@@ -130,11 +145,13 @@ class TestLibrary:
         assert "soh" in loaded.installed_ports
         assert loaded.installed_ports["soh"]["version"] == "1.0.0"
         assert "Test.z64" in loaded.downloaded_roms.get("n64", [])
-        assert loaded.is_linked_to_steam("soh") is True
+        assert loaded.is_hidden_from_steam("hidden_game") is True
+        assert loaded.is_hidden_from_steam("soh") is False  # Not hidden
 
     def test_library_load_missing_file(self, temp_dir: Path):
         """Library.load should return empty library for missing file."""
         lib = Library.load(temp_dir / "nonexistent")
         assert lib.installed_ports == {}
         assert lib.downloaded_roms == {}
-        assert lib.steam_links == {}
+        assert lib.hidden_from_steam == set()
+        assert lib.custom_games == {}
