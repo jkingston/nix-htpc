@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
@@ -15,6 +16,7 @@ from pier.core.constants import (
     DOWNLOAD_TIMEOUT,
     HASH_CHUNK_SIZE,
     RETROARCH_SYSTEM_RAW,
+    USER_AGENT,
 )
 from pier.core.errors import BIOSHashMismatchError, UnknownBIOSError
 from pier.core.http import AsyncHTTPClient
@@ -184,7 +186,11 @@ class BiosManager(AsyncHTTPClient):
         Args:
             config: Optional config, loads default if not provided
         """
-        super().__init__(timeout=DOWNLOAD_TIMEOUT, follow_redirects=True)
+        super().__init__(
+            timeout=DOWNLOAD_TIMEOUT,
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+        )
         self.config = config or Config.load()
         self.bios_dir = self.config.emulation_dir / "bios"
         self.base_url = RETROARCH_SYSTEM_RAW
@@ -270,7 +276,8 @@ class BiosManager(AsyncHTTPClient):
             ValueError: If downloaded file hash doesn't match
         """
         client = await self._get_client()
-        url = f"{self.base_url}/{bios.github_path}"
+        # URL-encode the path (spaces in github_path like "Sony - PlayStation/...")
+        url = f"{self.base_url}/{quote(bios.github_path, safe='/')}"
 
         self.bios_dir.mkdir(parents=True, exist_ok=True)
         dest_path = self._get_bios_path(bios)
@@ -321,16 +328,18 @@ class BiosManager(AsyncHTTPClient):
     async def download_recommended(
         self,
         progress_callback: Callable[[str, int, int], None] | None = None,
-    ) -> list[Path]:
+    ) -> tuple[list[Path], list[tuple[str, str]]]:
         """Download all recommended (priority 1) BIOS files.
 
         Args:
             progress_callback: Optional callback(filename, downloaded, total)
 
         Returns:
-            List of paths to downloaded files
+            Tuple of (successful paths, failed downloads as [(filename, error), ...])
         """
-        paths = []
+        paths: list[Path] = []
+        failed: list[tuple[str, str]] = []
+
         for bios in get_recommended_bios():
             # Skip if already valid
             result = self.check_file(bios)
@@ -341,25 +350,28 @@ class BiosManager(AsyncHTTPClient):
             try:
                 path = await self.download(bios, file_callback)
                 paths.append(path)
-            except (httpx.HTTPStatusError, BIOSHashMismatchError):
-                # Continue with other files if one fails
-                pass
+            except httpx.HTTPStatusError as e:
+                failed.append((bios.filename, f"HTTP {e.response.status_code}"))
+            except BIOSHashMismatchError as e:
+                failed.append((bios.filename, str(e)))
 
-        return paths
+        return paths, failed
 
     async def download_all(
         self,
         progress_callback: Callable[[str, int, int], None] | None = None,
-    ) -> list[Path]:
+    ) -> tuple[list[Path], list[tuple[str, str]]]:
         """Download all BIOS files in the registry.
 
         Args:
             progress_callback: Optional callback(filename, downloaded, total)
 
         Returns:
-            List of paths to downloaded files
+            Tuple of (successful paths, failed downloads as [(filename, error), ...])
         """
-        paths = []
+        paths: list[Path] = []
+        failed: list[tuple[str, str]] = []
+
         for bios in BIOS_REGISTRY:
             # Skip if already valid
             result = self.check_file(bios)
@@ -370,10 +382,12 @@ class BiosManager(AsyncHTTPClient):
             try:
                 path = await self.download(bios, file_callback)
                 paths.append(path)
-            except (httpx.HTTPStatusError, BIOSHashMismatchError):
-                pass
+            except httpx.HTTPStatusError as e:
+                failed.append((bios.filename, f"HTTP {e.response.status_code}"))
+            except BIOSHashMismatchError as e:
+                failed.append((bios.filename, str(e)))
 
-        return paths
+        return paths, failed
 
 
 # Synchronous wrappers for CLI use
@@ -401,8 +415,12 @@ def download_bios_sync(
 
 def download_recommended_sync(
     progress_callback: Callable[[str, int, int], None] | None = None,
-) -> list[Path]:
-    """Synchronous wrapper for downloading recommended BIOS files."""
+) -> tuple[list[Path], list[tuple[str, str]]]:
+    """Synchronous wrapper for downloading recommended BIOS files.
+
+    Returns:
+        Tuple of (successful paths, failed downloads as [(filename, error), ...])
+    """
 
     async def _download():
         manager = BiosManager()
@@ -416,8 +434,12 @@ def download_recommended_sync(
 
 def download_all_sync(
     progress_callback: Callable[[str, int, int], None] | None = None,
-) -> list[Path]:
-    """Synchronous wrapper for downloading all BIOS files."""
+) -> tuple[list[Path], list[tuple[str, str]]]:
+    """Synchronous wrapper for downloading all BIOS files.
+
+    Returns:
+        Tuple of (successful paths, failed downloads as [(filename, error), ...])
+    """
 
     async def _download():
         manager = BiosManager()

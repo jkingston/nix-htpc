@@ -156,13 +156,8 @@ class BiosScreen(PierScreen):
     async def _download_recommended(self) -> None:
         """Worker to download recommended BIOS files."""
         try:
-            paths = await self.manager.download_recommended()
-            if paths:
-                self.app.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
-            else:
-                self.app.call_from_thread(
-                    self.notify_info, "All recommended BIOS files already present"
-                )
+            paths, failed = await self.manager.download_recommended()
+            self._report_download_result(paths, failed, "recommended")
         except Exception as e:
             self.app.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
@@ -171,12 +166,32 @@ class BiosScreen(PierScreen):
     async def _download_all(self) -> None:
         """Worker to download all BIOS files."""
         try:
-            paths = await self.manager.download_all()
-            if paths:
-                self.app.call_from_thread(self.notify_success, f"Downloaded {len(paths)} BIOS files")
-            else:
-                self.app.call_from_thread(self.notify_info, "All BIOS files already present")
+            paths, failed = await self.manager.download_all()
+            self._report_download_result(paths, failed, "all")
         except Exception as e:
             self.app.call_from_thread(self.notify_error, f"Error: {e}")
         finally:
             self.app.call_from_thread(self.refresh_table)
+
+    def _report_download_result(
+        self,
+        paths: list,
+        failed: list[tuple[str, str]],
+        scope: str,
+    ) -> None:
+        """Report download results to user."""
+        if not paths and not failed:
+            self.app.call_from_thread(
+                self.notify_info, f"All {scope} BIOS files already present"
+            )
+        elif failed:
+            # Show failures prominently
+            fail_summary = ", ".join(f"{f[0]} ({f[1]})" for f in failed[:3])
+            if len(failed) > 3:
+                fail_summary += f" +{len(failed) - 3} more"
+            msg = f"Downloaded {len(paths)}, failed {len(failed)}: {fail_summary}"
+            self.app.call_from_thread(self.notify_warning, msg)
+        else:
+            self.app.call_from_thread(
+                self.notify_success, f"Downloaded {len(paths)} BIOS files"
+            )

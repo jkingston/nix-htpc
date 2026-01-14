@@ -1,12 +1,14 @@
 """Port installation logic."""
 
 import asyncio
+import os
 import shutil
 import stat
 import subprocess
 import tarfile
 import zipfile
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 
 from pier.core.artwork import ArtworkManager
@@ -30,6 +32,281 @@ from pier.core.registry import (
     get_port,
 )
 from pier.core.steam import SteamLibrary
+
+__all__ = [
+    "InstallerType",
+    "UnsupportedInstallerError",
+    "detect_installer_type",
+    "get_installer_description",
+    "run_installer",
+    "find_executables",
+    "ProgressReporter",
+    "PortInstaller",
+    "install_port_sync",
+    "check_updates_sync",
+]
+
+# =============================================================================
+# Game Installer Detection (GOG, itch.io, etc.)
+# =============================================================================
+
+
+class InstallerType(Enum):
+    """Supported installer types."""
+
+    INNOSETUP = "innosetup"  # GOG Windows installers, many itch.io games
+    NSIS = "nsis"  # Some Windows installers
+    MSI = "msi"  # Microsoft installer
+    MOJOSETUP = "mojosetup"  # GOG Linux installers
+    MAKESELF = "makeself"  # Self-extracting shell scripts
+    UNSUPPORTED = "unsupported"
+
+
+class UnsupportedInstallerError(Exception):
+    """Raised when installer format is not supported for silent install."""
+
+    pass
+
+
+def detect_installer_type(path: Path) -> InstallerType:
+    """Detect the installer type from file contents.
+
+    Args:
+        path: Path to installer file
+
+    Returns:
+        InstallerType enum value
+    """
+    # Read file header
+    try:
+        with open(path, "rb") as f:
+            header = f.read(4096)
+    except OSError:
+        return InstallerType.UNSUPPORTED
+
+    # Check Windows executable formats
+    if b"Inno Setup" in header:
+        return InstallerType.INNOSETUP
+    if b"Nullsoft" in header:
+        return InstallerType.NSIS
+    if header[:4] == b"\xD0\xCF\x11\xE0":  # MSI compound document magic
+        return InstallerType.MSI
+
+    # Check Linux shell script formats
+    if path.suffix.lower() == ".sh":
+        try:
+            text = path.read_text(errors="ignore")[:2000]
+            if "MojoSetup" in text:
+                return InstallerType.MOJOSETUP
+            if "makeself" in text.lower():
+                return InstallerType.MAKESELF
+        except OSError:
+            pass
+
+    return InstallerType.UNSUPPORTED
+
+
+def get_installer_description(installer_type: InstallerType) -> str:
+    """Get human-readable description for installer type."""
+    descriptions = {
+        InstallerType.INNOSETUP: "InnoSetup (GOG/Windows)",
+        InstallerType.NSIS: "NSIS (Windows)",
+        InstallerType.MSI: "MSI (Windows)",
+        InstallerType.MOJOSETUP: "MojoSetup (Linux)",
+        InstallerType.MAKESELF: "makeself (Linux)",
+        InstallerType.UNSUPPORTED: "Unknown format",
+    }
+    return descriptions.get(installer_type, "Unknown")
+
+
+async def run_installer(
+    installer: Path,
+    dest: Path,
+    name: str,
+    on_status: Callable[[str], None] | None = None,
+) -> Path:
+    """Run an installer in silent mode.
+
+    Args:
+        installer: Path to installer file
+        dest: Destination directory
+        name: Game name (for folder naming)
+        on_status: Optional status callback
+
+    Returns:
+        Path to installed game directory
+
+    Raises:
+        UnsupportedInstallerError: If installer format not supported
+        InstallError: If installation fails
+    """
+    status = on_status or (lambda _: None)
+    installer_type = detect_installer_type(installer)
+
+    if installer_type == InstallerType.UNSUPPORTED:
+        raise UnsupportedInstallerError(
+            "This installer format requires GUI interaction. "
+            "Install manually, then use 'Add Custom' to add to Steam."
+        )
+
+    dest.mkdir(parents=True, exist_ok=True)
+
+    if installer_type == InstallerType.INNOSETUP:
+        return await _run_innosetup(installer, dest, name, status)
+    elif installer_type == InstallerType.NSIS:
+        return await _run_nsis(installer, dest, name, status)
+    elif installer_type == InstallerType.MSI:
+        return await _run_msi(installer, dest, name, status)
+    elif installer_type == InstallerType.MOJOSETUP:
+        return await _run_mojosetup(installer, dest, status)
+    elif installer_type == InstallerType.MAKESELF:
+        return await _run_makeself(installer, dest, status)
+
+    raise UnsupportedInstallerError("Unknown installer type")
+
+
+async def _run_wine_installer(
+    dest: Path,
+    name: str,
+    status: Callable[[str], None],
+    installer_name: str,
+    cmd: list[str],
+) -> Path:
+    """Run a Windows installer via Wine.
+
+    Args:
+        dest: Destination directory for Wine prefix
+        name: Game name for install directory
+        status: Status callback
+        installer_name: Human-readable installer type for messages
+        cmd: Full command to execute
+
+    Returns:
+        Path to installed game directory
+    """
+    status(f"Running {installer_name} installer...")
+
+    wine_prefix = dest / ".wine"
+    wine_prefix.mkdir(parents=True, exist_ok=True)
+
+    result = await asyncio.to_thread(
+        subprocess.run,
+        cmd,
+        env={**os.environ, "WINEPREFIX": str(wine_prefix)},
+        capture_output=True,
+    )
+
+    if result.returncode != 0:
+        raise InstallError(f"{installer_name} installer failed: {result.stderr.decode()[:200]}")
+
+    status("Installation complete")
+    return wine_prefix / "drive_c" / "Games" / name
+
+
+async def _run_innosetup(
+    installer: Path, dest: Path, name: str, status: Callable[[str], None]
+) -> Path:
+    """Run InnoSetup installer via Wine."""
+    wine_dest = f"C:\\Games\\{name}"
+    cmd = [
+        "wine",
+        str(installer),
+        "/VERYSILENT",
+        f"/DIR={wine_dest}",
+        "/NOICONS",
+        "/SUPPRESSMSGBOXES",
+    ]
+    return await _run_wine_installer(dest, name, status, "InnoSetup", cmd)
+
+
+async def _run_nsis(
+    installer: Path, dest: Path, name: str, status: Callable[[str], None]
+) -> Path:
+    """Run NSIS installer via Wine."""
+    wine_dest = f"C:\\Games\\{name}"
+    cmd = ["wine", str(installer), "/S", f"/D={wine_dest}"]
+    return await _run_wine_installer(dest, name, status, "NSIS", cmd)
+
+
+async def _run_msi(
+    installer: Path, dest: Path, name: str, status: Callable[[str], None]
+) -> Path:
+    """Run MSI installer via Wine."""
+    wine_dest = f"C:\\Games\\{name}"
+    cmd = ["wine", "msiexec", "/qn", "/i", str(installer), f"INSTALLDIR={wine_dest}"]
+    return await _run_wine_installer(dest, name, status, "MSI", cmd)
+
+
+async def _run_mojosetup(
+    installer: Path, dest: Path, status: Callable[[str], None]
+) -> Path:
+    """Run MojoSetup Linux installer."""
+    status("Running MojoSetup installer...")
+
+    # Make executable
+    installer.chmod(installer.stat().st_mode | stat.S_IXUSR)
+
+    cmd = [str(installer), "--noreadme", "--noprompt", f"--destination={dest}"]
+
+    result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+
+    if result.returncode != 0:
+        raise InstallError(f"MojoSetup installer failed: {result.stderr.decode()[:200]}")
+
+    status("Installation complete")
+    return dest
+
+
+async def _run_makeself(
+    installer: Path, dest: Path, status: Callable[[str], None]
+) -> Path:
+    """Run makeself self-extracting archive."""
+    status("Extracting makeself archive...")
+
+    # Make executable
+    installer.chmod(installer.stat().st_mode | stat.S_IXUSR)
+
+    cmd = [str(installer), f"--target={dest}"]
+
+    result = await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+
+    if result.returncode != 0:
+        raise InstallError(f"makeself extraction failed: {result.stderr.decode()[:200]}")
+
+    status("Extraction complete")
+    return dest
+
+
+def find_executables(install_dir: Path) -> list[Path]:
+    """Find executable files in an installed game directory.
+
+    Args:
+        install_dir: Directory to search
+
+    Returns:
+        List of executable paths, sorted by likelihood of being the main game
+    """
+    executables: list[Path] = []
+
+    for f in install_dir.rglob("*"):
+        if not f.is_file():
+            continue
+        suffix = f.suffix.lower()
+        # Windows executables or Linux executables with executable bit
+        if suffix == ".exe" or (suffix in ("", ".x86_64", ".x86") and f.stat().st_mode & stat.S_IXUSR):
+            executables.append(f)
+
+    # Sort: prefer files with "game", "start", "launch" in name, and shorter paths
+    def sort_key(p: Path) -> tuple:
+        name_lower = p.stem.lower()
+        priority = 0
+        if any(kw in name_lower for kw in ("game", "start", "launch", "play")):
+            priority = -2
+        if "unins" in name_lower or "setup" in name_lower:
+            priority = 10  # Likely uninstaller/setup, deprioritize
+        return (priority, len(str(p)), p.name)
+
+    return sorted(executables, key=sort_key)
 
 
 class ProgressReporter:

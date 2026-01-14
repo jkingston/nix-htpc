@@ -242,10 +242,22 @@ class RomsScreen(PierScreen):
         """Worker to download a ROM."""
         browser = MyrientBrowser()
         try:
+
+            def on_progress(downloaded: int, total: int) -> None:
+                if total > 0:
+                    pct = int((downloaded / total) * 100)
+                    size_mb = downloaded / (1024 * 1024)
+                    total_mb = total / (1024 * 1024)
+                    self.app.call_from_thread(
+                        self._update_status,
+                        f"Downloading: {size_mb:.1f}/{total_mb:.1f} MB ({pct}%)",
+                    )
+
             dest_dir = self.config.roms_dir / self._current_system
             path = await browser.download(
                 entry.path,
                 dest_dir,
+                progress_callback=on_progress,
                 extract=True,
             )
             # Record in library
