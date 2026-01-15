@@ -1,35 +1,36 @@
-"""Pytest fixtures for pier tests."""
+"""Test fixtures."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from pier.core.config import Config, Library
+
+@pytest.fixture
+def temp_dir(tmp_path: Path) -> Path:
+    """Return a temporary directory for tests."""
+    return tmp_path
 
 
 @pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+def roms_dir(tmp_path: Path) -> Path:
+    """Create a temporary ROMs directory with sample files."""
+    roms = tmp_path / "roms"
 
+    # Create N64 ROMs
+    n64_dir = roms / "n64"
+    n64_dir.mkdir(parents=True)
+    (n64_dir / "Super Mario 64 (USA).z64").touch()
+    (n64_dir / "Mario Kart 64 (USA).z64").touch()
+    (n64_dir / "readme.txt").touch()  # Should be ignored
 
-@pytest.fixture
-def temp_config(temp_dir: Path) -> Config:
-    """Create a Config with temporary paths."""
-    emulation_dir = temp_dir / "emulation"
-    emulation_dir.mkdir(parents=True)
+    # Create SNES ROMs
+    snes_dir = roms / "snes"
+    snes_dir.mkdir(parents=True)
+    (snes_dir / "Super Mario World (USA).sfc").touch()
 
-    return Config(
-        emulation_dir=emulation_dir,
-        roms_dir=emulation_dir / "roms",
-        ports_dir=emulation_dir / "ports",
-        pier_dir=emulation_dir / ".pier",
-    )
+    # Create PS2 ROMs
+    ps2_dir = roms / "ps2"
+    ps2_dir.mkdir(parents=True)
+    (ps2_dir / "Gran Turismo 4 (USA).iso").touch()
 
-
-@pytest.fixture
-def temp_library() -> Library:
-    """Create an empty Library for tests."""
-    return Library()
+    return roms

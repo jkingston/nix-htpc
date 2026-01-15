@@ -1,802 +1,247 @@
-"""CLI interface for pier."""
-
-import asyncio
-import sys
-from collections.abc import Callable
+"""Pier CLI - ROM management for NixOS HTPC."""
 
 import click
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
-from pier.core.constants import PIER_TAG, PORTS_TAG, STEAM_RUN_EXECUTABLE
+from pier import __version__
+from pier.config import Config
+from pier.roms.scanner import scan_roms
+from pier.roms.systems import SYSTEMS
+from pier.steam.paths import find_shortcuts_vdf, find_steam_userdata
+from pier.steam.shortcuts import get_pier_shortcuts, load_shortcuts, sync_games
 
 console = Console()
 
 
-def make_download_progress(progress: Progress, task_id) -> Callable[[int, int], None]:
-    """Create a download progress callback for a Progress task.
-
-    Args:
-        progress: The Rich Progress instance
-        task_id: The task ID from progress.add_task()
-
-    Returns:
-        A callback function that updates progress as bytes are downloaded
-    """
-
-    def callback(downloaded: int, total: int):
-        if progress.tasks[task_id].total is None and total > 0:
-            progress.update(task_id, total=total)
-        progress.update(task_id, completed=downloaded)
-
-    return callback
-
-
-@click.group(invoke_without_command=True)
-@click.pass_context
-@click.version_option()
-def main(ctx: click.Context) -> None:
-    """pier - HTPC game management tool.
-
-    Manage ROMs, native game ports, and Steam integration from your terminal.
-    """
-    if ctx.invoked_subcommand is None:
-        # Launch TUI if no subcommand
-        from pier.tui.app import PierApp
-
-        app = PierApp()
-        app.run()
-
-
-@main.command("list")
-def list_cmd() -> None:
-    """List installed ports and available ports."""
-    from pier.core.config import Config, Library
-    from pier.core.registry import list_ports
-
-    config = Config.load()
-    library = Library.load(config.pier_dir)
-
-    table = Table(title="Game Ports")
-    table.add_column("ID", style="cyan")
-    table.add_column("Name", style="green")
-    table.add_column("Game")
-    table.add_column("Status")
-    table.add_column("Steam")
-
-    for port in list_ports():
-        installed = port.id in library.installed_ports
-        version = library.installed_ports.get(port.id, {}).get("version", "")
-        steam_linked = library.is_linked_to_steam(port.id)
-
-        status = f"[green]v{version}[/green]" if installed else "[dim]not installed[/dim]"
-        steam = "[green]linked[/green]" if steam_linked else "[dim]-[/dim]"
-
-        table.add_row(port.id, port.name, port.game, status, steam)
-
-    console.print(table)
-
-
-@main.command()
-@click.argument("port_id")
-@click.option("--no-mods", is_flag=True, help="Skip HD texture pack installation")
-@click.option("--no-steam", is_flag=True, help="Don't add to Steam library")
-@click.option("--no-artwork", is_flag=True, help="Don't fetch artwork")
-def install(port_id: str, no_mods: bool, no_steam: bool, no_artwork: bool) -> None:
-    """Install a native game port."""
-    from pier.core.installer import InstallError, PortInstaller, ProgressReporter
-    from pier.core.registry import get_port
-
-    port = get_port(port_id)
-    if not port:
-        console.print(f"[red]Unknown port: {port_id}[/red]")
-        console.print("\nAvailable ports:")
-        from pier.core.registry import list_ports
-
-        for p in list_ports():
-            console.print(f"  {p.id}: {p.name} ({p.game})")
-        sys.exit(1)
-
-    console.print(f"[bold]Installing {port.name}[/bold]")
-    console.print(f"Game: {port.game}")
-    console.print(f"ROM required: {port.rom.name}")
-    console.print()
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Starting...", total=None)
-        download_task = None
-
-        def on_status(message: str):
-            progress.update(task, description=message)
-
-        def on_progress(downloaded: int, total: int):
-            nonlocal download_task
-            if download_task is None and total > 0:
-                download_task = progress.add_task("Downloading...", total=total)
-            if download_task is not None:
-                progress.update(download_task, completed=downloaded)
-
-        async def _install():
-            reporter = ProgressReporter(on_status, on_progress)
-            installer = PortInstaller(progress=reporter)
-            return await installer.install(
-                port_id,
-                with_mods=not no_mods,
-                add_to_steam=not no_steam,
-                fetch_artwork=not no_artwork,
-            )
-
-        try:
-            result = asyncio.run(_install())
-            progress.update(task, description="[green]Complete![/green]")
-        except InstallError as e:
-            progress.update(task, description=f"[red]Failed: {e}[/red]")
-            sys.exit(1)
-
-    console.print()
-    console.print(f"[green]Successfully installed {port.name}![/green]")
-    console.print(f"Location: {result}")
-    if not no_steam:
-        console.print("Steam shortcut created - restart Steam to see it")
-
-
-@main.command()
-@click.argument("port_id", required=False)
-@click.option("--auto", is_flag=True, help="Non-interactive mode for systemd")
-def update(port_id: str | None, auto: bool) -> None:
-    """Check for and apply updates."""
-    import asyncio
-
-    from pier.core.installer import PortInstaller, check_updates_sync
-
-    if port_id:
-        # Update specific port
-        async def _update():
-            installer = PortInstaller()
-            result = await installer.check_update(port_id)
-            if result:
-                current, new = result
-                console.print(f"Update available: {current} -> {new}")
-                if auto or click.confirm("Update now?"):
-                    await installer.update(port_id)
-                    console.print("[green]Updated successfully![/green]")
-            else:
-                console.print("Already up to date")
-
-        asyncio.run(_update())
-    else:
-        # Check all ports
-        updates = check_updates_sync()
-        if not updates:
-            console.print("All ports are up to date")
-            return
-
-        table = Table(title="Available Updates")
-        table.add_column("Port")
-        table.add_column("Current")
-        table.add_column("New")
-
-        for port_id, current, new in updates:
-            table.add_row(port_id, current, new)
-
-        console.print(table)
-
-        if auto or click.confirm("Update all?"):
-
-            async def _update_all():
-                installer = PortInstaller()
-                for port_id, _, _ in updates:
-                    console.print(f"Updating {port_id}...")
-                    await installer.update(port_id)
-                console.print("[green]All ports updated![/green]")
-
-            asyncio.run(_update_all())
-
-
-@main.group()
-def roms() -> None:
-    """ROM management commands."""
+@click.group()
+@click.version_option(version=__version__)
+def cli() -> None:
+    """Pier - ROM management for NixOS HTPC."""
     pass
 
 
-@roms.command("list")
-@click.argument("system")
-@click.option("--limit", "-n", default=50, help="Maximum results")
-def roms_list(system: str, limit: int) -> None:
-    """List ROMs for a system from myrient."""
-    import asyncio
+@cli.command("list")
+@click.argument("system", required=False)
+@click.option("--in-steam", is_flag=True, help="Only show games synced to Steam")
+@click.option("--not-in-steam", is_flag=True, help="Only show games not synced to Steam")
+def list_games(system: str | None, in_steam: bool, not_in_steam: bool) -> None:
+    """List ROMs on disk.
 
-    from pier.core.myrient import MyrientBrowser
-    from pier.core.registry import SYSTEMS
+    Optionally filter by SYSTEM (e.g., n64, snes, ps2).
+    """
+    config = Config.load()
 
-    if system not in SYSTEMS:
+    if system and system not in SYSTEMS:
         console.print(f"[red]Unknown system: {system}[/red]")
-        console.print("Available systems:", ", ".join(SYSTEMS.keys()))
-        sys.exit(1)
+        console.print(f"Available systems: {', '.join(SYSTEMS.keys())}")
+        raise SystemExit(1)
 
-    console.print(f"Listing ROMs for {SYSTEMS[system].name}...")
+    games = scan_roms(config.roms_dir, system_filter=system)
 
-    async def _list():
-        browser = MyrientBrowser()
-        try:
-            entries = await browser.list_system(system)
-            return entries
-        finally:
-            await browser.close()
-
-    entries = asyncio.run(_list())
-    roms = [e for e in entries if not e.is_directory][:limit]
-
-    table = Table(title=f"{SYSTEMS[system].name} ROMs ({len(roms)} shown)")
-    table.add_column("Name")
-    table.add_column("Size", justify="right")
-
-    for rom in roms:
-        table.add_row(rom.name, rom.size)
-
-    console.print(table)
-
-
-@roms.command("search")
-@click.argument("system")
-@click.argument("query")
-@click.option("--limit", "-n", default=20, help="Maximum results")
-def roms_search(system: str, query: str, limit: int) -> None:
-    """Search ROMs on myrient."""
-    import asyncio
-
-    from pier.core.myrient import MyrientBrowser
-    from pier.core.registry import SYSTEMS
-
-    if system not in SYSTEMS:
-        console.print(f"[red]Unknown system: {system}[/red]")
-        sys.exit(1)
-
-    console.print(f"Searching {SYSTEMS[system].name} for '{query}'...")
-
-    async def _search():
-        browser = MyrientBrowser()
-        try:
-            return await browser.search(system, query, limit)
-        finally:
-            await browser.close()
-
-    results = asyncio.run(_search())
-
-    if not results:
-        console.print("No results found")
+    if not games:
+        console.print("[yellow]No ROMs found.[/yellow]")
+        console.print(f"ROM directory: {config.roms_dir}")
         return
 
-    table = Table(title=f"Search Results ({len(results)})")
-    table.add_column("Name")
-    table.add_column("Size", justify="right")
+    # Check which games are in Steam
+    shortcuts_data = load_shortcuts()
+    pier_shortcuts = get_pier_shortcuts(shortcuts_data)
+    steam_game_ids = set(pier_shortcuts.keys())
 
-    for rom in results:
-        table.add_row(rom.name, rom.size)
+    for game in games:
+        game.in_steam = game.id in steam_game_ids
 
-    console.print(table)
+    # Apply filters
+    if in_steam:
+        games = [g for g in games if g.in_steam]
+    elif not_in_steam:
+        games = [g for g in games if not g.in_steam]
 
+    if not games:
+        console.print("[yellow]No matching games found.[/yellow]")
+        return
 
-@roms.command("download")
-@click.argument("system")
-@click.argument("filename")
-def roms_download(system: str, filename: str) -> None:
-    """Download a ROM from myrient."""
-    import asyncio
-    from urllib.parse import quote
+    # Group by system
+    by_system: dict[str, list] = {}
+    for game in games:
+        by_system.setdefault(game.system.id, []).append(game)
 
-    from pier.core.config import Config
-    from pier.core.myrient import MyrientBrowser
-    from pier.core.registry import SYSTEMS
+    for sys_id in sorted(by_system.keys()):
+        sys_games = by_system[sys_id]
+        system_info = SYSTEMS[sys_id]
 
-    if system not in SYSTEMS:
-        console.print(f"[red]Unknown system: {system}[/red]")
-        sys.exit(1)
+        table = Table(title=f"{system_info.name} ({len(sys_games)} ROMs)")
+        table.add_column("Name", style="cyan")
+        table.add_column("Steam", justify="center")
+        table.add_column("File", style="dim")
 
-    config = Config.load()
-    dest_dir = config.roms_dir / system
+        for game in sys_games:
+            steam_status = "[green]Yes[/green]" if game.in_steam else "[dim]No[/dim]"
+            table.add_row(game.name, steam_status, game.filename)
 
-    console.print(f"Downloading {filename}...")
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Downloading...", total=None)
-        on_progress = make_download_progress(progress, task)
-
-        async def _download():
-            browser = MyrientBrowser()
-            try:
-                path = f"{SYSTEMS[system].myrient_path}/{quote(filename)}"
-                return await browser.download(path, dest_dir, on_progress)
-            finally:
-                await browser.close()
-
-        result = asyncio.run(_download())
-
-    console.print(f"[green]Downloaded:[/green] {result}")
+        console.print(table)
+        console.print()
 
 
-@main.group()
-def steam() -> None:
-    """Steam shortcut management."""
-    pass
+@cli.command()
+@click.argument("system", required=False)
+@click.option("--dry-run", is_flag=True, help="Show what would be synced without making changes")
+def sync(system: str | None, dry_run: bool) -> None:
+    """Sync ROMs to Steam shortcuts.
 
-
-@steam.command("sync")
-@click.option("--auto", is_flag=True, help="Non-interactive mode (for scripts)")
-def steam_sync(auto: bool) -> None:
-    """Sync all games to Steam shortcuts.
-
-    Syncs ports, ROMs, and custom games that are not hidden.
-    Use --auto for non-interactive mode (scripts/services).
+    Optionally filter by SYSTEM (e.g., n64, snes, ps2).
     """
-    from pathlib import Path
-
-    from pier.core.config import Config, Library
-    from pier.core.constants import GAME_ID_ROM_PREFIX
-    from pier.core.errors import ShortcutVDFError
-    from pier.core.registry import get_port, get_system
-    from pier.core.steam import SteamLibrary
-
     config = Config.load()
-    library = Library.load(config.pier_dir)
 
-    try:
-        steam = SteamLibrary()
-    except FileNotFoundError:
-        if auto:
-            sys.exit(0)  # Silent exit if Steam not set up
-        console.print("[red]Steam not found. Has Steam been run at least once?[/red]")
-        sys.exit(1)
+    # Check Steam is available
+    if not find_steam_userdata():
+        console.print("[red]Could not find Steam userdata directory.[/red]")
+        console.print("Is Steam installed?")
+        raise SystemExit(1)
 
-    # Validate we can read shortcuts.vdf before making changes
-    try:
-        steam.load()  # Just validate we can read the file
-    except ShortcutVDFError as e:
-        if auto:
-            print(f"pier: cannot read shortcuts.vdf: {e}", file=sys.stderr)
-            sys.exit(1)
-        console.print(f"[red]Cannot read shortcuts.vdf: {e}[/red]")
-        console.print("Is Steam running? Close it and try again.")
-        sys.exit(1)
+    if system and system not in SYSTEMS:
+        console.print(f"[red]Unknown system: {system}[/red]")
+        raise SystemExit(1)
 
-    # Get existing pier shortcuts to avoid duplicates
-    existing_names: set[str] = set()
-    for shortcut in steam.list_pier_shortcuts():
-        existing_names.add(shortcut.app_name)
+    games = scan_roms(config.roms_dir, system_filter=system)
 
-    synced = 0
+    if not games:
+        console.print("[yellow]No ROMs found to sync.[/yellow]")
+        return
 
-    # Sync ports
-    for port_id, info in library.installed_ports.items():
-        if library.is_hidden_from_steam(port_id):
-            continue
-        port = get_port(port_id)
-        if not port:
-            continue
-        if port.name in existing_names:
-            continue
-        exe_path = info.get("executable", "")
-        if not exe_path:
-            continue
+    result = sync_games(games, dry_run=dry_run)
 
-        steam.add_shortcut(
-            app_name=port.name,
-            exe=STEAM_RUN_EXECUTABLE,
-            start_dir=str(config.ports_dir / port_id),
-            launch_options=f'"{exe_path}"',
-            tags=[PIER_TAG, PORTS_TAG],
-        )
-        synced += 1
-        if not auto:
-            console.print(f"  Synced: {port.name}")
+    if dry_run:
+        console.print("[bold]Dry run - no changes made[/bold]\n")
 
-    # Sync ROMs
-    for system_id, roms in library.downloaded_roms.items():
-        system = get_system(system_id)
-        if not system or not system.emulator_wrapper:
-            continue
+    if result.added:
+        console.print(f"[green]Added {len(result.added)} games:[/green]")
+        for game in result.added:
+            console.print(f"  + {game.name} ({game.system.name})")
 
-        for rom_name in roms:
-            game_id = f"{GAME_ID_ROM_PREFIX}{system_id}:{rom_name}"
-            if library.is_hidden_from_steam(game_id):
-                continue
+    if result.updated:
+        console.print(f"[yellow]Updated {len(result.updated)} games:[/yellow]")
+        for game in result.updated:
+            console.print(f"  ~ {game.name} ({game.system.name})")
 
-            rom_path = config.roms_dir / system_id / rom_name
-            display_name = Path(rom_name).stem
-            if display_name in existing_names:
-                continue
+    if result.removed:
+        console.print(f"[red]Removed {len(result.removed)} shortcuts:[/red]")
+        for game_id in result.removed:
+            console.print(f"  - {game_id}")
 
-            # Build launch options
-            if system.emulator_args:
-                launch_options = f'{system.emulator_args} "{rom_path}"'
-            else:
-                launch_options = f'"{rom_path}"'
+    if result.unchanged:
+        console.print(f"[dim]Unchanged: {len(result.unchanged)} games[/dim]")
 
-            steam.add_shortcut(
-                app_name=display_name,
-                exe=f"/run/current-system/sw/bin/{system.emulator_wrapper}",
-                start_dir=str(rom_path.parent),
-                launch_options=launch_options,
-                tags=[PIER_TAG, system.name],
-            )
-            synced += 1
-            if not auto:
-                console.print(f"  Synced: {display_name}")
-
-    # Sync custom games
-    for game_id, game_data in library.custom_games.items():
-        if library.is_hidden_from_steam(game_id):
-            continue
-
-        name = game_data["name"]
-        if name in existing_names:
-            continue
-
-        exe = game_data.get("executable", "")
-        if not exe:
-            continue
-
-        if game_data.get("use_steam_run", False):
-            final_exe = STEAM_RUN_EXECUTABLE
-            launch_options = f'"{exe}"'
-            if game_data.get("launch_args"):
-                launch_options += f" {game_data['launch_args']}"
-        else:
-            final_exe = exe
-            launch_options = game_data.get("launch_args", "")
-
-        steam.add_shortcut(
-            app_name=name,
-            exe=final_exe,
-            start_dir=game_data.get("start_dir", ""),
-            launch_options=launch_options,
-            tags=[PIER_TAG, "Custom"],
-        )
-        synced += 1
-        if not auto:
-            console.print(f"  Synced: {name}")
-
-    if auto:
-        # Silent output for scripts
-        if synced > 0:
-            print(f"pier: synced {synced} games to Steam")
-    else:
-        console.print(f"[green]Synced {synced} games[/green]")
-        if synced > 0:
-            console.print("Changes will appear next time Steam starts")
+    total_changes = len(result.added) + len(result.updated) + len(result.removed)
+    if total_changes > 0 and not dry_run:
+        console.print("\n[bold]Restart Steam to see changes.[/bold]")
+    elif total_changes == 0:
+        console.print("[green]Everything up to date.[/green]")
 
 
-@steam.command("link")
-@click.argument("game_id")
-def steam_link(game_id: str) -> None:
-    """Link a game to Steam library."""
-    from pier.core.config import Config, Library
+@cli.command()
+@click.argument("key", required=False)
+@click.argument("value", required=False)
+def config(key: str | None, value: str | None) -> None:
+    """View or set configuration.
 
-    config = Config.load()
-    library = Library.load(config.pier_dir)
-
-    library.set_steam_link(game_id, True)
-    library.save(config.pier_dir)
-
-    console.print(f"[green]Marked {game_id} for Steam linking[/green]")
-    console.print("Run 'pier steam sync' to update shortcuts")
-
-
-@steam.command("unlink")
-@click.argument("game_id")
-def steam_unlink(game_id: str) -> None:
-    """Remove a game from Steam library."""
-    from pier.core.config import Config, Library
-    from pier.core.registry import get_port
-    from pier.core.steam import SteamLibrary
-
-    config = Config.load()
-    library = Library.load(config.pier_dir)
-
-    library.set_steam_link(game_id, False)
-    library.save(config.pier_dir)
-
-    # Also remove from Steam shortcuts
-    port = get_port(game_id)
-    if port:
-        try:
-            steam = SteamLibrary()
-            if steam.remove_shortcut(port.name):
-                console.print(f"Removed Steam shortcut for {port.name}")
-        except FileNotFoundError:
-            pass
-
-    console.print(f"[green]Unlinked {game_id} from Steam[/green]")
-
-
-@main.group()
-def config() -> None:
-    """Configuration management."""
-    pass
-
-
-@config.command("set")
-@click.argument("key")
-@click.argument("value")
-def config_set(key: str, value: str) -> None:
-    """Set a configuration value."""
-    from pier.core.config import Config
-
+    With no arguments, shows all config values.
+    With KEY, shows that config value.
+    With KEY and VALUE, sets the config value.
+    """
     cfg = Config.load()
 
-    if not hasattr(cfg, key):
-        console.print(f"[red]Unknown config key: {key}[/red]")
-        console.print(
-            "Available keys: steamgriddb_api_key, auto_fetch_artwork, auto_add_to_steam, install_hd_textures"
+    if key is None:
+        # Show all config
+        table = Table(title="Configuration")
+        table.add_column("Key", style="cyan")
+        table.add_column("Value")
+
+        table.add_row("roms_dir", str(cfg.roms_dir))
+        table.add_row(
+            "steamgriddb_api_key",
+            cfg.steamgriddb_api_key if cfg.steamgriddb_api_key else "[dim]not set[/dim]"
         )
-        sys.exit(1)
 
-    # Handle boolean values
-    parsed_value: str | bool = value
-    if value.lower() in ("true", "1", "yes"):
-        parsed_value = True
-    elif value.lower() in ("false", "0", "no"):
-        parsed_value = False
+        console.print(table)
+        return
 
-    cfg.set(key, parsed_value)
+    if value is None:
+        # Show specific config value
+        val = cfg.get(key)
+        if val is None:
+            console.print(f"[red]Unknown config key: {key}[/red]")
+            raise SystemExit(1)
+        console.print(val)
+        return
+
+    # Set config value
+    if not cfg.set(key, value):
+        console.print(f"[red]Unknown config key: {key}[/red]")
+        raise SystemExit(1)
+
     cfg.save()
-
     console.print(f"[green]Set {key} = {value}[/green]")
 
 
-@config.command("get")
-@click.argument("key", required=False)
-def config_get(key: str | None) -> None:
-    """Get configuration values."""
-    from pier.core.config import Config
+@cli.command()
+def systems() -> None:
+    """List supported ROM systems."""
+    table = Table(title="Supported Systems")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name")
+    table.add_column("Extensions", style="dim")
+    table.add_column("Emulator")
 
-    cfg = Config.load()
-
-    if key:
-        value = cfg.get(key)
-        if value is None:
-            console.print(f"[red]Unknown key: {key}[/red]")
-            sys.exit(1)
-        console.print(f"{key} = {value}")
-    else:
-        # Show all config
-        table = Table(title="Configuration")
-        table.add_column("Key")
-        table.add_column("Value")
-
-        table.add_row("emulation_dir", str(cfg.emulation_dir))
-        table.add_row("roms_dir", str(cfg.roms_dir))
-        table.add_row("ports_dir", str(cfg.ports_dir))
-        table.add_row("pier_dir", str(cfg.pier_dir))
-        table.add_row("steamgriddb_api_key", "***" if cfg.steamgriddb_api_key else "(not set)")
-        table.add_row("auto_fetch_artwork", str(cfg.auto_fetch_artwork))
-        table.add_row("auto_add_to_steam", str(cfg.auto_add_to_steam))
-        table.add_row("install_hd_textures", str(cfg.install_hd_textures))
-
-        console.print(table)
-
-
-@config.command("path")
-def config_path() -> None:
-    """Show configuration file paths."""
-    from pier.core.config import Config
-
-    cfg = Config.load()
-
-    console.print(f"Config file: {cfg.pier_dir / 'config.json'}")
-    console.print(f"Library file: {cfg.pier_dir / 'library.json'}")
-    console.print(f"Ports directory: {cfg.ports_dir}")
-    console.print(f"ROMs directory: {cfg.roms_dir}")
-
-
-@main.group()
-def bios() -> None:
-    """BIOS file management."""
-    pass
-
-
-@bios.command("check")
-def bios_check() -> None:
-    """Check status of BIOS files."""
-    from pier.core.bios import BiosManager, BiosStatus
-
-    manager = BiosManager()
-    results = manager.check_all()
-
-    table = Table(title="BIOS Status")
-    table.add_column("File", style="cyan")
-    table.add_column("System")
-    table.add_column("Status")
-    table.add_column("Hash", style="dim")
-
-    for result in results:
-        if result.status == BiosStatus.VALID:
-            status = "[green]Valid[/green]"
-            hash_display = result.actual_md5[:8] if result.actual_md5 else "-"
-        elif result.status == BiosStatus.INVALID:
-            status = "[red]Invalid[/red]"
-            hash_display = f"[red]{result.actual_md5[:8]}[/red]" if result.actual_md5 else "-"
-        else:
-            status = "[dim]Missing[/dim]"
-            hash_display = "-"
-
-        table.add_row(
-            result.bios.filename,
-            result.bios.system.upper(),
-            status,
-            hash_display,
-        )
+    for sys_id, system in sorted(SYSTEMS.items()):
+        exts = ", ".join(sorted(system.extensions))
+        table.add_row(sys_id, system.name, exts, system.emulator.split()[0])
 
     console.print(table)
 
-    # Summary
-    valid = sum(1 for r in results if r.status == BiosStatus.VALID)
-    invalid = sum(1 for r in results if r.status == BiosStatus.INVALID)
-    missing = sum(1 for r in results if r.status == BiosStatus.MISSING)
 
+@cli.command()
+def status() -> None:
+    """Show status of pier and Steam integration."""
+    config = Config.load()
+
+    console.print("[bold]Pier Status[/bold]\n")
+
+    # Config
+    console.print(f"ROM directory: {config.roms_dir}")
+    if config.roms_dir.exists():
+        console.print("  [green]exists[/green]")
+    else:
+        console.print("  [red]does not exist[/red]")
+
+    # Steam
     console.print()
-    console.print(f"Valid: {valid}, Invalid: {invalid}, Missing: {missing}")
-    console.print(f"BIOS directory: {manager.bios_dir}")
-
-
-@bios.command("list")
-@click.argument("system", required=False)
-def bios_list(system: str | None) -> None:
-    """List available BIOS files."""
-    from pier.core.bios import BIOS_REGISTRY, get_bios_by_system
-
-    if system:
-        files = get_bios_by_system(system.lower())
-        if not files:
-            console.print(f"[red]Unknown system: {system}[/red]")
-            systems = sorted({b.system for b in BIOS_REGISTRY})
-            console.print(f"Available systems: {', '.join(systems)}")
-            sys.exit(1)
-    else:
-        files = BIOS_REGISTRY
-
-    table = Table(title="Available BIOS Files")
-    table.add_column("File", style="cyan")
-    table.add_column("System")
-    table.add_column("Priority")
-    table.add_column("Description")
-
-    for bios in files:
-        priority = "[green]Recommended[/green]" if bios.priority == 1 else "[dim]Optional[/dim]"
-        table.add_row(
-            bios.filename,
-            bios.system.upper(),
-            priority,
-            bios.description,
-        )
-
-    console.print(table)
-
-
-@bios.command("download")
-@click.argument("filename", required=False)
-@click.option("--all", "download_all", is_flag=True, help="Download all BIOS files")
-def bios_download(filename: str | None, download_all: bool) -> None:
-    """Download BIOS files from retroarch_system repo.
-
-    Without arguments, downloads recommended files only.
-    Specify a filename to download a specific file.
-    Use --all to download all known BIOS files.
-    """
-
-    from pier.core.bios import (
-        download_all_sync,
-        download_bios_sync,
-        download_recommended_sync,
-        get_bios_by_filename,
-    )
-
-    if filename:
-        # Download specific file
-        bios = get_bios_by_filename(filename)
-        if not bios:
-            console.print(f"[red]Unknown BIOS file: {filename}[/red]")
-            console.print("Run 'pier bios list' to see available files")
-            sys.exit(1)
-
-        console.print(f"Downloading {bios.filename}...")
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Downloading...", total=None)
-            progress_cb = make_download_progress(progress, task)
-
-            try:
-                path = download_bios_sync(filename, progress_cb)
-                console.print(f"[green]Downloaded:[/green] {path}")
-            except ValueError as e:
-                console.print(f"[red]Error:[/red] {e}")
-                sys.exit(1)
-
-    elif download_all:
-        # Download all BIOS files
-        console.print("Downloading all BIOS files...")
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            current_task = None
-            current_file = None
-
-            def on_progress(filename: str, downloaded: int, total: int):
-                nonlocal current_task, current_file
-                if filename != current_file:
-                    current_file = filename
-                    current_task = progress.add_task(
-                        f"Downloading {filename}...", total=total or None
-                    )
-                if current_task is not None:
-                    if progress.tasks[current_task].total is None and total > 0:
-                        progress.update(current_task, total=total)
-                    progress.update(current_task, completed=downloaded)
-
-            paths = download_all_sync(on_progress)
-
-        if paths:
-            console.print(f"[green]Downloaded {len(paths)} files[/green]")
+    userdata = find_steam_userdata()
+    if userdata:
+        console.print(f"Steam userdata: {userdata}")
+        shortcuts_path = find_shortcuts_vdf()
+        if shortcuts_path and shortcuts_path.exists():
+            data = load_shortcuts(shortcuts_path)
+            pier_shortcuts = get_pier_shortcuts(data)
+            console.print(f"  Pier shortcuts in Steam: {len(pier_shortcuts)}")
         else:
-            console.print("All BIOS files already present")
-
+            console.print("  [yellow]No shortcuts.vdf found[/yellow]")
     else:
-        # Download recommended files only
-        console.print("Downloading recommended BIOS files...")
+        console.print("[red]Steam not found[/red]")
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            current_task = None
-            current_file = None
+    # ROMs on disk
+    console.print()
+    games = scan_roms(config.roms_dir)
+    console.print(f"ROMs on disk: {len(games)}")
 
-            def on_progress(filename: str, downloaded: int, total: int):
-                nonlocal current_task, current_file
-                if filename != current_file:
-                    current_file = filename
-                    current_task = progress.add_task(
-                        f"Downloading {filename}...", total=total or None
-                    )
-                if current_task is not None:
-                    if progress.tasks[current_task].total is None and total > 0:
-                        progress.update(current_task, total=total)
-                    progress.update(current_task, completed=downloaded)
-
-            paths = download_recommended_sync(on_progress)
-
-        if paths:
-            console.print(f"[green]Downloaded {len(paths)} files[/green]")
-        else:
-            console.print("All recommended BIOS files already present")
+    if games:
+        by_system: dict[str, int] = {}
+        for game in games:
+            by_system[game.system.id] = by_system.get(game.system.id, 0) + 1
+        for sys_id, count in sorted(by_system.items()):
+            console.print(f"  {SYSTEMS[sys_id].name}: {count}")
 
 
 if __name__ == "__main__":
-    main()
+    cli()
