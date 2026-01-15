@@ -4,39 +4,29 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pier.steam.artwork import (
-    ArtworkPaths,
-    ArtworkStatus,
-    get_artwork_paths,
-    get_artwork_status,
+    ArtworkType,
     clear_artwork,
+    get_artwork_status,
 )
-from pier.steam.shortcuts import generate_grid_id
+from pier.steam.vdf import generate_grid_id
 
 
-class TestArtworkPaths:
-    """Tests for artwork path generation."""
+class TestArtworkType:
+    """Tests for ArtworkType enum."""
 
-    def test_get_artwork_paths(self, temp_dir: Path):
-        """get_artwork_paths should return correct paths."""
-        grid_dir = temp_dir / "grid"
-        grid_dir.mkdir()
+    def test_artwork_type_suffixes(self):
+        """ArtworkType should have correct suffixes."""
+        assert ArtworkType.POSTER.suffix == "p"
+        assert ArtworkType.HERO.suffix == "_hero"
+        assert ArtworkType.LOGO.suffix == "_logo"
+        assert ArtworkType.ICON.suffix == ""
 
-        with patch("pier.steam.artwork.find_grid_dir", return_value=grid_dir):
-            app_id = 12345
-            paths = get_artwork_paths(app_id)
-
-            assert paths is not None
-            grid_id = generate_grid_id(app_id)
-            assert paths.poster == grid_dir / f"{grid_id}p.png"
-            assert paths.hero == grid_dir / f"{grid_id}_hero.png"
-            assert paths.logo == grid_dir / f"{grid_id}_logo.png"
-            assert paths.icon == grid_dir / f"{grid_id}.ico"
-
-    def test_get_artwork_paths_no_grid_dir(self):
-        """get_artwork_paths should return None if no grid dir."""
-        with patch("pier.steam.artwork.find_grid_dir", return_value=None):
-            paths = get_artwork_paths(12345)
-            assert paths is None
+    def test_artwork_type_sgdb_endpoints(self):
+        """ArtworkType should have correct SGDB endpoints."""
+        assert ArtworkType.POSTER.sgdb_endpoint == "grids"
+        assert ArtworkType.HERO.sgdb_endpoint == "heroes"
+        assert ArtworkType.LOGO.sgdb_endpoint == "logos"
+        assert ArtworkType.ICON.sgdb_endpoint == "icons"
 
 
 class TestArtworkStatus:

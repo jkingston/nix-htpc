@@ -63,9 +63,9 @@ class SteamGridDBClient:
 
             return data
         except httpx.HTTPStatusError as e:
-            raise SteamGridDBError(f"HTTP {e.response.status_code}: {e.response.text}")
+            raise SteamGridDBError(f"HTTP {e.response.status_code}: {e.response.text}") from e
         except httpx.RequestError as e:
-            raise SteamGridDBError(f"Request failed: {e}")
+            raise SteamGridDBError(f"Request failed: {e}") from e
 
     def search_game(self, name: str) -> list[SteamGridDBGame]:
         """Search for a game by name.
@@ -110,69 +110,56 @@ class SteamGridDBClient:
         return images
 
     def get_grids(self, game_id: int) -> list[SteamGridDBImage]:
-        """Get grid/poster images for a game.
-
-        Args:
-            game_id: SteamGridDB game ID
-
-        Returns:
-            List of available grid images
-        """
+        """Get grid/poster images for a game."""
         return self._get_images(f"/grids/game/{game_id}")
 
     def get_heroes(self, game_id: int) -> list[SteamGridDBImage]:
-        """Get hero/banner images for a game.
-
-        Args:
-            game_id: SteamGridDB game ID
-
-        Returns:
-            List of available hero images
-        """
+        """Get hero/banner images for a game."""
         return self._get_images(f"/heroes/game/{game_id}")
 
     def get_logos(self, game_id: int) -> list[SteamGridDBImage]:
-        """Get logo images for a game.
-
-        Args:
-            game_id: SteamGridDB game ID
-
-        Returns:
-            List of available logo images
-        """
+        """Get logo images for a game."""
         return self._get_images(f"/logos/game/{game_id}")
 
     def get_icons(self, game_id: int) -> list[SteamGridDBImage]:
-        """Get icon images for a game.
-
-        Args:
-            game_id: SteamGridDB game ID
-
-        Returns:
-            List of available icon images
-        """
+        """Get icon images for a game."""
         return self._get_images(f"/icons/game/{game_id}")
 
-    def download_image(self, url: str, dest: Path) -> bool:
-        """Download an image to a destination path.
+    def download_image(self, url: str, dest: Path) -> Path | None:
+        """Download an image to a destination path, preserving original extension.
 
         Args:
             url: URL of the image to download
-            dest: Destination file path
+            dest: Base destination file path (extension will be adjusted)
 
         Returns:
-            True if download succeeded
+            Path to downloaded file, or None if download failed
         """
         try:
-            # Use a separate client without auth headers for image downloads
             response = httpx.get(url, timeout=60.0, follow_redirects=True)
             response.raise_for_status()
 
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(response.content)
-            return True
+            # Get extension from URL
+            url_ext = Path(url).suffix.lower()
+            if url_ext in [".png", ".jpg", ".jpeg", ".ico", ".webp"]:
+                ext = url_ext
+            else:
+                # Fall back to content-type
+                content_type = response.headers.get("content-type", "")
+                ext = {
+                    "image/png": ".png",
+                    "image/jpeg": ".jpg",
+                    "image/x-icon": ".ico",
+                    "image/webp": ".webp",
+                }.get(content_type, ".png")
+
+            # Adjust dest path with correct extension
+            final_dest = dest.with_suffix(ext)
+            final_dest.parent.mkdir(parents=True, exist_ok=True)
+            final_dest.write_bytes(response.content)
+            return final_dest
         except Exception:
-            return False
+            return None
 
     def close(self) -> None:
         """Close the HTTP client."""
@@ -183,3 +170,27 @@ class SteamGridDBClient:
 
     def __exit__(self, *args: Any) -> None:
         self.close()
+
+
+def get_clean_name(name: str, client: SteamGridDBClient | None) -> str:
+    """Get canonical game name from SteamGridDB if available.
+
+    This helps clean up ROM filenames like "Super Mario 64 (USA)" to
+    their proper game titles like "Super Mario 64".
+
+    Args:
+        name: Original game name (often a ROM filename)
+        client: SteamGridDB client, or None to skip lookup
+
+    Returns:
+        Canonical game name if found, otherwise original name
+    """
+    if not client:
+        return name
+    try:
+        games = client.search_game(name)
+        if games:
+            return games[0].name
+    except SteamGridDBError:
+        pass
+    return name

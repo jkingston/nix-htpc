@@ -1,11 +1,11 @@
 """Tests for Steam shortcut manager."""
 
-from pier.steam.manager import (
+from pier.steam.shortcuts import (
     Shortcut,
-    get_all_shortcuts,
     find_shortcut,
-    parse_shortcut,
+    get_all_shortcuts,
     get_shortcut_details,
+    parse_shortcut,
 )
 
 

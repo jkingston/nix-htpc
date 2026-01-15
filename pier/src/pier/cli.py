@@ -8,15 +8,17 @@ from pier import __version__
 from pier.config import Config
 from pier.roms.scanner import scan_roms
 from pier.roms.systems import SYSTEMS
-from pier.steam.paths import find_shortcuts_vdf, find_steam_userdata
-from pier.steam.shortcuts import get_pier_shortcuts, load_shortcuts, sync_games
-from pier.steam.manager import (
-    get_all_shortcuts,
+from pier.steam.artwork import ArtworkType
+from pier.steam.paths import find_shortcuts_vdf, find_steam_userdata, is_steam_running
+from pier.steam.shortcuts import (
     find_shortcut,
-    remove_shortcut,
+    get_all_shortcuts,
     get_shortcut_details,
+    remove_shortcut,
 )
-from pier.steamgriddb import SteamGridDBClient, SteamGridDBError
+from pier.steam.steamgriddb import SteamGridDBClient, SteamGridDBError
+from pier.steam.sync import get_pier_shortcuts, sync_games
+from pier.steam.vdf import load_shortcuts
 
 console = Console()
 
@@ -142,7 +144,10 @@ def sync(system: str | None, dry_run: bool) -> None:
 
     total_changes = len(result.added) + len(result.updated) + len(result.removed)
     if total_changes > 0 and not dry_run:
-        console.print("\n[bold]Restart Steam to see changes.[/bold]")
+        if is_steam_running():
+            console.print("\n[yellow]Note: Steam is running. Restart Steam to see changes.[/yellow]")
+        else:
+            console.print("\n[dim]Changes will appear when Steam starts.[/dim]")
     elif total_changes == 0:
         console.print("[green]Everything up to date.[/green]")
 
@@ -369,7 +374,8 @@ def shortcuts_remove(query: str, yes: bool) -> None:
     removed = remove_shortcut(query)
     if removed:
         console.print(f"[green]Removed: {removed.name}[/green]")
-        console.print("\n[bold]Restart Steam to see changes.[/bold]")
+        if is_steam_running():
+            console.print("\n[yellow]Note: Steam is running. Restart Steam to see changes.[/yellow]")
     else:
         console.print("[red]Failed to remove shortcut.[/red]")
         raise SystemExit(1)
@@ -404,6 +410,7 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
     if fetch_all:
         shortcuts_to_fetch = get_all_shortcuts()
     else:
+        assert query is not None  # Checked above
         shortcut = find_shortcut(query)
         if not shortcut:
             console.print(f"[red]No shortcut found matching: {query}[/red]")
@@ -449,7 +456,8 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
                 try:
                     grids = client.get_grids(game.id)
                     if grids:
-                        if client.download_image(grids[0].url, artwork.paths.poster):
+                        dest = artwork.get_dest_path(ArtworkType.POSTER)
+                        if client.download_image(grids[0].url, dest):
                             console.print("[green]\u2713[/green]")
                             downloaded += 1
                         else:
@@ -465,7 +473,8 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
                 try:
                     heroes = client.get_heroes(game.id)
                     if heroes:
-                        if client.download_image(heroes[0].url, artwork.paths.hero):
+                        dest = artwork.get_dest_path(ArtworkType.HERO)
+                        if client.download_image(heroes[0].url, dest):
                             console.print("[green]\u2713[/green]")
                             downloaded += 1
                         else:
@@ -481,7 +490,8 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
                 try:
                     logos = client.get_logos(game.id)
                     if logos:
-                        if client.download_image(logos[0].url, artwork.paths.logo):
+                        dest = artwork.get_dest_path(ArtworkType.LOGO)
+                        if client.download_image(logos[0].url, dest):
                             console.print("[green]\u2713[/green]")
                             downloaded += 1
                         else:
@@ -497,7 +507,8 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
                 try:
                     icons = client.get_icons(game.id)
                     if icons:
-                        if client.download_image(icons[0].url, artwork.paths.icon):
+                        dest = artwork.get_dest_path(ArtworkType.ICON)
+                        if client.download_image(icons[0].url, dest):
                             console.print("[green]\u2713[/green]")
                             downloaded += 1
                         else:
@@ -516,7 +527,7 @@ def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
 
     except SteamGridDBError as e:
         console.print(f"[red]SteamGridDB error: {e}[/red]")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

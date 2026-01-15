@@ -1,5 +1,6 @@
 """Steam directory detection."""
 
+import subprocess
 from pathlib import Path
 
 
@@ -50,3 +51,15 @@ def find_grid_dir() -> Path | None:
     grid_dir = userdata / "config" / "grid"
     grid_dir.mkdir(parents=True, exist_ok=True)
     return grid_dir
+
+
+def is_steam_running() -> bool:
+    """Check if Steam process is running."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-x", "steam"],
+            capture_output=True,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False

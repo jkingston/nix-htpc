@@ -6,14 +6,8 @@ import vdf
 
 from pier.roms.scanner import Game
 from pier.roms.systems import SYSTEMS
-from pier.steam.shortcuts import (
-    create_shortcut,
-    generate_app_id,
-    generate_grid_id,
-    get_pier_shortcuts,
-    load_shortcuts,
-    save_shortcuts,
-)
+from pier.steam.sync import create_shortcut, get_pier_shortcuts
+from pier.steam.vdf import generate_app_id, generate_grid_id, load_shortcuts, save_shortcuts
 
 
 class TestAppIdGeneration:
@@ -37,13 +31,13 @@ class TestAppIdGeneration:
         assert app_id & 0x80000000 != 0
 
     def test_generate_grid_id(self):
-        """Grid ID should be derived from app ID."""
+        """Grid ID should be unsigned 32-bit app ID for artwork filenames."""
         app_id = generate_app_id("/usr/bin/test", "Test Game")
         grid_id = generate_grid_id(app_id)
 
-        # Grid ID should be 64-bit with app_id in upper bits
-        assert grid_id > 0xFFFFFFFF
-        assert (grid_id >> 32) == app_id
+        # Grid ID should be 32-bit unsigned (same as app_id masked to unsigned)
+        assert grid_id <= 0xFFFFFFFF
+        assert grid_id == (app_id & 0xFFFFFFFF)
 
 
 class TestShortcuts:

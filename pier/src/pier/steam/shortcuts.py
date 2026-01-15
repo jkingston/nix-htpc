@@ -1,237 +1,140 @@
-"""Steam shortcuts.vdf handling."""
+"""Steam shortcut management."""
 
-import shutil
-import zlib
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-import vdf
-
-from pier.roms.scanner import Game
+from pier.steam.artwork import ArtworkStatus, get_artwork_status
 from pier.steam.paths import find_shortcuts_vdf
+from pier.steam.vdf import load_shortcuts, save_shortcuts
 
-# Tag used to identify pier-managed shortcuts
 PIER_TAG = "pier"
 
 
-def generate_app_id(exe: str, name: str) -> int:
-    """Generate a deterministic app ID for a non-Steam game.
-
-    Uses CRC32 hash of exe + name, with high bit set to mark as non-Steam.
-    This matches the algorithm used by BoilR and Steam ROM Manager.
-    """
-    combined = exe + name
-    crc = zlib.crc32(combined.encode("utf-8")) & 0xFFFFFFFF
-    return crc | 0x80000000
-
-
-def generate_grid_id(app_id: int) -> int:
-    """Generate the grid ID used for artwork filenames.
-
-    The grid ID is a 64-bit unsigned value derived from the 32-bit app ID.
-    Steam stores app_id as signed, but grid filenames use unsigned.
-    """
-    unsigned_app_id = app_id & 0xFFFFFFFF
-    return (unsigned_app_id << 32) | 0x02000000
-
-
-def load_shortcuts(path: Path | None = None) -> dict[str, Any]:
-    """Load shortcuts from shortcuts.vdf.
-
-    Returns a dict with 'shortcuts' key containing numbered shortcut entries.
-    """
-    if path is None:
-        path = find_shortcuts_vdf()
-
-    if not path or not path.exists():
-        return {"shortcuts": {}}
-
-    try:
-        data = vdf.binary_loads(path.read_bytes())
-        return data
-    except Exception:
-        return {"shortcuts": {}}
-
-
-def save_shortcuts(data: dict[str, Any], path: Path | None = None) -> None:
-    """Save shortcuts to shortcuts.vdf.
-
-    Creates a backup before writing.
-    """
-    if path is None:
-        path = find_shortcuts_vdf()
-
-    if not path:
-        raise RuntimeError("Could not find Steam shortcuts.vdf path")
-
-    # Ensure parent directory exists
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Backup existing file
-    if path.exists():
-        backup = path.with_suffix(".vdf.bak")
-        shutil.copy(path, backup)
-
-    # Write new file
-    path.write_bytes(vdf.binary_dumps(data))
-
-
-def get_pier_shortcuts(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Get all pier-managed shortcuts, keyed by game ID.
-
-    Returns shortcuts that have the 'pier' tag and a DevkitGameID.
-    """
-    shortcuts = {}
-    for entry in data.get("shortcuts", {}).values():
-        if not isinstance(entry, dict):
-            continue
-
-        # Check for pier tag
-        tags = entry.get("tags", {})
-        if isinstance(tags, dict):
-            tag_values = list(tags.values())
-        else:
-            tag_values = []
-
-        if PIER_TAG not in tag_values:
-            continue
-
-        # Get game ID from DevkitGameID field
-        game_id = entry.get("DevkitGameID", "")
-        if game_id:
-            shortcuts[game_id] = entry
-
-    return shortcuts
-
-
-def create_shortcut(game: Game) -> dict[str, Any]:
-    """Create a shortcut entry for a game."""
-    # Build the launch command
-    emulator_parts = game.system.emulator.split()
-    exe = f"/run/current-system/sw/bin/{emulator_parts[0]}"
-
-    # Build launch options: core args + ROM path
-    launch_args = " ".join(emulator_parts[1:])
-    if launch_args:
-        launch_options = f'{launch_args} "{game.path}"'
-    else:
-        launch_options = f'"{game.path}"'
-
-    app_id = generate_app_id(exe, game.name)
-
-    return {
-        "appid": app_id,
-        "AppName": game.name,
-        "Exe": f'"{exe}"',
-        "StartDir": f'"{game.path.parent}"',
-        "icon": "",
-        "ShortcutPath": "",
-        "LaunchOptions": launch_options,
-        "IsHidden": 0,
-        "AllowDesktopConfig": 1,
-        "AllowOverlay": 1,
-        "OpenVR": 0,
-        "Devkit": 0,
-        "DevkitGameID": game.id,  # Store our game ID here
-        "DevkitOverrideAppID": 0,
-        "LastPlayTime": 0,
-        "FlatpakAppID": "",
-        "tags": {"0": PIER_TAG},
-    }
-
-
 @dataclass
-class SyncResult:
-    """Result of syncing games to Steam."""
+class Shortcut:
+    """A Steam non-Steam shortcut."""
 
-    added: list[Game]
-    updated: list[Game]
-    removed: list[str]  # Game IDs of removed shortcuts
-    unchanged: list[Game]
+    index: str
+    app_id: int
+    name: str
+    exe: str
+    start_dir: str
+    launch_options: str
+    tags: list[str]
+    is_pier: bool
+
+    @property
+    def display_tags(self) -> str:
+        return ", ".join(self.tags) if self.tags else "-"
+
+    @property
+    def artwork(self) -> ArtworkStatus | None:
+        return get_artwork_status(self.app_id)
 
 
-def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
-    """Sync games to Steam shortcuts.
+def parse_shortcut(index: str, entry: dict[str, Any]) -> Shortcut:
+    """Parse a shortcut entry into a Shortcut object."""
+    tags_dict = entry.get("tags", {})
+    tags = list(tags_dict.values()) if isinstance(tags_dict, dict) else []
 
-    Args:
-        games: List of games to sync (from disk scan)
-        dry_run: If True, don't actually write changes
+    return Shortcut(
+        index=index,
+        app_id=entry.get("appid", 0),
+        name=entry.get("AppName", ""),
+        exe=entry.get("Exe", "").strip('"'),
+        start_dir=entry.get("StartDir", "").strip('"'),
+        launch_options=entry.get("LaunchOptions", ""),
+        tags=tags,
+        is_pier=PIER_TAG in tags,
+    )
 
-    Returns:
-        SyncResult with details of what changed
-    """
+
+def get_all_shortcuts(data: dict[str, Any] | None = None) -> list[Shortcut]:
+    """Get all non-Steam shortcuts."""
+    if data is None:
+        data = load_shortcuts()
+
+    shortcuts = []
+    for index, entry in data.get("shortcuts", {}).items():
+        if isinstance(entry, dict):
+            shortcuts.append(parse_shortcut(index, entry))
+
+    return sorted(shortcuts, key=lambda s: int(s.index))
+
+
+def find_shortcut(query: str, data: dict[str, Any] | None = None) -> Shortcut | None:
+    """Find a shortcut by index or name."""
+    if data is None:
+        data = load_shortcuts()
+
+    shortcuts = get_all_shortcuts(data)
+
+    # Try exact index match first
+    if query.isdigit():
+        for s in shortcuts:
+            if s.index == query:
+                return s
+
+    # Try exact name match
+    query_lower = query.lower()
+    for s in shortcuts:
+        if s.name.lower() == query_lower:
+            return s
+
+    # Try partial name match
+    for s in shortcuts:
+        if query_lower in s.name.lower():
+            return s
+
+    return None
+
+
+def remove_shortcut(query: str) -> Shortcut | None:
+    """Remove a shortcut by index or name."""
     path = find_shortcuts_vdf()
     data = load_shortcuts(path)
 
-    # Get existing pier shortcuts
-    existing = get_pier_shortcuts(data)
+    shortcut = find_shortcut(query, data)
+    if not shortcut:
+        return None
 
-    # Build set of game IDs we want to sync
-    wanted_ids = {g.id for g in games}
+    del data["shortcuts"][shortcut.index]
 
-    added: list[Game] = []
-    updated: list[Game] = []
-    unchanged: list[Game] = []
-    removed: list[str] = []
+    # Re-index shortcuts to keep them sequential
+    old_shortcuts = data["shortcuts"]
+    data["shortcuts"] = {}
+    for new_idx, key in enumerate(sorted(old_shortcuts.keys(), key=int)):
+        data["shortcuts"][str(new_idx)] = old_shortcuts[key]
 
-    # Check which games need to be added/updated
-    for game in games:
-        if game.id in existing:
-            # Check if shortcut needs updating
-            old_shortcut = existing[game.id]
-            new_shortcut = create_shortcut(game)
-
-            # Compare key fields
-            if (old_shortcut.get("Exe") != new_shortcut["Exe"] or
-                old_shortcut.get("LaunchOptions") != new_shortcut["LaunchOptions"] or
-                old_shortcut.get("AppName") != new_shortcut["AppName"]):
-                updated.append(game)
-            else:
-                unchanged.append(game)
-        else:
-            added.append(game)
-
-    # Check which existing shortcuts should be removed (not on disk anymore)
-    for game_id in existing:
-        if game_id not in wanted_ids:
-            removed.append(game_id)
-
-    if dry_run:
-        return SyncResult(added, updated, removed, unchanged)
-
-    # Apply changes
-    shortcuts = data.get("shortcuts", {})
-
-    # Find the next available index
-    existing_indices = [int(k) for k in shortcuts.keys() if k.isdigit()]
-    next_index = max(existing_indices, default=-1) + 1
-
-    # Remove old pier shortcuts that are no longer wanted
-    keys_to_remove = []
-    for key, entry in shortcuts.items():
-        if not isinstance(entry, dict):
-            continue
-        game_id = entry.get("DevkitGameID", "")
-        if game_id and game_id in existing and game_id not in wanted_ids:
-            keys_to_remove.append(key)
-
-    for key in keys_to_remove:
-        del shortcuts[key]
-
-    # Update existing shortcuts
-    for game in updated:
-        for key, entry in shortcuts.items():
-            if isinstance(entry, dict) and entry.get("DevkitGameID") == game.id:
-                shortcuts[key] = create_shortcut(game)
-                break
-
-    # Add new shortcuts
-    for game in added:
-        shortcuts[str(next_index)] = create_shortcut(game)
-        next_index += 1
-
-    data["shortcuts"] = shortcuts
     save_shortcuts(data, path)
+    return shortcut
 
-    return SyncResult(added, updated, removed, unchanged)
+
+def get_shortcut_details(shortcut: Shortcut) -> dict[str, str]:
+    """Get detailed info about a shortcut for display."""
+    details = {
+        "Index": shortcut.index,
+        "Name": shortcut.name,
+        "App ID": str(shortcut.app_id),
+        "Executable": shortcut.exe,
+        "Start Dir": shortcut.start_dir,
+        "Launch Options": shortcut.launch_options or "(none)",
+        "Tags": shortcut.display_tags,
+        "Pier Managed": "Yes" if shortcut.is_pier else "No",
+    }
+
+    artwork = shortcut.artwork
+    if artwork:
+        def _status(has: bool, path) -> str:
+            if has:
+                return f"[green]\\u2713[/green] {path.name if path else 'yes'}"
+            return "[dim]- (missing)[/dim]"
+
+        details["---"] = ""
+        details["Artwork"] = ""
+        details["  Poster"] = _status(artwork.has_poster, artwork.paths.get("poster"))
+        details["  Hero"] = _status(artwork.has_hero, artwork.paths.get("hero"))
+        details["  Logo"] = _status(artwork.has_logo, artwork.paths.get("logo"))
+        details["  Icon"] = _status(artwork.has_icon, artwork.paths.get("icon"))
+
+    return details
