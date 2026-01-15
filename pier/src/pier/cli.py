@@ -10,6 +10,12 @@ from pier.roms.scanner import scan_roms
 from pier.roms.systems import SYSTEMS
 from pier.steam.paths import find_shortcuts_vdf, find_steam_userdata
 from pier.steam.shortcuts import get_pier_shortcuts, load_shortcuts, sync_games
+from pier.steam.manager import (
+    get_all_shortcuts,
+    find_shortcut,
+    remove_shortcut,
+    get_shortcut_details,
+)
 
 console = Console()
 
@@ -222,9 +228,9 @@ def status() -> None:
         console.print(f"Steam userdata: {userdata}")
         shortcuts_path = find_shortcuts_vdf()
         if shortcuts_path and shortcuts_path.exists():
-            data = load_shortcuts(shortcuts_path)
-            pier_shortcuts = get_pier_shortcuts(data)
-            console.print(f"  Pier shortcuts in Steam: {len(pier_shortcuts)}")
+            all_shortcuts = get_all_shortcuts()
+            pier_count = sum(1 for s in all_shortcuts if s.is_pier)
+            console.print(f"  Non-Steam shortcuts: {len(all_shortcuts)} ({pier_count} pier-tagged)")
         else:
             console.print("  [yellow]No shortcuts.vdf found[/yellow]")
     else:
@@ -241,6 +247,105 @@ def status() -> None:
             by_system[game.system.id] = by_system.get(game.system.id, 0) + 1
         for sys_id, count in sorted(by_system.items()):
             console.print(f"  {SYSTEMS[sys_id].name}: {count}")
+
+
+# --- Shortcuts command group ---
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def shortcuts(ctx: click.Context) -> None:
+    """Manage Steam shortcuts.
+
+    Without a subcommand, lists all non-Steam shortcuts.
+    """
+    if ctx.invoked_subcommand is None:
+        # Default to listing shortcuts
+        ctx.invoke(shortcuts_list)
+
+
+@shortcuts.command("list")
+def shortcuts_list() -> None:
+    """List all non-Steam shortcuts."""
+    userdata = find_steam_userdata()
+    if not userdata:
+        console.print("[red]Steam not found[/red]")
+        raise SystemExit(1)
+
+    all_shortcuts = get_all_shortcuts()
+
+    if not all_shortcuts:
+        console.print("[yellow]No non-Steam shortcuts found.[/yellow]")
+        return
+
+    table = Table(title=f"Steam Shortcuts ({len(all_shortcuts)})")
+    table.add_column("#", style="dim", justify="right")
+    table.add_column("Name", style="cyan")
+    table.add_column("Tags", style="dim")
+    table.add_column("Source", justify="center")
+
+    for shortcut in all_shortcuts:
+        source = "[green]pier[/green]" if shortcut.is_pier else "[dim]-[/dim]"
+        table.add_row(
+            shortcut.index,
+            shortcut.name,
+            shortcut.display_tags,
+            source,
+        )
+
+    console.print(table)
+
+
+@shortcuts.command("info")
+@click.argument("query")
+def shortcuts_info(query: str) -> None:
+    """Show details of a shortcut.
+
+    QUERY can be an index number or partial name match.
+    """
+    shortcut = find_shortcut(query)
+    if not shortcut:
+        console.print(f"[red]No shortcut found matching: {query}[/red]")
+        raise SystemExit(1)
+
+    details = get_shortcut_details(shortcut)
+
+    table = Table(title=f"Shortcut: {shortcut.name}")
+    table.add_column("Property", style="cyan")
+    table.add_column("Value")
+
+    for key, value in details.items():
+        table.add_row(key, value)
+
+    console.print(table)
+
+
+@shortcuts.command("remove")
+@click.argument("query")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def shortcuts_remove(query: str, yes: bool) -> None:
+    """Remove a shortcut from Steam.
+
+    QUERY can be an index number or partial name match.
+    """
+    shortcut = find_shortcut(query)
+    if not shortcut:
+        console.print(f"[red]No shortcut found matching: {query}[/red]")
+        raise SystemExit(1)
+
+    if not yes:
+        console.print(f"Remove shortcut: [cyan]{shortcut.name}[/cyan]?")
+        if not click.confirm("Proceed?"):
+            console.print("[yellow]Cancelled.[/yellow]")
+            return
+
+    removed = remove_shortcut(query)
+    if removed:
+        console.print(f"[green]Removed: {removed.name}[/green]")
+        console.print("\n[bold]Restart Steam to see changes.[/bold]")
+    else:
+        console.print("[red]Failed to remove shortcut.[/red]")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
