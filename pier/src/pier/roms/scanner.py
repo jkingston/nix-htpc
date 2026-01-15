@@ -62,6 +62,10 @@ def scan_roms(roms_dir: Path, system_filter: str | None = None) -> list[Game]:
             if not rom_file.is_file():
                 continue
 
+            # Skip hidden files (dotfiles like .keep, .gitkeep)
+            if rom_file.name.startswith("."):
+                continue
+
             ext = rom_file.suffix.lower()
             if ext in IGNORED_EXTENSIONS:
                 continue

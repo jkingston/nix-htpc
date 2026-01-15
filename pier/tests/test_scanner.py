@@ -46,6 +46,18 @@ class TestScanRoms:
         filenames = [g.filename for g in games]
         assert "readme.txt" not in filenames
 
+    def test_scan_ignores_hidden_files(self, roms_dir: Path):
+        """scan_roms should ignore hidden files (dotfiles)."""
+        # Create a .keep file in n64 directory
+        keep_file = roms_dir / "n64" / ".keep"
+        keep_file.touch()
+
+        games = scan_roms(roms_dir)
+        filenames = [g.filename for g in games]
+        assert ".keep" not in filenames
+        names = [g.name for g in games]
+        assert ".keep" not in names
+
     def test_scan_with_system_filter(self, roms_dir: Path):
         """scan_roms should filter by system."""
         n64_games = scan_roms(roms_dir, system_filter="n64")
