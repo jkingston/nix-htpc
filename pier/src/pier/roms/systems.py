@@ -18,7 +18,7 @@ class System:
 IGNORED_EXTENSIONS = frozenset({
     ".txt", ".nfo", ".jpg", ".jpeg", ".png", ".gif", ".xml", ".json",
     ".sav", ".srm", ".log", ".cue", ".m3u", ".html", ".htm", ".pdf",
-    ".state", ".oops", ".auto",
+    ".state", ".oops", ".auto", ".keep",
 })
 
 
