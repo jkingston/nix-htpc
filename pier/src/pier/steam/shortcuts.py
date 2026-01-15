@@ -29,9 +29,11 @@ def generate_app_id(exe: str, name: str) -> int:
 def generate_grid_id(app_id: int) -> int:
     """Generate the grid ID used for artwork filenames.
 
-    The grid ID is a 64-bit value derived from the 32-bit app ID.
+    The grid ID is a 64-bit unsigned value derived from the 32-bit app ID.
+    Steam stores app_id as signed, but grid filenames use unsigned.
     """
-    return (app_id << 32) | 0x02000000
+    unsigned_app_id = app_id & 0xFFFFFFFF
+    return (unsigned_app_id << 32) | 0x02000000
 
 
 def load_shortcuts(path: Path | None = None) -> dict[str, Any]:
