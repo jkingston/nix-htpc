@@ -32,7 +32,7 @@ let
     STEAM_USERDATA="$HOME/.steam/steam/userdata"
     if [ -d "$STEAM_USERDATA" ]; then
       # Run pier steam sync (non-interactive, silent on errors)
-      /run/current-system/sw/bin/pier steam sync --auto 2>/dev/null || true
+      /run/current-system/sw/bin/pier sync 2>/dev/null || true
     fi
   '';
 
