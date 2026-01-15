@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pier.steam.artwork import ArtworkStatus, get_artwork_status
 from pier.steam.paths import find_shortcuts_vdf
 from pier.steam.shortcuts import PIER_TAG, load_shortcuts, save_shortcuts
 
@@ -25,6 +26,11 @@ class Shortcut:
     def display_tags(self) -> str:
         """Tags formatted for display."""
         return ", ".join(self.tags) if self.tags else "-"
+
+    @property
+    def artwork(self) -> ArtworkStatus | None:
+        """Get artwork status for this shortcut."""
+        return get_artwork_status(self.app_id)
 
 
 def parse_shortcut(index: str, entry: dict[str, Any]) -> Shortcut:
@@ -133,7 +139,7 @@ def remove_shortcut(query: str) -> Shortcut | None:
 
 def get_shortcut_details(shortcut: Shortcut) -> dict[str, str]:
     """Get detailed info about a shortcut for display."""
-    return {
+    details = {
         "Index": shortcut.index,
         "Name": shortcut.name,
         "App ID": str(shortcut.app_id),
@@ -143,3 +149,20 @@ def get_shortcut_details(shortcut: Shortcut) -> dict[str, str]:
         "Tags": shortcut.display_tags,
         "Pier Managed": "Yes" if shortcut.is_pier else "No",
     }
+
+    # Add artwork info
+    artwork = shortcut.artwork
+    if artwork:
+        def _status(has: bool, path: str) -> str:
+            if has:
+                return f"[green]\\u2713[/green] {path}"
+            return "[dim]- (missing)[/dim]"
+
+        details["---"] = ""  # Separator
+        details["Artwork"] = ""
+        details["  Poster"] = _status(artwork.has_poster, artwork.paths.poster.name)
+        details["  Hero"] = _status(artwork.has_hero, artwork.paths.hero.name)
+        details["  Logo"] = _status(artwork.has_logo, artwork.paths.logo.name)
+        details["  Icon"] = _status(artwork.has_icon, artwork.paths.icon.name)
+
+    return details

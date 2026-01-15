@@ -16,6 +16,7 @@ from pier.steam.manager import (
     remove_shortcut,
     get_shortcut_details,
 )
+from pier.steamgriddb import SteamGridDBClient, SteamGridDBError
 
 console = Console()
 
@@ -281,19 +282,45 @@ def shortcuts_list() -> None:
     table = Table(title=f"Steam Shortcuts ({len(all_shortcuts)})")
     table.add_column("#", style="dim", justify="right")
     table.add_column("Name", style="cyan")
-    table.add_column("Tags", style="dim")
-    table.add_column("Source", justify="center")
+    table.add_column("Poster", justify="center")
+    table.add_column("Hero", justify="center")
+    table.add_column("Logo", justify="center")
+    table.add_column("Icon", justify="center")
 
+    def _check(has: bool) -> str:
+        return "[green]\u2713[/green]" if has else "[dim]-[/dim]"
+
+    missing_count = 0
     for shortcut in all_shortcuts:
-        source = "[green]pier[/green]" if shortcut.is_pier else "[dim]-[/dim]"
-        table.add_row(
-            shortcut.index,
-            shortcut.name,
-            shortcut.display_tags,
-            source,
-        )
+        artwork = shortcut.artwork
+        if artwork:
+            has_all = artwork.complete
+            if not has_all:
+                missing_count += 1
+            table.add_row(
+                shortcut.index,
+                shortcut.name,
+                _check(artwork.has_poster),
+                _check(artwork.has_hero),
+                _check(artwork.has_logo),
+                _check(artwork.has_icon),
+            )
+        else:
+            missing_count += 1
+            table.add_row(
+                shortcut.index,
+                shortcut.name,
+                "[dim]-[/dim]",
+                "[dim]-[/dim]",
+                "[dim]-[/dim]",
+                "[dim]-[/dim]",
+            )
 
     console.print(table)
+
+    if missing_count > 0:
+        console.print(f"\n[yellow]Missing artwork: {missing_count} shortcut(s)[/yellow]")
+        console.print("[dim]Run 'pier shortcuts fetch-artwork' to download[/dim]")
 
 
 @shortcuts.command("info")
@@ -345,6 +372,150 @@ def shortcuts_remove(query: str, yes: bool) -> None:
         console.print("\n[bold]Restart Steam to see changes.[/bold]")
     else:
         console.print("[red]Failed to remove shortcut.[/red]")
+        raise SystemExit(1)
+
+
+@shortcuts.command("fetch-artwork")
+@click.argument("query", required=False)
+@click.option("--all", "fetch_all", is_flag=True, help="Fetch artwork for all shortcuts")
+def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
+    """Fetch artwork from SteamGridDB.
+
+    QUERY can be an index number or partial name match.
+    Use --all to fetch for all shortcuts.
+    """
+    config = Config.load()
+
+    if not config.steamgriddb_api_key:
+        console.print("[red]SteamGridDB API key not configured.[/red]")
+        console.print()
+        console.print("Get a free API key at:")
+        console.print("  [cyan]https://www.steamgriddb.com/profile/preferences/api[/cyan]")
+        console.print()
+        console.print("Then set it with:")
+        console.print("  [cyan]pier config steamgriddb_api_key YOUR_KEY[/cyan]")
+        raise SystemExit(1)
+
+    if not query and not fetch_all:
+        console.print("[red]Specify a shortcut or use --all[/red]")
+        raise SystemExit(1)
+
+    # Get shortcuts to process
+    if fetch_all:
+        shortcuts_to_fetch = get_all_shortcuts()
+    else:
+        shortcut = find_shortcut(query)
+        if not shortcut:
+            console.print(f"[red]No shortcut found matching: {query}[/red]")
+            raise SystemExit(1)
+        shortcuts_to_fetch = [shortcut]
+
+    if not shortcuts_to_fetch:
+        console.print("[yellow]No shortcuts to process.[/yellow]")
+        return
+
+    try:
+        client = SteamGridDBClient(config.steamgriddb_api_key)
+
+        for shortcut in shortcuts_to_fetch:
+            console.print(f"\n[bold]Fetching artwork for: {shortcut.name}[/bold]")
+
+            # Search for game on SteamGridDB
+            console.print("  Searching SteamGridDB...", end=" ")
+            try:
+                games = client.search_game(shortcut.name)
+            except SteamGridDBError as e:
+                console.print(f"[red]error: {e}[/red]")
+                continue
+
+            if not games:
+                console.print("[yellow]not found[/yellow]")
+                continue
+
+            game = games[0]  # Use best match
+            console.print(f"[green]found: \"{game.name}\"[/green]")
+
+            # Get artwork paths
+            artwork = shortcut.artwork
+            if not artwork:
+                console.print("  [red]Could not determine artwork paths[/red]")
+                continue
+
+            downloaded = 0
+
+            # Fetch poster/grid
+            if not artwork.has_poster:
+                console.print("  Downloading poster...", end=" ")
+                try:
+                    grids = client.get_grids(game.id)
+                    if grids:
+                        if client.download_image(grids[0].url, artwork.paths.poster):
+                            console.print("[green]\u2713[/green]")
+                            downloaded += 1
+                        else:
+                            console.print("[red]failed[/red]")
+                    else:
+                        console.print("[yellow]none available[/yellow]")
+                except SteamGridDBError:
+                    console.print("[red]error[/red]")
+
+            # Fetch hero
+            if not artwork.has_hero:
+                console.print("  Downloading hero...", end=" ")
+                try:
+                    heroes = client.get_heroes(game.id)
+                    if heroes:
+                        if client.download_image(heroes[0].url, artwork.paths.hero):
+                            console.print("[green]\u2713[/green]")
+                            downloaded += 1
+                        else:
+                            console.print("[red]failed[/red]")
+                    else:
+                        console.print("[yellow]none available[/yellow]")
+                except SteamGridDBError:
+                    console.print("[red]error[/red]")
+
+            # Fetch logo
+            if not artwork.has_logo:
+                console.print("  Downloading logo...", end=" ")
+                try:
+                    logos = client.get_logos(game.id)
+                    if logos:
+                        if client.download_image(logos[0].url, artwork.paths.logo):
+                            console.print("[green]\u2713[/green]")
+                            downloaded += 1
+                        else:
+                            console.print("[red]failed[/red]")
+                    else:
+                        console.print("[yellow]none available[/yellow]")
+                except SteamGridDBError:
+                    console.print("[red]error[/red]")
+
+            # Fetch icon
+            if not artwork.has_icon:
+                console.print("  Downloading icon...", end=" ")
+                try:
+                    icons = client.get_icons(game.id)
+                    if icons:
+                        if client.download_image(icons[0].url, artwork.paths.icon):
+                            console.print("[green]\u2713[/green]")
+                            downloaded += 1
+                        else:
+                            console.print("[red]failed[/red]")
+                    else:
+                        console.print("[yellow]none available[/yellow]")
+                except SteamGridDBError:
+                    console.print("[red]error[/red]")
+
+            if downloaded > 0:
+                console.print(f"  [green]Downloaded {downloaded} artwork(s)[/green]")
+            else:
+                console.print("  [dim]No new artwork downloaded[/dim]")
+
+        client.close()
+
+    except SteamGridDBError as e:
+        console.print(f"[red]SteamGridDB error: {e}[/red]")
         raise SystemExit(1)
 
 
