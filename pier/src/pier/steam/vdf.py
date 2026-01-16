@@ -15,18 +15,27 @@ def generate_app_id(exe: str, name: str) -> int:
 
     Uses CRC32 hash of exe + name, with high bit set to mark as non-Steam.
     This matches the algorithm used by BoilR and Steam ROM Manager.
+
+    Returns a signed 32-bit int for VDF compatibility (which uses signed ints),
+    even though Steam interprets these as unsigned.
     """
     combined = exe + name
     crc = zlib.crc32(combined.encode("utf-8")) & 0xFFFFFFFF
-    return crc | 0x80000000
+    app_id = crc | 0x80000000
+    # Convert to signed for VDF library compatibility
+    if app_id >= 0x80000000:
+        app_id = app_id - 0x100000000
+    return app_id
 
 
 def generate_grid_id(app_id: int) -> int:
     """Generate the ID used for artwork filenames.
 
     Steam uses the unsigned 32-bit app_id for grid artwork filenames.
-    The app_id may be stored as signed in Python, so we mask to unsigned.
+    The app_id is stored as signed for VDF, so we convert back to unsigned.
     """
+    if app_id < 0:
+        return app_id + 0x100000000
     return app_id & 0xFFFFFFFF
 
 

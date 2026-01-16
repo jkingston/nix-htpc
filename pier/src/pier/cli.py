@@ -257,23 +257,23 @@ def status() -> None:
             console.print(f"  {SYSTEMS[sys_id].name}: {count}")
 
 
-# --- Shortcuts command group ---
+# --- Steam command group ---
 
 
 @cli.group(invoke_without_command=True)
 @click.pass_context
-def shortcuts(ctx: click.Context) -> None:
+def steam(ctx: click.Context) -> None:
     """Manage Steam shortcuts.
 
     Without a subcommand, lists all non-Steam shortcuts.
     """
     if ctx.invoked_subcommand is None:
         # Default to listing shortcuts
-        ctx.invoke(shortcuts_list)
+        ctx.invoke(steam_list)
 
 
-@shortcuts.command("list")
-def shortcuts_list() -> None:
+@steam.command("list")
+def steam_list() -> None:
     """List all non-Steam shortcuts."""
     userdata = find_steam_userdata()
     if not userdata:
@@ -327,12 +327,12 @@ def shortcuts_list() -> None:
 
     if missing_count > 0:
         console.print(f"\n[yellow]Missing artwork: {missing_count} shortcut(s)[/yellow]")
-        console.print("[dim]Run 'pier shortcuts fetch-artwork' to download[/dim]")
+        console.print("[dim]Run 'pier steam fetch-artwork' to download[/dim]")
 
 
-@shortcuts.command("info")
+@steam.command("info")
 @click.argument("query")
-def shortcuts_info(query: str) -> None:
+def steam_info(query: str) -> None:
     """Show details of a shortcut.
 
     QUERY can be an index number or partial name match.
@@ -354,10 +354,10 @@ def shortcuts_info(query: str) -> None:
     console.print(table)
 
 
-@shortcuts.command("remove")
+@steam.command("remove")
 @click.argument("query")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-def shortcuts_remove(query: str, yes: bool) -> None:
+def steam_remove(query: str, yes: bool) -> None:
     """Remove a shortcut from Steam.
 
     QUERY can be an index number or partial name match.
@@ -383,10 +383,10 @@ def shortcuts_remove(query: str, yes: bool) -> None:
         raise SystemExit(1)
 
 
-@shortcuts.command("fetch-artwork")
+@steam.command("fetch-artwork")
 @click.argument("query", required=False)
 @click.option("--all", "fetch_all", is_flag=True, help="Fetch artwork for all shortcuts")
-def shortcuts_fetch_artwork(query: str | None, fetch_all: bool) -> None:
+def steam_fetch_artwork(query: str | None, fetch_all: bool) -> None:
     """Fetch artwork from SteamGridDB.
 
     QUERY can be an index number or partial name match.
