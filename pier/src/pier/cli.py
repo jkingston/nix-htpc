@@ -831,14 +831,12 @@ def ports_installed() -> None:
     table.add_column("Name")
     table.add_column("Version")
     table.add_column("Steam", justify="center")
-    table.add_column("ROM")
 
     for port in installed:
         version = port.version or "[dim]unknown[/dim]"
         steam_status = "[green]✓[/green]" if port.in_steam else "[dim]-[/dim]"
-        rom_status = port.rom_path.name if port.rom_path else "[dim]-[/dim]"
 
-        table.add_row(port.id, port.port.name, version, steam_status, rom_status)
+        table.add_row(port.id, port.port.name, version, steam_status)
 
     console.print(table)
     console.print()
