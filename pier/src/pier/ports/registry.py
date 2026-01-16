@@ -25,6 +25,7 @@ class Enhancement:
     repo: str  # GitHub repo (e.g., "GhostlyDark/OoT-Reloaded-SoH")
     asset_pattern: str  # Glob pattern for release asset ("*.o2r", "*.zip")
     install_subdir: str = "mods"  # Relative to port install dir
+    install_by_default: bool = True  # Whether to install with port by default
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class Port:
     steamgriddb_name: str | None = None  # Override name for SteamGridDB artwork lookup
     texture_pack_repo: str | None = None  # GitHub repo for HD texture pack (legacy)
     enhancements: tuple[Enhancement, ...] = ()  # Available enhancements for this port
+    include_prereleases: bool = False  # Whether to include pre-releases when fetching latest
 
 
 # Ship of Harkinian supported ROM hashes
@@ -88,7 +90,7 @@ PORTS: dict[str, Port] = {
         rom_search_name="Zelda - Ocarina of Time",
         required_hashes=SOH_HASHES,
         linux_asset_pattern="*Linux*.zip",
-        executable_name="soh.elf",
+        executable_name="soh.appimage",
         steamgriddb_name="The Legend of Zelda: Ocarina of Time",
         texture_pack_repo="GhostlyDark/OoT-Reloaded-SoH",
         enhancements=(
@@ -111,7 +113,7 @@ PORTS: dict[str, Port] = {
         # TODO: Add actual hashes from supportedHashes.json
         required_hashes=frozenset(),
         linux_asset_pattern="*Linux*.zip",
-        executable_name="2s2h.elf",
+        executable_name="2ship.appimage",
         steamgriddb_name="The Legend of Zelda: Majora's Mask",
         texture_pack_repo="GhostlyDark/MM-Reloaded-2S2H",
         enhancements=(
@@ -133,7 +135,7 @@ PORTS: dict[str, Port] = {
         rom_search_name="Mario Kart 64 (USA)",
         required_hashes=frozenset({"579c48e211ae952530ffc8738709f078d5dd215e"}),
         linux_asset_pattern="*Linux*.zip",
-        executable_name="spaghettikart.elf",
+        executable_name="spaghetti.appimage",
         steamgriddb_name="Mario Kart 64",
         texture_pack_repo="GhostlyDark/MK64-Reloaded-SK",
         enhancements=(
@@ -145,6 +147,7 @@ PORTS: dict[str, Port] = {
                 install_subdir="mods",
             ),
         ),
+        include_prereleases=True,
     ),
     "starship": Port(
         id="starship",
@@ -160,7 +163,7 @@ PORTS: dict[str, Port] = {
             }
         ),
         linux_asset_pattern="*Linux*.zip",
-        executable_name="starship.elf",
+        executable_name="starship.appimage",
         steamgriddb_name="Star Fox 64",
     ),
     "opengoal-jak1": Port(
@@ -208,7 +211,7 @@ PORTS: dict[str, Port] = {
         rom_search_name="Perfect Dark (USA)",
         required_hashes=frozenset(),  # TODO: Add actual hashes
         linux_asset_pattern="pd-*-linux*.tar.gz",
-        executable_name="pd",
+        executable_name="pd.x86_64",
         steamgriddb_name="Perfect Dark",
     ),
 }

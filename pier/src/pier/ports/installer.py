@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pier.ports.enhancements import EnhancementError, download_enhancement
 from pier.ports.github import GitHubClient, GitHubError
 from pier.ports.registry import Port, PortType
 from pier.roms.hashing import N64Format, compute_sha1, convert_to_z64, detect_n64_format
@@ -378,6 +379,7 @@ def install_port(
     ports_dir: Path,
     github_token: str | None = None,
     progress_callback: Callable[[str, int, int], None] | None = None,
+    install_enhancements: bool = True,
 ) -> InstallResult:
     """Install a PC port.
 
@@ -387,6 +389,7 @@ def install_port(
         ports_dir: Base directory for installed ports.
         github_token: Optional GitHub token for API rate limits.
         progress_callback: Optional callback(status, downloaded, total).
+        install_enhancements: Whether to install HD textures/enhancements.
 
     Returns:
         InstallResult with success status and details.
@@ -415,7 +418,10 @@ def install_port(
 
         with GitHubClient(token=github_token) as github:
             try:
-                release = github.get_latest_release(port.github_repo)
+                release = github.get_latest_release(
+                    port.github_repo,
+                    include_prereleases=port.include_prereleases,
+                )
             except GitHubError as e:
                 result.errors.append(f"Failed to get release: {e}")
                 return result
@@ -462,7 +468,23 @@ def install_port(
             # Direct port ROM setup would go here
             result.warnings.append("Direct port ROM setup not yet implemented")
 
-        # 5. Save version and mark success
+        # 5. Install enhancements (HD textures, etc.)
+        if install_enhancements and port.enhancements:
+            for enhancement in port.enhancements:
+                if not enhancement.install_by_default:
+                    continue
+                try:
+                    download_enhancement(
+                        port=port,
+                        enhancement=enhancement,
+                        install_dir=install_dir,
+                        github_token=github_token,
+                        progress_callback=progress_callback,
+                    )
+                except EnhancementError as e:
+                    result.warnings.append(f"Enhancement {enhancement.name}: {e}")
+
+        # 6. Save version and mark success
         if result.version:
             version_file = install_dir / ".pier-version"
             version_file.write_text(result.version)

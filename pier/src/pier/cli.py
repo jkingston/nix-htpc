@@ -883,11 +883,12 @@ def ports_available() -> None:
 @ports.command("install")
 @click.argument("port_id")
 @click.option("--no-steam", is_flag=True, help="Don't add to Steam")
-def ports_install(port_id: str, no_steam: bool) -> None:
+@click.option("--no-hd-textures", is_flag=True, help="Don't install HD texture packs")
+def ports_install(port_id: str, no_steam: bool, no_hd_textures: bool) -> None:
     """Install a PC port.
 
     Downloads the port, finds/downloads the required ROM, generates assets,
-    and adds to Steam.
+    installs HD textures if available, and adds to Steam.
     """
     from pier.ports import PORTS, InstallerError, install_port
 
@@ -919,6 +920,7 @@ def ports_install(port_id: str, no_steam: bool) -> None:
             ports_dir=ports_dir,
             github_token=config.github_token,
             progress_callback=progress_callback,
+            install_enhancements=not no_hd_textures,
         )
 
         console.print()
