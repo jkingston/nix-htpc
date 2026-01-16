@@ -16,9 +16,10 @@ let
 
   dolphinWrapper = pkgs.writeShellScriptBin "dolphin-wrapper" ''
     # Dolphin (GameCube/Wii) wrapper for Steam
+    # --video_backend=Vulkan = critical for AMD iGPU (OpenGL is very slow)
     # -b = batch mode (exit when game closes)
     # -e = execute game
-    exec ${pkgs.dolphin-emu}/bin/dolphin-emu -b -e "$@"
+    exec ${pkgs.dolphin-emu}/bin/dolphin-emu --video_backend=Vulkan -b -e "$@"
   '';
 
   pcsx2Wrapper = pkgs.writeShellScriptBin "pcsx2-wrapper" ''
