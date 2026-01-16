@@ -2,8 +2,34 @@
 
 from pathlib import Path
 
-from pier.roms.scanner import make_game_id, parse_game_id, scan_roms
+from pier.roms.scanner import clean_rom_name, make_game_id, parse_game_id, scan_roms
 from pier.roms.systems import SYSTEMS
+
+
+class TestCleanRomName:
+    """Tests for clean_rom_name function."""
+
+    def test_strips_single_tag(self):
+        """clean_rom_name should strip single parenthesized tag."""
+        assert clean_rom_name("Mario Kart 64 (USA)") == "Mario Kart 64"
+        assert clean_rom_name("Super Mario 64 (Europe)") == "Super Mario 64"
+
+    def test_strips_multiple_tags(self):
+        """clean_rom_name should strip multiple parenthesized tags."""
+        assert clean_rom_name("Gran Turismo 4 (USA) (v2.00)") == "Gran Turismo 4"
+        assert (
+            clean_rom_name("Goodboy Galaxy (World) (En,Ja,Fr) (v1.3) (Unl)")
+            == "Goodboy Galaxy"
+        )
+
+    def test_preserves_name_without_tags(self):
+        """clean_rom_name should preserve names without tags."""
+        assert clean_rom_name("Doom") == "Doom"
+        assert clean_rom_name("test") == "test"
+
+    def test_handles_empty_string(self):
+        """clean_rom_name should handle empty string."""
+        assert clean_rom_name("") == ""
 
 
 class TestGameId:
@@ -80,6 +106,7 @@ class TestScanRoms:
 
         assert game.id == "rom:n64:Super Mario 64 (USA).z64"
         assert game.name == "Super Mario 64 (USA)"
+        assert game.display_name == "Super Mario 64"  # Cleaned
         assert game.filename == "Super Mario 64 (USA).z64"
         assert game.system == SYSTEMS["n64"]
         assert game.path == roms_dir / "n64" / "Super Mario 64 (USA).z64"

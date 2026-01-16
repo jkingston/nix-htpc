@@ -46,20 +46,22 @@ class TestShortcuts:
     def test_create_shortcut(self, roms_dir: Path):
         """create_shortcut should create valid shortcut dict."""
         game = Game(
-            id="rom:n64:Test Game.z64",
-            name="Test Game",
+            id="rom:n64:Test Game (USA).z64",
+            name="Test Game (USA)",
+            display_name="Test Game",
             system=SYSTEMS["n64"],
-            path=roms_dir / "n64" / "Test Game.z64",
+            path=roms_dir / "n64" / "Test Game (USA).z64",
         )
 
         shortcut = create_shortcut(game)
 
+        # AppName uses display_name (cleaned)
         assert shortcut["AppName"] == "Test Game"
-        assert shortcut["DevkitGameID"] == "rom:n64:Test Game.z64"
+        assert shortcut["DevkitGameID"] == "rom:n64:Test Game (USA).z64"
         assert shortcut["tags"] == {"0": "pier"}
         assert "retroarch-wrapper" in shortcut["Exe"]
         assert "mupen64plus_next" in shortcut["LaunchOptions"]
-        assert "Test Game.z64" in shortcut["LaunchOptions"]
+        assert "Test Game (USA).z64" in shortcut["LaunchOptions"]
 
     def test_load_shortcuts_missing_file(self, temp_dir: Path):
         """load_shortcuts should return empty dict for missing file."""

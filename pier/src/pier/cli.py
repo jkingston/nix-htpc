@@ -89,7 +89,7 @@ def list_games(system: str | None, in_steam: bool, not_in_steam: bool) -> None:
 
         for game in sys_games:
             steam_status = "[green]Yes[/green]" if game.in_steam else "[dim]No[/dim]"
-            table.add_row(game.name, steam_status, game.filename)
+            table.add_row(game.display_name, steam_status, game.filename)
 
         console.print(table)
         console.print()
@@ -129,17 +129,17 @@ def sync(system: str | None, dry_run: bool) -> None:
     if result.added:
         console.print(f"[green]Added {len(result.added)} games:[/green]")
         for game in result.added:
-            console.print(f"  + {game.name} ({game.system.name})")
+            console.print(f"  + {game.display_name} ({game.system.name})")
 
     if result.adopted:
         console.print(f"[cyan]Adopted {len(result.adopted)} existing shortcuts:[/cyan]")
         for game in result.adopted:
-            console.print(f"  ~ {game.name} ({game.system.name})")
+            console.print(f"  ~ {game.display_name} ({game.system.name})")
 
     if result.updated:
         console.print(f"[yellow]Updated {len(result.updated)} games:[/yellow]")
         for game in result.updated:
-            console.print(f"  ~ {game.name} ({game.system.name})")
+            console.print(f"  ~ {game.display_name} ({game.system.name})")
 
     if result.removed:
         console.print(f"[red]Removed {len(result.removed)} shortcuts:[/red]")
@@ -727,7 +727,7 @@ def roms_verify(system: str | None) -> None:
         for game in sys_games:
             sha1 = compute_sha1(game.path)
             # Just show the hash for now (DAT verification would require loading DAT files)
-            console.print(f"  {game.name}")
+            console.print(f"  {game.display_name}")
             console.print(f"    [dim]SHA1: {sha1}[/dim]")
 
         console.print()

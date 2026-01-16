@@ -68,7 +68,7 @@ def create_shortcut(game: Game) -> dict[str, Any]:
 
     return {
         "appid": app_id,
-        "AppName": game.name,
+        "AppName": game.display_name,
         "Exe": f'"{exe}"',
         "StartDir": f'"{game.path.parent}"',
         "icon": "",
