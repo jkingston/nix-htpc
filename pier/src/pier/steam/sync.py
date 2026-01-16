@@ -53,8 +53,12 @@ def find_shortcut_by_name(
     return None
 
 
-def create_shortcut(game: Game) -> dict[str, Any]:
-    """Create a shortcut entry for a game."""
+def get_expected_rom_values(game: Game) -> tuple[str, str, str]:
+    """Get the expected exe, start_dir, and launch_options for a ROM.
+
+    Returns:
+        Tuple of (exe, start_dir, launch_options) without quotes.
+    """
     emulator_parts = game.system.emulator.split()
     exe = f"/run/current-system/sw/bin/{emulator_parts[0]}"
 
@@ -64,13 +68,22 @@ def create_shortcut(game: Game) -> dict[str, Any]:
     else:
         launch_options = f'"{game.path}"'
 
+    start_dir = str(game.path.parent)
+
+    return (exe, start_dir, launch_options)
+
+
+def create_shortcut(game: Game) -> dict[str, Any]:
+    """Create a shortcut entry for a game."""
+    exe, start_dir, launch_options = get_expected_rom_values(game)
+
     app_id = generate_app_id(exe, game.name)
 
     return {
         "appid": app_id,
         "AppName": game.display_name,
         "Exe": f'"{exe}"',
-        "StartDir": f'"{game.path.parent}"',
+        "StartDir": f'"{start_dir}"',
         "icon": "",
         "ShortcutPath": "",
         "LaunchOptions": launch_options,
@@ -87,6 +100,16 @@ def create_shortcut(game: Game) -> dict[str, Any]:
     }
 
 
+def _has_pier_tag(entry: dict[str, Any]) -> bool:
+    """Check if a shortcut entry has the pier tag."""
+    tags = entry.get("tags", {})
+    if isinstance(tags, dict):
+        tag_values = list(tags.values())
+    else:
+        tag_values = []
+    return PIER_TAG in tag_values
+
+
 @dataclass
 class SyncResult:
     """Result of syncing games to Steam."""
@@ -96,10 +119,15 @@ class SyncResult:
     removed: list[str]
     unchanged: list[Game]
     adopted: list[Game]
+    skipped_external: list[Game]  # Games with existing non-pier shortcuts
 
 
 def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
-    """Sync games to Steam shortcuts."""
+    """Sync games to Steam shortcuts.
+
+    Only modifies shortcuts that pier created (those with the pier tag).
+    External shortcuts are left untouched and reported separately.
+    """
     path = find_shortcuts_vdf()
     data = load_shortcuts(path)
 
@@ -111,6 +139,7 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
     unchanged: list[Game] = []
     removed: list[str] = []
     adopted: list[Game] = []
+    skipped_external: list[Game] = []
 
     for game in games:
         if game.id in existing:
@@ -131,14 +160,20 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
             removed.append(game_id)
 
     if dry_run:
-        # For dry run, check what would be adopted vs truly added
+        # For dry run, check what would be adopted vs truly added vs external
         shortcuts = data.get("shortcuts", {})
         for game in added[:]:
             match = find_shortcut_by_name(shortcuts, game.name)
             if match:
-                adopted.append(game)
+                _, existing_entry = match
+                if _has_pier_tag(existing_entry):
+                    # Already pier-managed, would be adopted/updated
+                    adopted.append(game)
+                else:
+                    # External shortcut - don't touch
+                    skipped_external.append(game)
                 added.remove(game)
-        return SyncResult(added, updated, removed, unchanged, adopted)
+        return SyncResult(added, updated, removed, unchanged, adopted, skipped_external)
 
     shortcuts = data.get("shortcuts", {})
     existing_indices = [int(k) for k in shortcuts.keys() if k.isdigit()]
@@ -163,17 +198,21 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
                 shortcuts[key] = create_shortcut(game)
                 break
 
-    # Add or adopt shortcuts
+    # Add or adopt shortcuts (but don't touch external shortcuts)
     for game in added[:]:
         match = find_shortcut_by_name(shortcuts, game.name)
         if match:
-            # Adopt existing shortcut
             index, existing_entry = match
-            new_shortcut = create_shortcut(game)
-            # Preserve LastPlayTime from existing shortcut
-            new_shortcut["LastPlayTime"] = existing_entry.get("LastPlayTime", 0)
-            shortcuts[index] = new_shortcut
-            adopted.append(game)
+            if _has_pier_tag(existing_entry):
+                # Already pier-managed - adopt/update it
+                new_shortcut = create_shortcut(game)
+                # Preserve LastPlayTime from existing shortcut
+                new_shortcut["LastPlayTime"] = existing_entry.get("LastPlayTime", 0)
+                shortcuts[index] = new_shortcut
+                adopted.append(game)
+            else:
+                # External shortcut - don't touch it
+                skipped_external.append(game)
             added.remove(game)
         else:
             # Create new shortcut
@@ -183,4 +222,4 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
     data["shortcuts"] = shortcuts
     save_shortcuts(data, path)
 
-    return SyncResult(added, updated, removed, unchanged, adopted)
+    return SyncResult(added, updated, removed, unchanged, adopted, skipped_external)

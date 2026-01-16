@@ -110,6 +110,80 @@ def remove_shortcut(query: str) -> Shortcut | None:
     return shortcut
 
 
+class ShortcutStatus:
+    """Status constants for shortcuts."""
+
+    READY = "ready"
+    NEEDS_SYNC = "needs_sync"
+    BROKEN = "broken"
+    UPDATE_AVAILABLE = "update_available"
+
+
+def shortcut_matches(
+    shortcut: Shortcut,
+    expected_exe: str,
+    expected_start_dir: str,
+    expected_launch_options: str,
+) -> bool:
+    """Check if a shortcut matches expected values.
+
+    Compares the functional parts of a shortcut (exe, start_dir, launch_options)
+    to detect if it needs to be re-synced. Does not compare cosmetic fields
+    like display name or icon.
+
+    Args:
+        shortcut: The existing shortcut to check.
+        expected_exe: Expected executable path (without quotes).
+        expected_start_dir: Expected start directory (without quotes).
+        expected_launch_options: Expected launch options.
+
+    Returns:
+        True if the shortcut matches the expected values.
+    """
+    return (
+        shortcut.exe == expected_exe
+        and shortcut.start_dir == expected_start_dir
+        and shortcut.launch_options == expected_launch_options
+    )
+
+
+def get_shortcut_status(
+    shortcut: Shortcut,
+    file_exists: bool,
+    expected_exe: str | None = None,
+    expected_start_dir: str | None = None,
+    expected_launch_options: str | None = None,
+    update_available: bool = False,
+) -> str:
+    """Determine the status of a shortcut.
+
+    Args:
+        shortcut: The shortcut to check.
+        file_exists: Whether the target file (ROM or port executable) exists.
+        expected_exe: Expected executable path (if checking staleness).
+        expected_start_dir: Expected start directory (if checking staleness).
+        expected_launch_options: Expected launch options (if checking staleness).
+        update_available: Whether an update is available (for ports).
+
+    Returns:
+        One of: 'ready', 'needs_sync', 'broken', 'update_available'
+    """
+    if not file_exists:
+        return ShortcutStatus.BROKEN
+
+    # If we have expected values, check for staleness
+    if expected_exe is not None:
+        if not shortcut_matches(
+            shortcut, expected_exe, expected_start_dir or "", expected_launch_options or ""
+        ):
+            return ShortcutStatus.NEEDS_SYNC
+
+    if update_available:
+        return ShortcutStatus.UPDATE_AVAILABLE
+
+    return ShortcutStatus.READY
+
+
 def get_shortcut_details(shortcut: Shortcut) -> dict[str, str]:
     """Get detailed info about a shortcut for display."""
     details = {

@@ -11,6 +11,41 @@ from pier.steam.vdf import generate_app_id, load_shortcuts, save_shortcuts
 PORT_TAG = "port"
 
 
+def find_port_executable(port: Port, install_dir: Path) -> Path:
+    """Find the executable for a port.
+
+    Args:
+        port: The port definition.
+        install_dir: Directory where the port is installed.
+
+    Returns:
+        Path to the executable (may not exist).
+    """
+    executable = install_dir / port.executable_name
+    if not executable.exists():
+        # Try to find in subdirectory
+        for subdir in install_dir.iterdir():
+            if subdir.is_dir():
+                candidate = subdir / port.executable_name
+                if candidate.exists():
+                    return candidate
+    return executable
+
+
+def get_expected_port_values(port: Port, install_dir: Path) -> tuple[str, str, str]:
+    """Get the expected exe, start_dir, and launch_options for a port.
+
+    Args:
+        port: The port definition.
+        install_dir: Directory where the port is installed.
+
+    Returns:
+        Tuple of (exe, start_dir, launch_options) without quotes.
+    """
+    executable = find_port_executable(port, install_dir)
+    return (str(executable), str(executable.parent), port.launch_args or "")
+
+
 def create_port_shortcut(port: Port, install_dir: Path) -> dict[str, Any]:
     """Create a Steam shortcut entry for a port.
 
@@ -21,27 +56,17 @@ def create_port_shortcut(port: Port, install_dir: Path) -> dict[str, Any]:
     Returns:
         Shortcut dictionary for Steam's shortcuts.vdf.
     """
-    # Find the executable - may be in root or subdirectory
-    executable = install_dir / port.executable_name
-    if not executable.exists():
-        # Try to find in subdirectory
-        for subdir in install_dir.iterdir():
-            if subdir.is_dir():
-                candidate = subdir / port.executable_name
-                if candidate.exists():
-                    executable = candidate
-                    break
-
-    app_id = generate_app_id(str(executable), port.name)
+    exe, start_dir, launch_options = get_expected_port_values(port, install_dir)
+    app_id = generate_app_id(exe, port.name)
 
     shortcut = {
         "appid": app_id,
         "AppName": port.name,
-        "Exe": f'"{executable}"',
-        "StartDir": f'"{executable.parent}"',
+        "Exe": f'"{exe}"',
+        "StartDir": f'"{start_dir}"',
         "icon": "",
         "ShortcutPath": "",
-        "LaunchOptions": port.launch_args or "",
+        "LaunchOptions": launch_options,
         "IsHidden": 0,
         "AllowDesktopConfig": 1,
         "AllowOverlay": 1,

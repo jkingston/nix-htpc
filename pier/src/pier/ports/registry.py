@@ -214,6 +214,20 @@ PORTS: dict[str, Port] = {
         executable_name="pd.x86_64",
         steamgriddb_name="Perfect Dark",
     ),
+    "sonic3air": Port(
+        id="sonic3air",
+        name="Sonic 3 A.I.R.",
+        type=PortType.DIRECT_PORT,
+        github_repo="Eukaryot/sonic3air",
+        system="genesis",
+        rom_search_name="Sonic 3 & Knuckles",
+        required_hashes=frozenset(
+            {"b711a909cce238ca4af3e517a2edca306228efa5"}  # Steam SEGA Classics release
+        ),
+        linux_asset_pattern="sonic3air_game.tar.gz",
+        executable_name="sonic3air_linux",
+        steamgriddb_name="Sonic 3 & Knuckles",
+    ),
 }
 
 

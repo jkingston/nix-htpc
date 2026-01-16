@@ -13,6 +13,10 @@ def _default_data_dir() -> Path:
     return Path.home() / ".local" / "share" / "pier"
 
 
+def _default_ports_dir() -> Path:
+    return Path.home() / "pier" / "ports"
+
+
 def _config_dir() -> Path:
     return Path.home() / ".config" / "pier"
 
@@ -27,8 +31,14 @@ class Config:
 
     roms_dir: Path = field(default_factory=_default_roms_dir)
     data_dir: Path = field(default_factory=_default_data_dir)
+    ports_dir: Path = field(default_factory=_default_ports_dir)
     steamgriddb_api_key: str | None = None
     github_token: str | None = None
+
+    @property
+    def config_path(self) -> Path:
+        """Path to the config file."""
+        return _config_path()
 
     @classmethod
     def load(cls) -> "Config":
@@ -40,6 +50,7 @@ class Config:
                 return cls(
                     roms_dir=Path(data.get("roms_dir", str(_default_roms_dir()))),
                     data_dir=Path(data.get("data_dir", str(_default_data_dir()))),
+                    ports_dir=Path(data.get("ports_dir", str(_default_ports_dir()))),
                     steamgriddb_api_key=data.get("steamgriddb_api_key"),
                     github_token=data.get("github_token"),
                 )
@@ -54,6 +65,7 @@ class Config:
         data = {
             "roms_dir": str(self.roms_dir),
             "data_dir": str(self.data_dir),
+            "ports_dir": str(self.ports_dir),
             "steamgriddb_api_key": self.steamgriddb_api_key,
             "github_token": self.github_token,
         }
@@ -65,6 +77,8 @@ class Config:
             return str(self.roms_dir)
         elif key == "data_dir":
             return str(self.data_dir)
+        elif key == "ports_dir":
+            return str(self.ports_dir)
         elif key == "steamgriddb_api_key":
             return self.steamgriddb_api_key
         elif key == "github_token":
@@ -78,6 +92,9 @@ class Config:
             return True
         elif key == "data_dir":
             self.data_dir = Path(value)
+            return True
+        elif key == "ports_dir":
+            self.ports_dir = Path(value)
             return True
         elif key == "steamgriddb_api_key":
             self.steamgriddb_api_key = value
