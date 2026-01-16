@@ -325,8 +325,7 @@ class TestPortSteam:
 
         assert shortcut["AppName"] == "Ship of Harkinian"
         assert shortcut["DevkitGameID"] == "port:soh"
-        assert "pier" in shortcut["tags"].values()
-        assert "port" in shortcut["tags"].values()
+        assert shortcut["tags"] == {}  # No tags added
 
     def test_create_port_shortcut_with_subdirectory(self, tmp_path: Path) -> None:
         """Create port shortcut finds executable in subdirectory."""

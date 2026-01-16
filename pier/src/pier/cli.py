@@ -868,7 +868,6 @@ def sync(dry_run: bool) -> None:
 
     total_added = 0
     total_updated = 0
-    total_skipped = 0
     ports_to_add = []
 
     # Sync ROMs
@@ -888,12 +887,9 @@ def sync(dry_run: bool) -> None:
                 console.print(f"  [cyan]~[/cyan] {game.display_name} [dim](adopt existing)[/dim]")
             for game in sync_result.updated:
                 console.print(f"  [yellow]~[/yellow] {game.display_name} [dim](update)[/dim]")
-            for game in sync_result.skipped_external:
-                console.print(f"  [dim]-[/dim] {game.display_name} [dim](external shortcut)[/dim]")
 
             total_added += len(sync_result.added)
             total_updated += len(sync_result.updated) + len(sync_result.adopted)
-            total_skipped += len(sync_result.skipped_external)
         else:
             if sync_result.added:
                 console.print(f"[green]Added {len(sync_result.added)} games[/green]")
@@ -901,9 +897,7 @@ def sync(dry_run: bool) -> None:
                 console.print(f"[cyan]Adopted {len(sync_result.adopted)} existing shortcuts[/cyan]")
             if sync_result.updated:
                 console.print(f"[yellow]Updated {len(sync_result.updated)} games[/yellow]")
-            if sync_result.skipped_external:
-                console.print(f"[dim]Skipped {len(sync_result.skipped_external)} (external shortcuts)[/dim]")
-            if not sync_result.added and not sync_result.adopted and not sync_result.updated and not sync_result.skipped_external:
+            if not sync_result.added and not sync_result.adopted and not sync_result.updated:
                 console.print("[dim]All ROMs already synced.[/dim]")
             console.print()
 
@@ -951,7 +945,7 @@ def sync(dry_run: bool) -> None:
 
     if dry_run:
         console.print()
-        if total_added == 0 and total_updated == 0 and total_skipped == 0:
+        if total_added == 0 and total_updated == 0:
             console.print("[green]Everything is already synced.[/green]")
         else:
             summary = []
@@ -959,8 +953,6 @@ def sync(dry_run: bool) -> None:
                 summary.append(f"add {total_added}")
             if total_updated > 0:
                 summary.append(f"update {total_updated}")
-            if total_skipped > 0:
-                summary.append(f"skip {total_skipped}")
             console.print(f"Would {', '.join(summary)}.")
         console.print()
         console.print("[dim]Run 'pier sync' to apply changes.[/dim]")
@@ -1038,29 +1030,30 @@ def _show_steam_status() -> None:
     console.print(f"[bold]Steam:[/bold] {status}")
 
     shortcuts = get_all_shortcuts()
-    pier_shortcuts = [s for s in shortcuts if s.is_pier]
+    game_shortcuts = [s for s in shortcuts if s.game_id]
 
     console.print(f"[bold]Total shortcuts:[/bold] {len(shortcuts)}")
-    console.print(f"[bold]Pier-managed:[/bold] {len(pier_shortcuts)}")
+    console.print(f"[bold]Game shortcuts:[/bold] {len(game_shortcuts)}")
     console.print()
-    console.print("[dim]Use 'pier steam list' to see all shortcuts.[/dim]")
+    console.print("[dim]Use 'pier steam list' to see game shortcuts.[/dim]")
 
 
 @steam.command("list")
 def steam_list() -> None:
-    """List pier-managed shortcuts and their status."""
+    """List game shortcuts and their status."""
     shortcuts = get_all_shortcuts()
-    pier_shortcuts = [s for s in shortcuts if s.is_pier]
+    # Filter to shortcuts that have a game ID (pier-created or adopted)
+    game_shortcuts = [s for s in shortcuts if s.game_id]
 
-    if not pier_shortcuts:
-        console.print("[yellow]No pier-managed shortcuts found.[/yellow]")
+    if not game_shortcuts:
+        console.print("[yellow]No game shortcuts found.[/yellow]")
         console.print("[dim]Use 'pier sync' to add games to Steam.[/dim]")
         return
 
     # Load config to get paths for status checking
     config = Config.load()
 
-    table = Table(title=f"Pier Games in Steam ({len(pier_shortcuts)})")
+    table = Table(title=f"Games in Steam ({len(game_shortcuts)})")
     table.add_column("Name", style="cyan")
     table.add_column("Status")
     table.add_column("Artwork", justify="center")
@@ -1068,7 +1061,7 @@ def steam_list() -> None:
     broken_count = 0
     needs_sync_count = 0
 
-    for shortcut in pier_shortcuts:
+    for shortcut in game_shortcuts:
         name = shortcut.name
         status, status_display = _get_shortcut_status_display(shortcut, config)
 
@@ -1107,28 +1100,11 @@ def _get_shortcut_status_display(shortcut, config: Config) -> tuple[str, str]:
     Returns:
         Tuple of (status_code, display_string).
     """
-    from pathlib import Path
-
-    # Parse DevkitGameID to determine type
-    game_id = None
-    for sc in get_all_shortcuts():
-        if sc.index == shortcut.index:
-            # Need to get the raw game ID - look it up from VDF
-            break
-
-    # Get the game ID from VDF
-    from pier.steam.vdf import load_shortcuts
-    data = load_shortcuts()
-    shortcuts_data = data.get("shortcuts", {})
-    game_id = None
-    for key, entry in shortcuts_data.items():
-        if isinstance(entry, dict) and entry.get("AppName") == shortcut.name:
-            game_id = entry.get("DevkitGameID", "")
-            break
+    game_id = shortcut.game_id
 
     if not game_id:
-        # No game ID - can't determine status
-        return ShortcutStatus.READY, "[green]✓ Ready[/green]"
+        # No game ID - unknown shortcut
+        return ShortcutStatus.READY, "[dim]? Unknown[/dim]"
 
     # Check if it's a port or ROM
     if game_id.startswith("port:"):

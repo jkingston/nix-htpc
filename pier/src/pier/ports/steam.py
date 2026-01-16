@@ -5,10 +5,7 @@ from typing import Any
 
 from pier.ports.registry import Port
 from pier.steam.paths import find_shortcuts_vdf
-from pier.steam.shortcuts import PIER_TAG
 from pier.steam.vdf import generate_app_id, load_shortcuts, save_shortcuts
-
-PORT_TAG = "port"
 
 
 def find_port_executable(port: Port, install_dir: Path) -> Path:
@@ -76,14 +73,16 @@ def create_port_shortcut(port: Port, install_dir: Path) -> dict[str, Any]:
         "DevkitOverrideAppID": 0,
         "LastPlayTime": 0,
         "FlatpakAppID": "",
-        "tags": {"0": PIER_TAG, "1": PORT_TAG},
+        "tags": {},
     }
 
     return shortcut
 
 
 def get_port_shortcuts(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Get all pier-managed port shortcuts, keyed by port ID.
+    """Get all port shortcuts, keyed by port ID.
+
+    Matches shortcuts by DevkitGameID starting with "port:".
 
     Args:
         data: Loaded shortcuts.vdf data.
@@ -94,16 +93,6 @@ def get_port_shortcuts(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     shortcuts = {}
     for entry in data.get("shortcuts", {}).values():
         if not isinstance(entry, dict):
-            continue
-
-        tags = entry.get("tags", {})
-        if isinstance(tags, dict):
-            tag_values = list(tags.values())
-        else:
-            tag_values = []
-
-        # Must have both pier and port tags
-        if PIER_TAG not in tag_values or PORT_TAG not in tag_values:
             continue
 
         game_id = entry.get("DevkitGameID", "")

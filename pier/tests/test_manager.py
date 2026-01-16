@@ -20,7 +20,8 @@ class TestParseShortcut:
             "Exe": '"/usr/bin/test"',
             "StartDir": '"/home/user"',
             "LaunchOptions": "--fullscreen",
-            "tags": {"0": "pier", "1": "N64"},
+            "tags": {"0": "retro", "1": "N64"},
+            "DevkitGameID": "rom:n64:test.z64",
         }
 
         shortcut = parse_shortcut("0", entry)
@@ -31,11 +32,11 @@ class TestParseShortcut:
         assert shortcut.exe == "/usr/bin/test"
         assert shortcut.start_dir == "/home/user"
         assert shortcut.launch_options == "--fullscreen"
-        assert shortcut.tags == ["pier", "N64"]
-        assert shortcut.is_pier is True
+        assert shortcut.tags == ["retro", "N64"]
+        assert shortcut.game_id == "rom:n64:test.z64"
 
-    def test_parse_shortcut_no_pier_tag(self):
-        """parse_shortcut should detect non-pier shortcuts."""
+    def test_parse_shortcut_no_game_id(self):
+        """parse_shortcut should handle shortcuts without DevkitGameID."""
         entry = {
             "appid": 12345,
             "AppName": "Manual Game",
@@ -44,7 +45,7 @@ class TestParseShortcut:
 
         shortcut = parse_shortcut("1", entry)
 
-        assert shortcut.is_pier is False
+        assert shortcut.game_id == ""
         assert shortcut.tags == ["custom"]
 
 
@@ -149,16 +150,16 @@ class TestShortcutDetails:
             exe="/usr/bin/test",
             start_dir="/home/user",
             launch_options="--opt",
-            tags=["pier", "N64"],
-            is_pier=True,
+            tags=["retro", "N64"],
+            game_id="rom:n64:test.z64",
         )
 
         details = get_shortcut_details(shortcut)
 
         assert details["Name"] == "Test Game"
         assert details["Index"] == "0"
-        assert details["Pier Managed"] == "Yes"
-        assert details["Tags"] == "pier, N64"
+        assert details["Game ID"] == "rom:n64:test.z64"
+        assert details["Tags"] == "retro, N64"
 
     def test_display_tags_empty(self):
         """Shortcut should display '-' for empty tags."""
@@ -170,7 +171,7 @@ class TestShortcutDetails:
             start_dir="",
             launch_options="",
             tags=[],
-            is_pier=False,
+            game_id="",
         )
 
         assert shortcut.display_tags == "-"

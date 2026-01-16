@@ -72,6 +72,16 @@ def scan_roms(roms_dir: Path, system_filter: str | None = None) -> list[Game]:
     Returns:
         List of games found on disk
     """
+    # Load Steam shortcuts once to check in_steam status
+    try:
+        from pier.steam.vdf import load_shortcuts
+        from pier.steam.sync import get_shortcuts_by_game_id
+
+        data = load_shortcuts()
+        shortcuts_by_id = set(get_shortcuts_by_game_id(data).keys())
+    except Exception:
+        shortcuts_by_id = set()
+
     games: list[Game] = []
 
     systems_to_scan = (
@@ -98,12 +108,14 @@ def scan_roms(roms_dir: Path, system_filter: str | None = None) -> list[Game]:
 
             # Accept any non-ignored file in the system directory
             # (user may have valid ROMs with unexpected extensions)
+            game_id = make_game_id(system.id, rom_file.name)
             games.append(Game(
-                id=make_game_id(system.id, rom_file.name),
+                id=game_id,
                 name=rom_file.stem,
                 display_name=clean_rom_name(rom_file.stem),
                 system=system,
                 path=rom_file,
+                in_steam=game_id in shortcuts_by_id,
             ))
 
     return sorted(games, key=lambda g: (g.system.id, g.name.lower()))

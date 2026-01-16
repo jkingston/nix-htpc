@@ -6,7 +6,7 @@ import vdf
 
 from pier.roms.scanner import Game
 from pier.roms.systems import SYSTEMS
-from pier.steam.sync import create_shortcut, find_shortcut_by_name, get_pier_shortcuts
+from pier.steam.sync import create_shortcut, find_shortcut_by_name, get_shortcuts_by_game_id
 from pier.steam.vdf import generate_app_id, generate_grid_id, load_shortcuts, save_shortcuts
 
 
@@ -58,7 +58,7 @@ class TestShortcuts:
         # AppName uses display_name (cleaned)
         assert shortcut["AppName"] == "Test Game"
         assert shortcut["DevkitGameID"] == "rom:n64:Test Game (USA).z64"
-        assert shortcut["tags"] == {"0": "pier"}
+        assert shortcut["tags"] == {}  # No tags added
         assert "retroarch-wrapper" in shortcut["Exe"]
         assert "mupen64plus_next" in shortcut["LaunchOptions"]
         assert "Test Game (USA).z64" in shortcut["LaunchOptions"]
@@ -112,34 +112,35 @@ class TestShortcuts:
         backup_data = vdf.binary_loads(backup.read_bytes())
         assert backup_data["shortcuts"]["0"]["AppName"] == "Original"
 
-    def test_get_pier_shortcuts(self, temp_dir: Path):
-        """get_pier_shortcuts should filter by pier tag."""
+    def test_get_shortcuts_by_game_id(self, temp_dir: Path):
+        """get_shortcuts_by_game_id should return shortcuts with DevkitGameID."""
         data = {
             "shortcuts": {
                 "0": {
-                    "AppName": "Pier Game",
+                    "AppName": "Game 1",
                     "DevkitGameID": "rom:n64:game1.z64",
-                    "tags": {"0": "pier"},
+                    "tags": {},
                 },
                 "1": {
                     "AppName": "Other Game",
-                    "DevkitGameID": "",
-                    "tags": {"0": "other"},
+                    "DevkitGameID": "",  # No game ID
+                    "tags": {},
                 },
                 "2": {
-                    "AppName": "Another Pier Game",
+                    "AppName": "Game 2",
                     "DevkitGameID": "rom:snes:game2.sfc",
-                    "tags": {"0": "pier"},
+                    "tags": {},
                 },
             }
         }
 
-        pier_shortcuts = get_pier_shortcuts(data)
+        shortcuts = get_shortcuts_by_game_id(data)
 
-        assert len(pier_shortcuts) == 2
-        assert "rom:n64:game1.z64" in pier_shortcuts
-        assert "rom:snes:game2.sfc" in pier_shortcuts
-        assert pier_shortcuts["rom:n64:game1.z64"]["AppName"] == "Pier Game"
+        # Only shortcuts with DevkitGameID should be returned
+        assert len(shortcuts) == 2
+        assert "rom:n64:game1.z64" in shortcuts
+        assert "rom:snes:game2.sfc" in shortcuts
+        assert shortcuts["rom:n64:game1.z64"]["AppName"] == "Game 1"
 
 
 class TestShortcutAdoption:

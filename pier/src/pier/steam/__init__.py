@@ -6,7 +6,7 @@ from pier.steam.paths import (
     find_steam_userdata,
     is_steam_running,
 )
-from pier.steam.sync import get_pier_shortcuts, sync_games
+from pier.steam.sync import get_shortcuts_by_game_id, sync_games
 from pier.steam.vdf import (
     generate_app_id,
     generate_grid_id,
@@ -21,7 +21,7 @@ __all__ = [
     "is_steam_running",
     "generate_app_id",
     "generate_grid_id",
-    "get_pier_shortcuts",
+    "get_shortcuts_by_game_id",
     "load_shortcuts",
     "save_shortcuts",
     "sync_games",

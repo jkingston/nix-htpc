@@ -7,8 +7,6 @@ from pier.steam.artwork import ArtworkStatus, get_artwork_status
 from pier.steam.paths import find_shortcuts_vdf
 from pier.steam.vdf import load_shortcuts, save_shortcuts
 
-PIER_TAG = "pier"
-
 
 @dataclass
 class Shortcut:
@@ -21,7 +19,7 @@ class Shortcut:
     start_dir: str
     launch_options: str
     tags: list[str]
-    is_pier: bool
+    game_id: str  # DevkitGameID - identifies which game this shortcut is for
 
     @property
     def display_tags(self) -> str:
@@ -45,7 +43,7 @@ def parse_shortcut(index: str, entry: dict[str, Any]) -> Shortcut:
         start_dir=entry.get("StartDir", "").strip('"'),
         launch_options=entry.get("LaunchOptions", ""),
         tags=tags,
-        is_pier=PIER_TAG in tags,
+        game_id=entry.get("DevkitGameID", ""),
     )
 
 
@@ -194,7 +192,7 @@ def get_shortcut_details(shortcut: Shortcut) -> dict[str, str]:
         "Start Dir": shortcut.start_dir,
         "Launch Options": shortcut.launch_options or "(none)",
         "Tags": shortcut.display_tags,
-        "Pier Managed": "Yes" if shortcut.is_pier else "No",
+        "Game ID": shortcut.game_id or "(none)",
     }
 
     artwork = shortcut.artwork
