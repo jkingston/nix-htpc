@@ -131,6 +131,11 @@ def sync(system: str | None, dry_run: bool) -> None:
         for game in result.added:
             console.print(f"  + {game.name} ({game.system.name})")
 
+    if result.adopted:
+        console.print(f"[cyan]Adopted {len(result.adopted)} existing shortcuts:[/cyan]")
+        for game in result.adopted:
+            console.print(f"  ~ {game.name} ({game.system.name})")
+
     if result.updated:
         console.print(f"[yellow]Updated {len(result.updated)} games:[/yellow]")
         for game in result.updated:
@@ -144,7 +149,7 @@ def sync(system: str | None, dry_run: bool) -> None:
     if result.unchanged:
         console.print(f"[dim]Unchanged: {len(result.unchanged)} games[/dim]")
 
-    total_changes = len(result.added) + len(result.updated) + len(result.removed)
+    total_changes = len(result.added) + len(result.adopted) + len(result.updated) + len(result.removed)
     if total_changes > 0 and not dry_run:
         if is_steam_running():
             console.print("\n[yellow]Note: Steam is running. Restart Steam to see changes.[/yellow]")
@@ -289,6 +294,7 @@ def steam_list() -> None:
     table = Table(title=f"Steam Shortcuts ({len(all_shortcuts)})")
     table.add_column("#", style="dim", justify="right")
     table.add_column("Name", style="cyan")
+    table.add_column("Pier", justify="center")
     table.add_column("Poster", justify="center")
     table.add_column("Hero", justify="center")
     table.add_column("Logo", justify="center")
@@ -307,6 +313,7 @@ def steam_list() -> None:
             table.add_row(
                 shortcut.index,
                 shortcut.name,
+                _check(shortcut.is_pier),
                 _check(artwork.has_poster),
                 _check(artwork.has_hero),
                 _check(artwork.has_logo),
@@ -317,6 +324,7 @@ def steam_list() -> None:
             table.add_row(
                 shortcut.index,
                 shortcut.name,
+                _check(shortcut.is_pier),
                 "[dim]-[/dim]",
                 "[dim]-[/dim]",
                 "[dim]-[/dim]",

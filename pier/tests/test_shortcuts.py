@@ -6,7 +6,7 @@ import vdf
 
 from pier.roms.scanner import Game
 from pier.roms.systems import SYSTEMS
-from pier.steam.sync import create_shortcut, get_pier_shortcuts
+from pier.steam.sync import create_shortcut, find_shortcut_by_name, get_pier_shortcuts
 from pier.steam.vdf import generate_app_id, generate_grid_id, load_shortcuts, save_shortcuts
 
 
@@ -138,3 +138,50 @@ class TestShortcuts:
         assert "rom:n64:game1.z64" in pier_shortcuts
         assert "rom:snes:game2.sfc" in pier_shortcuts
         assert pier_shortcuts["rom:n64:game1.z64"]["AppName"] == "Pier Game"
+
+
+class TestShortcutAdoption:
+    """Tests for shortcut adoption functionality."""
+
+    def test_find_shortcut_by_name_found(self):
+        """find_shortcut_by_name should find matching shortcut."""
+        shortcuts = {
+            "0": {"AppName": "Mario Kart 64 (USA)", "tags": {}},
+            "1": {"AppName": "Other Game", "tags": {}},
+        }
+
+        result = find_shortcut_by_name(shortcuts, "Mario Kart 64 (USA)")
+        assert result is not None
+        index, entry = result
+        assert index == "0"
+        assert entry["AppName"] == "Mario Kart 64 (USA)"
+
+    def test_find_shortcut_by_name_case_insensitive(self):
+        """find_shortcut_by_name should be case-insensitive."""
+        shortcuts = {
+            "0": {"AppName": "Super Mario 64", "tags": {}},
+        }
+
+        result = find_shortcut_by_name(shortcuts, "SUPER MARIO 64")
+        assert result is not None
+        assert result[0] == "0"
+
+    def test_find_shortcut_by_name_not_found(self):
+        """find_shortcut_by_name should return None when not found."""
+        shortcuts = {
+            "0": {"AppName": "Mario Kart 64", "tags": {}},
+        }
+
+        result = find_shortcut_by_name(shortcuts, "Zelda")
+        assert result is None
+
+    def test_find_shortcut_by_name_skips_non_dict(self):
+        """find_shortcut_by_name should skip non-dict entries."""
+        shortcuts = {
+            "0": "invalid",
+            "1": {"AppName": "Test Game", "tags": {}},
+        }
+
+        result = find_shortcut_by_name(shortcuts, "Test Game")
+        assert result is not None
+        assert result[0] == "1"

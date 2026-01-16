@@ -32,6 +32,27 @@ def get_pier_shortcuts(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return shortcuts
 
 
+def find_shortcut_by_name(
+    shortcuts: dict[str, Any],
+    name: str,
+) -> tuple[str, dict[str, Any]] | None:
+    """Find an existing shortcut by AppName (case-insensitive).
+
+    Args:
+        shortcuts: The shortcuts dictionary from VDF data.
+        name: The game name to search for.
+
+    Returns:
+        Tuple of (index, entry) or None if not found.
+    """
+    name_lower = name.lower()
+    for index, entry in shortcuts.items():
+        if isinstance(entry, dict):
+            if entry.get("AppName", "").lower() == name_lower:
+                return (index, entry)
+    return None
+
+
 def create_shortcut(game: Game) -> dict[str, Any]:
     """Create a shortcut entry for a game."""
     emulator_parts = game.system.emulator.split()
@@ -74,6 +95,7 @@ class SyncResult:
     updated: list[Game]
     removed: list[str]
     unchanged: list[Game]
+    adopted: list[Game]
 
 
 def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
@@ -88,6 +110,7 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
     updated: list[Game] = []
     unchanged: list[Game] = []
     removed: list[str] = []
+    adopted: list[Game] = []
 
     for game in games:
         if game.id in existing:
@@ -108,7 +131,14 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
             removed.append(game_id)
 
     if dry_run:
-        return SyncResult(added, updated, removed, unchanged)
+        # For dry run, check what would be adopted vs truly added
+        shortcuts = data.get("shortcuts", {})
+        for game in added[:]:
+            match = find_shortcut_by_name(shortcuts, game.name)
+            if match:
+                adopted.append(game)
+                added.remove(game)
+        return SyncResult(added, updated, removed, unchanged, adopted)
 
     shortcuts = data.get("shortcuts", {})
     existing_indices = [int(k) for k in shortcuts.keys() if k.isdigit()]
@@ -133,12 +163,24 @@ def sync_games(games: list[Game], dry_run: bool = False) -> SyncResult:
                 shortcuts[key] = create_shortcut(game)
                 break
 
-    # Add new shortcuts
-    for game in added:
-        shortcuts[str(next_index)] = create_shortcut(game)
-        next_index += 1
+    # Add or adopt shortcuts
+    for game in added[:]:
+        match = find_shortcut_by_name(shortcuts, game.name)
+        if match:
+            # Adopt existing shortcut
+            index, existing_entry = match
+            new_shortcut = create_shortcut(game)
+            # Preserve LastPlayTime from existing shortcut
+            new_shortcut["LastPlayTime"] = existing_entry.get("LastPlayTime", 0)
+            shortcuts[index] = new_shortcut
+            adopted.append(game)
+            added.remove(game)
+        else:
+            # Create new shortcut
+            shortcuts[str(next_index)] = create_shortcut(game)
+            next_index += 1
 
     data["shortcuts"] = shortcuts
     save_shortcuts(data, path)
 
-    return SyncResult(added, updated, removed, unchanged)
+    return SyncResult(added, updated, removed, unchanged, adopted)
