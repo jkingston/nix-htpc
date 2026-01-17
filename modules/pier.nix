@@ -28,4 +28,11 @@ in
     # steam-run is required for running AppImages and non-Nix binaries
     pkgs.steam-run
   ];
+
+  # Enable AppImage support via binfmt_misc (extracts and runs automatically)
+  # Required for Harbour Masters ports (SoH, 2Ship, SpaghettiKart, etc.)
+  programs.appimage = {
+    enable = true;
+    binfmt = true;
+  };
 }
