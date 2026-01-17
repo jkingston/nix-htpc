@@ -63,11 +63,14 @@ let
   # Session selector - checks flag file to decide Kodi vs Steam
   sessionSelector = pkgs.writeShellScript "htpc-session-selector" ''
     SESSION_FILE="/tmp/htpc-session-request"
-    if [ -f "$SESSION_FILE" ]; then
+    SESSION="kodi"
+
+    # Only use the file if we can read AND delete it (avoid stuck state from root-owned files)
+    if [ -f "$SESSION_FILE" ] && [ -w "$SESSION_FILE" ]; then
       SESSION=$(cat "$SESSION_FILE")
       rm -f "$SESSION_FILE"
-    else
-      SESSION="kodi"
+    elif [ -f "$SESSION_FILE" ]; then
+      echo "Warning: $SESSION_FILE exists but not writable, ignoring (defaulting to kodi)" >&2
     fi
 
     case "$SESSION" in
