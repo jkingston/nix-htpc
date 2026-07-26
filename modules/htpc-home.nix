@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ osConfig, ... }:
 {
   programs.kodi = {
     enable = true;
@@ -7,14 +7,13 @@
     # advancedsettings.xml - immutable settings
     settings = {
       services = {
-        devicename = "htpc-server";
+        devicename = osConfig.networking.hostName;
         webserver = "true";
         webserverport = "8080";
         esallinterfaces = "true";
         esenabled = "true";
         zeroconf = "true";
       };
-      # Prevent TV power-off when switching sessions (Kodi → Steam)
       cec = {
         poweroffonstandby = "false";
       };
@@ -24,22 +23,10 @@
     # The addon stores auth tokens, sync state, and SyncInstallRunDone flag
     # in settings.xml. Home Manager would overwrite these on every rebuild,
     # causing the setup wizard to re-appear. Configure via Kodi UI on first run.
-
-    # Media library sources
-    sources = {
-      video = [
-        { name = "Media"; path = "/mnt/hdd/media"; }
-      ];
-    };
   };
 
   # CEC peripheral adapter settings
-  # Controls TV power behavior during session switching vs explicit shutdown
-  #
-  # Session switch (Kodi ↔ Steam): TV stays on
-  #   - standby_devices=231 (None) - Don't send Standby on Kodi exit
-  #   - send_inactive_source=0 - Don't announce "inactive" on exit
-  #   - Session scripts send Image View On to keep TV awake
+  # Controls TV power behavior.
   #
   # TV turned off with remote: PC stays on
   #   - standby_pc_on_tv_standby=36044 (Ignore) - Don't suspend PC when TV sends standby

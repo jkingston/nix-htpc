@@ -1,10 +1,11 @@
 { config, pkgs, lib, ... }:
 {
-  # Allow unfree packages (Steam, emulators, codecs, etc.)
+  # Allow unfree packages if needed by media packages/codecs.
   nixpkgs.config.allowUnfree = true;
 
   # Use latest stable kernel for best hardware support
   boot.kernelPackages = pkgs.linuxPackages_latest;
+  boot.supportedFilesystems.zfs = false;
 
   time.timeZone = "Europe/London";
   i18n.defaultLocale = "en_GB.UTF-8";
@@ -30,26 +31,10 @@
     pulse.enable = true;
   };
 
-  # Bluetooth for game controllers
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = true;
-    settings = {
-      General = {
-        Experimental = true;      # Battery status support
-        FastConnectable = true;   # Faster reconnection
-      };
-      Policy = {
-        AutoEnable = true;
-      };
-    };
-  };
-
   # Avahi/mDNS for .local hostname resolution (Bonjour)
   services.avahi = {
     enable = true;
     nssmdns4 = true;  # Enable .local resolution for IPv4
-    allowInterfaces = [ "enp1s0" ];  # Only announce on main ethernet (not podman/veth)
     publish = {
       enable = true;
       addresses = true;     # Publish hostname.local
