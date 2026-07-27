@@ -1,10 +1,10 @@
-diff --git a/xml/Home.xml b/xml/Home.xml
-index 11311ab..cd98939 100644
---- a/xml/Home.xml
-+++ b/xml/Home.xml
-@@ -60,4 +60,19 @@
+diff --git a/1080i/Home.xml b/1080i/Home.xml
+index 67d72a3..1aac3be 100644
+--- a/1080i/Home.xml
++++ b/1080i/Home.xml
+@@ -51,4 +51,19 @@
  		<!-- Home Screen -->
-         <include condition="String.IsEqual(Skin.String(HomeLayout),bingie)">HomeBingie</include>
+         <include>HomeBingie</include>
 +		<!-- Hide the home carousel while a video selected in the information
 +		     dialog is being resolved. The play controls set this property. -->
 +		<control type="group">
@@ -22,61 +22,48 @@ index 11311ab..cd98939 100644
 +		</control>
  
  		<!-- Debug -->
-diff --git a/xml/IncludesOSD.xml b/xml/IncludesOSD.xml
-index d3ef9af..a23d12e 100644
---- a/xml/IncludesOSD.xml
-+++ b/xml/IncludesOSD.xml
-@@ -929,5 +929,18 @@
- 					<reveal>true</reveal>
- 				</control>
-+				<!-- Chapter markers over the BINGIE progress bar. Kodi's ranges
-+				     control is display-only; the adjacent chapters button opens
-+				     the native selectable chapter/bookmark list. -->
-+				<control type="ranges">
-+					<visible>!VideoPlayer.HasEpg + Integer.IsGreater(Player.ChapterCount,1)</visible>
-+					<posx>384</posx>
-+					<posy>174</posy>
-+					<height>7</height>
-+					<width>1152</width>
-+					<texturebg colordiffuse="00ffffff">colors/color_white.png</texturebg>
-+					<righttexture>colors/color_white.png</righttexture>
-+					<info>Player.Chapters</info>
-+				</control>
- 				<control type="progress" id="23">
- 					<visible>VideoPlayer.HasEpg</visible>
- 					<posx>384</posx>
-@@ -3183,6 +3196,19 @@
- 				<visible>Player.PauseEnabled</visible>
- 				<visible>!VideoPlayer.Content(livetv)</visible>
- 			</control>
-+			<control type="button" id="220">
-+				<include>Bottom_OSD_Button_Zoom_Anim</include>
-+				<description>Chapters</description>
-+				<width>45</width>
-+				<height>45</height>
-+				<font/>
-+				<label>21396</label>
-+				<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]bookmarks_fo.png</texturefocus>
-+				<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]bookmarks.png</texturenofocus>
-+				<onclick>ActivateWindow(VideoBookmarks)</onclick>
-+				<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
-+				<visible>!VideoPlayer.Content(livetv)</visible>
-+			</control>
+diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
+index 6d770f7..91fb7e7 100644
+--- a/1080i/IncludesOSD.xml
++++ b/1080i/IncludesOSD.xml
+@@ -242,7 +242,7 @@
+ 					<texturebg colordiffuse="00FFFFFF">diffuse/osd_panel_trans.png</texturebg>
+ 					<righttexture colordiffuse="$INFO[Skin.String(OSDPrimaryTextColor)]">diffuse/osd_range.png</righttexture>
+ 					<info>Player.Chapters</info>
+-					<visible>Skin.HasSetting(ChapterMarks)</visible>
++					<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
+ 				</control>	
+                 <control type="slider" id="401">
+                     <description>Seek Slider</description>
+@@ -562,7 +562,7 @@
+ 					<texturebg colordiffuse="00FFFFFF">diffuse/panel2.png</texturebg>
+ 					<righttexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</righttexture>
+ 					<info>Player.Chapters</info>
+-					<visible>Skin.HasSetting(ChapterMarks)</visible>
++					<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
+ 				</control>	
+ 				<control type="slider" id="401">
+ 					<description>Seek Slider</description>
+@@ -1210,7 +1210,8 @@
+ 			<ondown>200</ondown>
+ 			<onright>StepForward</onright>
+ 			<onleft>StepBack</onleft>
+ 			<onclick condition="Player.Forwarding | Player.Rewinding">PlayerControl(Play)</onclick>
++			<onclick condition="Integer.IsGreater(Player.ChapterCount,1)">ActivateWindow(VideoBookmarks)</onclick>
  		</control>
- 		<control type="grouplist" id="3000">
- 			<animation effect="fade" time="350" delay="200" reversible="false">Visible</animation>
-diff --git a/xml/VideoFullScreen.xml b/xml/VideoFullScreen.xml
-index f1f07d3..d304ea9 100644
---- a/xml/VideoFullScreen.xml
-+++ b/xml/VideoFullScreen.xml
+ 		<control type="slider">
+ 			<animation type="WindowOpen">
+diff --git a/1080i/VideoFullScreen.xml b/1080i/VideoFullScreen.xml
+index 5f22ed0..f73be68 100644
+--- a/1080i/VideoFullScreen.xml
++++ b/1080i/VideoFullScreen.xml
 @@ -6,7 +6,9 @@
- 	<onload condition="Player.HasVideo + !Window.IsVisible(videoosd) + !Player.Paused">SetProperty(DialogMPAATopBar,1,home)</onload>
+ 	<onload condition="Player.HasVideo + !Window.IsVisible(videoosd) + !Player.Paused + !Skin.HasSetting(EnableOSDInfo)">AlarmClock(OpenMPAATopBar,SetProperty(DialogMPAATopBar,1,home),00:00,silent)</onload>
 +	<onload condition="System.HasAlarm(BingiePlaybackTimeout)">CancelAlarm(BingiePlaybackTimeout,silent)</onload>
 +	<onload>ClearProperty(BingiePlaybackStarting,Home)</onload>
  	<onunload condition="![Player.HasVideo + VideoPlayer.Content(livetv)]">ClearProperty(pvrGuideOnFullscreenVideo,Home)</onunload>
- 	<onunload condition="!String.IsEmpty(Window(Home).Property(BaseWindow)) + !Window.Previous(videos) + !Player.HasVideo">AlarmClock(loadinfo,Action(Info),00:00,silent)</onunload>
--	<onunload condition="$EXP[IsPlayingUnrecognizedContent] | [Player.HasVideo + !VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop) + ![Skin.HasSetting(EnableOSDInfo)]]">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
-+	<onunload condition="$EXP[IsPlayingUnrecognizedContent] | [Player.HasVideo + !VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop)]">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
- 
- 	<controls>
- 		<control type="image">
+-	<onunload condition="!VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop) + ![Skin.HasSetting(EnableOSDInfo)]">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
++	<onunload condition="!VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop)">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
+ 	<onunload>AlarmClock(LastPlayed,CancelAlarm(preview_delay,silent),00:01,silent)</onunload>
+ 	<onunload>ClearProperty(DialogMPAATopBar,home)</onunload>
+ 	<onunload>ClearProperty(HideDialogMPAATopBar,home)</onunload>
