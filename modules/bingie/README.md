@@ -4,12 +4,14 @@
 result into Kodi's user add-on directory with writable permissions because
 Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
 upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
-The local version is one patch release higher than upstream at `2.0.2.1`.
+The local version is higher than upstream at `2.0.2.2`.
 
 `htpc-playback.patch` contains the reviewable skin XML changes:
 
 - a black loading shield and spinner over Home while Jellyfin resolves a video;
 - always-visible chapter markers and native chapter selection from the timeline;
+- Play (or Resume for a partially watched movie) receives focus when movie
+  details open;
 - stop VOD playback whenever fullscreen video is left while BINGIE's
   `ForceVideoPlaybackStop` setting is enabled.
 

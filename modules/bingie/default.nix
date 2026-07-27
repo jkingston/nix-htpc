@@ -2,7 +2,7 @@
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-htpc";
   namespace = "skin.bingie";
-  version = "2.0.2.1";
+  version = "2.0.2.2";
 
   src = pkgs.fetchzip {
     url = "https://raw.githubusercontent.com/matke-84/repository.bingie/main/omega/skin.bingie/skin.bingie-2.0.2.zip";

@@ -1,3 +1,12 @@
+diff --git a/1080i/DialogVideoInfo.xml b/1080i/DialogVideoInfo.xml
+index 1e5d67d..c33b187 100644
+--- a/1080i/DialogVideoInfo.xml
++++ b/1080i/DialogVideoInfo.xml
+@@ -5 +5,3 @@
+-	<onload condition="!String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(8000)</onload>
++	<onload condition="!String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(8000)</onload>
++	<onload condition="[String.IsEqual(ListItem.DBTYPE,movie) | String.IsEqual(ListItem.Property(DBTYPE),movie)] + !ListItem.IsResumable">SetFocus(80)</onload>
++	<onload condition="[String.IsEqual(ListItem.DBTYPE,movie) | String.IsEqual(ListItem.Property(DBTYPE),movie)] + ListItem.IsResumable">SetFocus(90)</onload>
 diff --git a/1080i/Home.xml b/1080i/Home.xml
 index 67d72a3..1aac3be 100644
 --- a/1080i/Home.xml
