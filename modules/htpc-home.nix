@@ -1,4 +1,4 @@
-{ osConfig, ... }:
+{ bingieMod, lib, osConfig, pkgs, ... }:
 {
   home.file.".kodi/userdata/advancedsettings.xml".text = ''
     <advancedsettings>
@@ -28,6 +28,18 @@
         </remote>
       </FullscreenVideo>
     </keymap>
+  '';
+
+  # Bingie uses Skin Shortcuts to generate XML inside its own add-on directory,
+  # so it cannot run directly from the read-only Nix store. Keep the source and
+  # patches reproducible in Nix, then install a writable managed copy in Kodi's
+  # user add-on directory.
+  home.activation.installBingie = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p /home/htpc/.kodi/addons/skin.bingie
+    $DRY_RUN_CMD ${pkgs.rsync}/bin/rsync \
+      -a --delete --chmod=Du+rwx,Fu+rw \
+      ${bingieMod}/share/kodi/addons/skin.bingie/ \
+      /home/htpc/.kodi/addons/skin.bingie/
   '';
 
   # Note: Jellyfin addon settings are NOT managed by Home Manager.

@@ -1,10 +1,10 @@
 # HTPC BINGIE fork
 
-`default.nix` packages the pinned Bingie 2.0.2 archive as a Kodi system add-on.
-It deliberately keeps the upstream add-on ID, `skin.bingie`, so an
-existing installation keeps its selected skin and settings. The local add-on
-version is one patch release higher than the pinned upstream version so Kodi
-selects this system copy instead of an existing per-user `2.0.2` copy.
+`default.nix` packages the pinned Bingie 2.0.2 archive. Home Manager copies the
+result into Kodi's user add-on directory with writable permissions because
+Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
+upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
+The local version is one patch release higher than upstream at `2.0.2.1`.
 
 `htpc-playback.patch` contains the reviewable skin XML changes:
 
