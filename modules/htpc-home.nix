@@ -15,6 +15,21 @@
     </advancedsettings>
   '';
 
+  # Kodi's stock CEC remote map uses Up/Down for chapter jumps in fullscreen
+  # video. Open the OSD instead, matching the Select/OK button. Back is an
+  # appliance-style "leave playback" action, so stop before returning home.
+  home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
+    <keymap>
+      <FullscreenVideo>
+        <remote>
+          <up>OSD</up>
+          <down>OSD</down>
+          <back>Stop</back>
+        </remote>
+      </FullscreenVideo>
+    </keymap>
+  '';
+
   # Note: Jellyfin addon settings are NOT managed by Home Manager.
   # The addon stores auth tokens, sync state, and SyncInstallRunDone flag
   # in settings.xml. Home Manager would overwrite these on every rebuild,

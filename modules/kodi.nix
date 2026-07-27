@@ -1,6 +1,10 @@
 { nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
+  bingieMod = import ./bingie {
+    inherit pkgs;
+    kodiPackages = rpiPackages.kodi-gbm.packages;
+  };
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
@@ -8,6 +12,7 @@ let
     src = ./kodi-settings-addon;
   };
   kodiWithAddons = rpiPackages.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
+    bingieMod
     jellyfin
     kodiSettingsAddon
   ]);

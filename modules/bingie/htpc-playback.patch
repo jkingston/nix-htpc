@@ -1,0 +1,82 @@
+diff --git a/xml/Home.xml b/xml/Home.xml
+index 11311ab..cd98939 100644
+--- a/xml/Home.xml
++++ b/xml/Home.xml
+@@ -60,4 +60,19 @@
+ 		<!-- Home Screen -->
+         <include condition="String.IsEqual(Skin.String(HomeLayout),bingie)">HomeBingie</include>
++		<!-- Hide the home carousel while a video selected in the information
++		     dialog is being resolved. The play controls set this property. -->
++		<control type="group">
++			<visible>!String.IsEmpty(Window(Home).Property(BingiePlaybackStarting))</visible>
++			<control type="image">
++				<include>FullscreenDimensions</include>
++				<texture>colors/color_white.png</texture>
++				<colordiffuse>ff000000</colordiffuse>
++			</control>
++			<include content="Busy_Spinner">
++				<param name="centerleft" value="50%"/>
++				<param name="centertop" value="50%"/>
++				<param name="size" value="100"/>
++			</include>
++		</control>
+ 
+ 		<!-- Debug -->
+diff --git a/xml/IncludesOSD.xml b/xml/IncludesOSD.xml
+index d3ef9af..a23d12e 100644
+--- a/xml/IncludesOSD.xml
++++ b/xml/IncludesOSD.xml
+@@ -929,5 +929,18 @@
+ 					<reveal>true</reveal>
+ 				</control>
++				<!-- Chapter markers over the BINGIE progress bar. Kodi's ranges
++				     control is display-only; the adjacent chapters button opens
++				     the native selectable chapter/bookmark list. -->
++				<control type="ranges">
++					<visible>!VideoPlayer.HasEpg + Integer.IsGreater(Player.ChapterCount,1)</visible>
++					<posx>384</posx>
++					<posy>174</posy>
++					<height>7</height>
++					<width>1152</width>
++					<texturebg colordiffuse="00ffffff">colors/color_white.png</texturebg>
++					<righttexture>colors/color_white.png</righttexture>
++					<info>Player.Chapters</info>
++				</control>
+ 				<control type="progress" id="23">
+ 					<visible>VideoPlayer.HasEpg</visible>
+ 					<posx>384</posx>
+@@ -3183,6 +3196,19 @@
+ 				<visible>Player.PauseEnabled</visible>
+ 				<visible>!VideoPlayer.Content(livetv)</visible>
+ 			</control>
++			<control type="button" id="220">
++				<include>Bottom_OSD_Button_Zoom_Anim</include>
++				<description>Chapters</description>
++				<width>45</width>
++				<height>45</height>
++				<font/>
++				<label>21396</label>
++				<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]bookmarks_fo.png</texturefocus>
++				<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]bookmarks.png</texturenofocus>
++				<onclick>ActivateWindow(VideoBookmarks)</onclick>
++				<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
++				<visible>!VideoPlayer.Content(livetv)</visible>
++			</control>
+ 		</control>
+ 		<control type="grouplist" id="3000">
+ 			<animation effect="fade" time="350" delay="200" reversible="false">Visible</animation>
+diff --git a/xml/VideoFullScreen.xml b/xml/VideoFullScreen.xml
+index f1f07d3..d304ea9 100644
+--- a/xml/VideoFullScreen.xml
++++ b/xml/VideoFullScreen.xml
+@@ -6,7 +6,9 @@
+ 	<onload condition="Player.HasVideo + !Window.IsVisible(videoosd) + !Player.Paused">SetProperty(DialogMPAATopBar,1,home)</onload>
++	<onload condition="System.HasAlarm(BingiePlaybackTimeout)">CancelAlarm(BingiePlaybackTimeout,silent)</onload>
++	<onload>ClearProperty(BingiePlaybackStarting,Home)</onload>
+ 	<onunload condition="![Player.HasVideo + VideoPlayer.Content(livetv)]">ClearProperty(pvrGuideOnFullscreenVideo,Home)</onunload>
+ 	<onunload condition="!String.IsEmpty(Window(Home).Property(BaseWindow)) + !Window.Previous(videos) + !Player.HasVideo">AlarmClock(loadinfo,Action(Info),00:00,silent)</onunload>
+-	<onunload condition="$EXP[IsPlayingUnrecognizedContent] | [Player.HasVideo + !VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop) + ![Skin.HasSetting(EnableOSDInfo)]]">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
++	<onunload condition="$EXP[IsPlayingUnrecognizedContent] | [Player.HasVideo + !VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop)]">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
+ 
+ 	<controls>
+ 		<control type="image">
