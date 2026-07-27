@@ -55,7 +55,7 @@
   #   - wake_devices=231 (None) - Don't wake the TV or AVR
   #
   # The cec-tv-wake service arms after TV standby, then asks Kodi to become the
-  # active source when the TV emits its next wake/routing message.
+  # active source when the TV's CEC power status returns to on.
   #
   # TV turned off with remote: PC stays on
   #   - standby_pc_on_tv_standby=36044 (Ignore) - Don't suspend PC when TV sends standby

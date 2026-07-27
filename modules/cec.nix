@@ -43,8 +43,9 @@ in
   users.users.htpc.extraGroups = [ "video" "dialout" ];
 
   # Kodi must not wake or steal the TV during startup. Once the TV has entered
-  # standby, however, make Kodi active on the first wake/routing message from
-  # the TV even if it restores a different input.
+  # standby, however, make Kodi active when its CEC power status returns to on,
+  # even if the TV restores a different input. Samsung TVs do not consistently
+  # broadcast a routing message when woken with their own remote.
   systemd.services.cec-tv-wake = {
     description = "Activate Kodi when the TV wakes";
     wantedBy = [ "multi-user.target" ];
@@ -54,49 +55,64 @@ in
 
     path = with pkgs; [
       coreutils
-      gnugrep
-      netcat-openbsd
+      iproute2
       v4l-utils
     ];
 
     script = ''
       armed=false
-      if timeout 12 cec-ctl -d /dev/cec0 --show-topology 2>&1 \
-        | grep -qi 'Power Status.*Standby'; then
-        armed=true
-        echo "TV is in standby; CEC source activation armed"
-      fi
+      last_status=unknown
 
-      stdbuf -oL cec-ctl -d /dev/cec0 --monitor --wall-clock 2>&1 \
-        | while IFS= read -r line; do
-          case "$line" in
-            "Received from TV"*"STANDBY"*)
-              armed=true
-              echo "TV entered standby; CEC source activation armed"
-              ;;
-            *"ACTIVE_SOURCE"*|\
-            *"IMAGE_VIEW_ON"*|\
-            *"TEXT_VIEW_ON"*|\
-            "Received from TV"*"REPORT_POWER_STATUS"*"on"*|\
-            "Received from TV"*"REQUEST_ACTIVE_SOURCE"*|\
-            "Received from TV"*"ROUTING_CHANGE"*|\
-            "Received from TV"*"ROUTING_INFORMATION"*|\
-            "Received from TV"*"SET_STREAM_PATH"*)
-              if "$armed"; then
-                echo "TV wake/routing detected; asking Kodi to become active"
-                for _ in $(seq 1 30); do
-                  if nc -z 127.0.0.1 9090; then
-                    ${kodiCecActivate}/bin/kodi-cec-activate
-                    armed=false
-                    echo "Kodi CEC source activation sent"
-                    break
-                  fi
-                  sleep 1
-                done
-              fi
-              ;;
-          esac
-        done
+      while true; do
+        response="$(
+          timeout 3 cec-ctl -d /dev/cec0 --to 0 \
+            --give-device-power-status 2>&1 || true
+        )"
+
+        case "$response" in
+          # This Samsung reports 0x02 continuously while its screen is off
+          # rather than settling at the CEC-defined standby state 0x01.
+          *"pwr-state:"*"(0x01)"*|\
+          *"pwr-state:"*"(0x02)"*|\
+          *"pwr-state:"*"(0x03)"*)
+            status=standby
+            ;;
+          *"pwr-state:"*"(0x00)"*)
+            status=on
+            ;;
+          *)
+            status=unknown
+            ;;
+        esac
+
+        if [[ "$status" == standby ]]; then
+          if [[ "$armed" == false ]]; then
+            echo "TV is in standby; CEC source activation armed"
+          fi
+          armed=true
+        elif [[ "$status" == on && "$armed" == true ]]; then
+          echo "TV wake detected; asking Kodi to become active"
+          for _ in $(seq 1 30); do
+            if [[ -n "$(ss -H -lun 'sport = :9777')" ]]; then
+              ${kodiCecActivate}/bin/kodi-cec-activate
+              armed=false
+              echo "Kodi CEC source activation sent"
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ "$armed" == true ]]; then
+            echo "Kodi is unavailable; CEC source activation remains armed"
+          fi
+        fi
+
+        if [[ "$status" != unknown && "$status" != "$last_status" ]]; then
+          echo "TV power status: $status"
+        fi
+        last_status="$status"
+        sleep 2
+      done
     '';
 
     serviceConfig = {
