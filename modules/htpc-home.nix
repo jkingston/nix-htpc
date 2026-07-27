@@ -1,32 +1,34 @@
 { osConfig, ... }:
 {
-  programs.kodi = {
-    enable = true;
-    # Package with addons defined in kodi.nix for greetd
+  home.file.".kodi/userdata/advancedsettings.xml".text = ''
+    <advancedsettings>
+      <services>
+        <devicename>${osConfig.networking.hostName}</devicename>
+        <webserver>false</webserver>
+        <esallinterfaces>false</esallinterfaces>
+        <esenabled>true</esenabled>
+        <zeroconf>true</zeroconf>
+      </services>
+      <cec>
+        <poweroffonstandby>false</poweroffonstandby>
+      </cec>
+    </advancedsettings>
+  '';
 
-    # advancedsettings.xml - immutable settings
-    settings = {
-      services = {
-        devicename = osConfig.networking.hostName;
-        webserver = "true";
-        webserverport = "8080";
-        esallinterfaces = "true";
-        esenabled = "true";
-        zeroconf = "true";
-      };
-      cec = {
-        poweroffonstandby = "false";
-      };
-    };
-
-    # Note: Jellyfin addon settings are NOT managed by Home Manager.
-    # The addon stores auth tokens, sync state, and SyncInstallRunDone flag
-    # in settings.xml. Home Manager would overwrite these on every rebuild,
-    # causing the setup wizard to re-appear. Configure via Kodi UI on first run.
-  };
+  # Note: Jellyfin addon settings are NOT managed by Home Manager.
+  # The addon stores auth tokens, sync state, and SyncInstallRunDone flag
+  # in settings.xml. Home Manager would overwrite these on every rebuild,
+  # causing the setup wizard to re-appear. Configure via Kodi UI on first run.
 
   # CEC peripheral adapter settings
   # Controls TV power behavior.
+  #
+  # Kodi boot: TV stays off and the current input is not changed
+  #   - activate_source=0 - Don't announce Kodi as active during startup
+  #   - wake_devices=231 (None) - Don't wake the TV or AVR
+  #
+  # The cec-tv-wake service arms after TV standby, then asks Kodi to become the
+  # active source when the TV emits its next wake/routing message.
   #
   # TV turned off with remote: PC stays on
   #   - standby_pc_on_tv_standby=36044 (Ignore) - Don't suspend PC when TV sends standby
@@ -40,13 +42,13 @@
   home.file.".kodi/userdata/peripheral_data/cec_CEC_Adapter.xml".text = ''
     <settings>
       <setting id="enabled" value="1"/>
-      <setting id="activate_source" value="1"/>
+      <setting id="activate_source" value="0"/>
       <setting id="standby_devices" value="231"/>
       <setting id="standby_devices_advanced" value=""/>
       <setting id="send_inactive_source" value="0"/>
       <setting id="standby_pc_on_tv_standby" value="36044"/>
       <setting id="standby_tv_on_pc_standby" value="1"/>
-      <setting id="wake_devices" value="36037"/>
+      <setting id="wake_devices" value="231"/>
       <setting id="wake_devices_advanced" value=""/>
       <setting id="double_tap_timeout_ms" value="300"/>
       <setting id="button_repeat_rate_ms" value="0"/>

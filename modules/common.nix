@@ -3,8 +3,6 @@
   # Allow unfree packages if needed by media packages/codecs.
   nixpkgs.config.allowUnfree = true;
 
-  # Use latest stable kernel for best hardware support
-  boot.kernelPackages = pkgs.linuxPackages_latest;
   boot.supportedFilesystems.zfs = false;
 
   time.timeZone = "Europe/London";
@@ -30,6 +28,7 @@
     alsa.enable = true;
     pulse.enable = true;
   };
+  security.rtkit.enable = true;
 
   # Avahi/mDNS for .local hostname resolution (Bonjour)
   services.avahi = {
@@ -52,7 +51,7 @@
   environment.enableAllTerminfo = true;
 
   # Accept COLORTERM from SSH clients for truecolor support in TUI apps
-  services.openssh.settings.AcceptEnv = "COLORTERM TERM";
+  services.openssh.settings.AcceptEnv = [ "COLORTERM" "TERM" ];
 
   networking.networkmanager.enable = true;
 

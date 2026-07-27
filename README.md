@@ -4,27 +4,25 @@ NixOS flake for a Raspberry Pi 4B Kodi appliance.
 
 ## Deploy Raspberry Pi
 
-```bash
-# Build SD image (requires Linux or binfmt)
-nix build .#nixosConfigurations.htpc-pi.config.system.build.sdImage
-
-# Flash to SD card
-sudo dd if=result/sd-image/*.img of=/dev/diskX bs=4M status=progress
-```
+Build and flash the project SD image. It uses the Raspberry Pi vendor kernel,
+generational direct-kernel boot, a 1 GiB firmware partition, and an
+automatically expanding root partition.
 
 Use the Raspberry Pi 4 HDMI0 port, the micro-HDMI port nearest USB-C, for the main TV connection.
+
+See [PI_INSTALL.md](PI_INSTALL.md) for the Mac build and flashing steps.
 
 ## Update
 
 ```bash
 # Update Pi after copying or cloning this repo onto it
-sudo nixos-rebuild switch --flake /path/to/nix-htpc#htpc-pi
+sudo nixos-rebuild switch --accept-flake-config --flake /path/to/nix-htpc#htpc-pi
 ```
 
 ## Features
 
 - **Kodi GBM**: Direct GPU rendering for a dedicated TV UI
-- **Kodi add-ons**: Jellyfin, inputstream-adaptive, SponsorBlock, and YouTube
+- **Kodi add-ons**: Jellyfin and the managed HTPC settings service
 - **CEC**: TV remote control through HDMI-CEC
 - **mDNS**: Access via `htpc-pi.local`
 - **Auto-login**: Boots directly to Kodi
