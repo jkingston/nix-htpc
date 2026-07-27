@@ -37,7 +37,7 @@
   home.activation.installBingie = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p /home/htpc/.kodi/addons/skin.bingie
     $DRY_RUN_CMD ${pkgs.rsync}/bin/rsync \
-      -a --delete --chmod=Du+rwx,Fu+rw \
+      -a --checksum --delete --chmod=Du+rwx,Fu+rw \
       ${bingieMod}/share/kodi/addons/skin.bingie/ \
       /home/htpc/.kodi/addons/skin.bingie/
   '';
