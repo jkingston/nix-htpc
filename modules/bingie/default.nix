@@ -2,14 +2,17 @@
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-htpc";
   namespace = "skin.bingie";
-  version = "2.0.2.2";
+  version = "2.0.2.3";
 
   src = pkgs.fetchzip {
     url = "https://raw.githubusercontent.com/matke-84/repository.bingie/main/omega/skin.bingie/skin.bingie-2.0.2.zip";
     hash = "sha256-kK9EzmO/yEAp2LNh0Wf4hkPHHaX37F1JsJ3xU9Tn12g=";
   };
 
-  patches = [ ./htpc-playback.patch ];
+  patches = [
+    ./htpc-playback.patch
+    ./htpc-ux.patch
+  ];
 
   postPatch = ''
     # The higher version keeps an older/equal per-user copy from shadowing the
@@ -75,7 +78,7 @@ kodiPackages.buildKodiAddon rec {
   '';
 
   meta = {
-    description = "Bingie with HTPC playback and chapter-navigation fixes";
+    description = "Bingie with appliance-style HTPC playback and navigation";
     homepage = "https://github.com/matke-84/repository.bingie";
     license = pkgs.lib.licenses.gpl2Only;
   };

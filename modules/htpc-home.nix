@@ -15,20 +15,40 @@
     </advancedsettings>
   '';
 
-  # Kodi's stock CEC remote map uses Up/Down for chapter jumps in fullscreen
-  # video. Open the OSD instead, matching the Select/OK button. Back is an
-  # appliance-style "leave playback" action, so stop before returning home.
+  # One predictable playback contract for the CEC remote and keyboard:
+  # Up/Down/OK reveal the controls, Left/Right seek by Kodi's short step
+  # immediately, and Back leaves playback by stopping it.
   home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
     <keymap>
       <FullscreenVideo>
         <remote>
           <up>OSD</up>
           <down>OSD</down>
+          <left>StepBack</left>
+          <right>StepForward</right>
+          <select>OSD</select>
           <back>Stop</back>
         </remote>
+        <keyboard>
+          <up>OSD</up>
+          <down>OSD</down>
+          <left>StepBack</left>
+          <right>StepForward</right>
+          <enter>OSD</enter>
+          <backspace>Stop</backspace>
+          <escape>Stop</escape>
+        </keyboard>
       </FullscreenVideo>
     </keymap>
   '';
+
+  # Superseded by zz-htpc-remote.xml. This exact legacy file predates the
+  # managed keymap and would otherwise leave duplicate fullscreen bindings.
+  home.activation.removeLegacyKodiKeymap =
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f \
+        /home/htpc/.kodi/userdata/keymaps/cec-stop-playback.xml
+    '';
 
   # Bingie uses Skin Shortcuts to generate XML inside its own add-on directory,
   # so it cannot run directly from the read-only Nix store. Keep the source and

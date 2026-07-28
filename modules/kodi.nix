@@ -4,7 +4,7 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "1.1.0";
+    version = "1.2.0";
     src = ./kodi-settings-addon;
   };
   kodiWithAddons = rpiPackages.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
