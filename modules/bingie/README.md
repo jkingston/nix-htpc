@@ -4,7 +4,7 @@
 result into Kodi's user add-on directory with writable permissions because
 Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
 upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
-The local version is higher than upstream at `2.0.2.3`.
+The local version is higher than upstream at `2.0.2.4`.
 
 `htpc-playback.patch` contains the playback-start fixes:
 
@@ -19,8 +19,8 @@ The local version is higher than upstream at `2.0.2.3`.
 
 - playback controls no longer pause merely because the OSD opened, animate
   faster, and hide VOD controls already covered by the remote;
-- choosing the focused timeline opens a horizontal chapter/bookmark picker
-  using Kodi's captured frame thumbnails;
+- choosing the focused timeline opens Kodi's chapter/bookmark picker as a
+  secondary navigation path;
 - Home spotlight selection always opens details, with the information action
   visibly selected and no extra Right/Left mode-switch press;
 - resume items use a thin edge-to-edge progress bar and the bottom-right
@@ -33,6 +33,16 @@ parent-directory entries, applying seek steps immediately, disabling the mouse,
 and hiding low-value maintenance actions in movie details. The Home Manager
 keymap makes Up/Down/OK open the playback controls, Left/Right seek, and Back
 stop playback.
+
+`htpc-seeking.patch` makes remote seeking predictable: the first Left/Right
+press always enters a pending seek, repeated presses accumulate against that
+target, and the short OSD transitions stay visible while Kodi is seeking.
+
+`htpc-trickplay.patch` displays the pending seek position on BINGIE's primary
+timeline. When the managed Jellyfin add-on supplies a preview, the same overlay
+shows the actual Jellyfin trickplay frame and current chapter above the
+timeline. Non-Jellyfin playback retains the native time bubble and seek
+indicator.
 
 `default.nix` adds the loading state to all ten information-dialog play controls
 and changes all 24 normal play timers from one second to zero seconds. Both
@@ -50,7 +60,7 @@ When updating the pin:
 1. Change the archive URL, `version`, and expected upstream version in
    `default.nix`.
 2. Update the source hash.
-3. Rebase `htpc-playback.patch` and `htpc-ux.patch`, and update the asserted
-   play-handler count if upstream intentionally changes it.
+3. Rebase all four `htpc-*.patch` files, and update the asserted play-handler
+   count if upstream intentionally changes it.
 4. Build the skin through the Pi configuration, then test playback from both
    the BINGIE information dialog and the Jellyfin library.
