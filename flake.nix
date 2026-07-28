@@ -32,6 +32,7 @@
           home-manager.nixosModules.home-manager
           ./hosts/htpc-pi
           ./modules/common.nix
+          ./modules/maintenance.nix
           ./modules/home.nix
           ./modules/kodi.nix
           ./modules/cec.nix
