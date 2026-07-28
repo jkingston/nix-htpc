@@ -16,8 +16,8 @@
   '';
 
   # One predictable playback contract for the CEC remote and keyboard:
-  # Up/Down/OK reveal the controls, Left/Right seek by Kodi's short step
-  # immediately, and Back leaves playback by stopping it.
+  # Up/Down/OK reveal the controls, Left/Right use Kodi's additive short seek,
+  # and Back leaves playback by stopping it.
   home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
     <keymap>
       <FullscreenVideo>

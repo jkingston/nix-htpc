@@ -1,0 +1,112 @@
+diff --git a/1080i/Custom_1158_AutoCloseOSD.xml b/1080i/Custom_1158_AutoCloseOSD.xml
+index 64181b4..f6ee5c0 100644
+--- a/1080i/Custom_1158_AutoCloseOSD.xml
++++ b/1080i/Custom_1158_AutoCloseOSD.xml
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <!-- BINGIE -->
+ <window type="dialog" id="1158">
+-    <visible>System.IdleTime(1) + Skin.HasSetting(AutoCloseVideoOSD) + ![Skin.HasSetting(EnableOSDInfo) | Window.IsActive(OSDVideoSettings) | Window.IsActive(OSDAudioSettings) | Window.IsActive(OSDSubtitleSettings) | Window.IsActive(videobookmarks) | Window.IsActive(pvrchannelguide)]</visible>
++    <visible>System.IdleTime(1) + !Player.Seeking + Skin.HasSetting(AutoCloseVideoOSD) + ![Skin.HasSetting(EnableOSDInfo) | Window.IsActive(OSDVideoSettings) | Window.IsActive(OSDAudioSettings) | Window.IsActive(OSDSubtitleSettings) | Window.IsActive(videobookmarks) | Window.IsActive(pvrchannelguide)]</visible>
+ 	<visible>System.IdleTime(1) + [Window.IsActive(videoosd) | Window.IsActive(musicosd)] + Player.Playing</visible>
+     <onload>AlarmClock(CloseVideoOSD, Dialog.Close(videoosd),$INFO[Skin.String(AutoCloseVideoOSDTime),00:,],silent)</onload>
+     <onload>AlarmClock(CloseMusicOSD, Dialog.Close(musicosd),$INFO[Skin.String(AutoCloseVideoOSDTime),00:,],silent)</onload>
+diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
+index 89db063..4082c7a 100644
+--- a/1080i/IncludesOSD.xml
++++ b/1080i/IncludesOSD.xml
+@@ -1217,16 +1217,15 @@
+ 			<onright>StepForward</onright>
+ 			<onleft>StepBack</onleft>
+ 			<onclick condition="Player.Forwarding | Player.Rewinding">PlayerControl(Play)</onclick>
+-			<onclick condition="Integer.IsGreater(Player.ChapterCount,1)">ActivateWindow(VideoBookmarks)</onclick>
+ 		</control>
+ 		<control type="slider">
+ 			<animation type="WindowOpen">
+-				<effect type="slide" start="0,400" end="0,0" tween="cubic" easing="out" delay="0" time="450" reversible="false"/>
+-				<effect type="fade" start="0" end="100" delay="0" time="350" reversible="false"/>
++				<effect type="slide" start="0,400" end="0,0" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="0" end="100" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation type="WindowClose" condition="![Player.Forwarding | Player.Rewinding | !String.IsEmpty(Player.SeekNumeric) | !String.IsEmpty(PVR.ChannelNumberInput)]">
+-				<effect type="slide" start="0,0" end="0,400" tween="cubic" easing="out" delay="0" time="900" reversible="false"/>
+-				<effect type="fade" start="100" end="0" delay="0" time="700" reversible="false"/>
++				<effect type="slide" start="0,0" end="0,400" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="100" end="0" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation type="WindowClose" condition="Player.Forwarding | Player.Rewinding | !String.IsEmpty(Player.SeekNumeric) | !String.IsEmpty(PVR.ChannelNumberInput)">
+ 				<effect type="fade" start="100" end="0" delay="0" time="0" reversible="false"/>
+@@ -1239,8 +1238,7 @@
+ 			<width>1152</width>
+ 			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
+ 			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
+-			<visible>!Player.Seeking + Player.HasVideo | Player.HasAudio</visible>
+-			<visible>Control.HasFocus(187)</visible>
++			<visible>Player.HasVideo | Player.HasAudio</visible>
+         </control>
+ 	</include>
+     
+@@ -1702,12 +1700,12 @@
+ 			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
+             <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>		
+ 			<animation type="WindowOpen">
+-				<effect type="slide" start="0,-400" end="0,0" tween="cubic" easing="out" delay="0" time="450" reversible="false"/>
+-				<effect type="fade" start="0" end="100" delay="0" time="350" reversible="false"/>
++				<effect type="slide" start="0,-400" end="0,0" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="0" end="100" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation type="WindowClose">
+-				<effect type="slide" start="0,0" end="0,-400" tween="cubic" easing="out" delay="0" time="900" reversible="false"/>
+-				<effect type="fade" start="100" end="0" delay="0" time="700" reversible="false" />
++				<effect type="slide" start="0,0" end="0,-400" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="100" end="0" delay="0" time="180" reversible="false" />
+ 			</animation>		
+ 			<width>auto</width>
+ 			<height>290</height>
+@@ -1939,12 +1937,12 @@
+ 			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
+             <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>
+ 			<animation type="WindowOpen">
+-				<effect type="slide" start="0,-400" end="0,0" tween="cubic" easing="out" delay="0" time="450" reversible="false"/>
+-				<effect type="fade" start="0" end="100" delay="0" time="350" reversible="false"/>
++				<effect type="slide" start="0,-400" end="0,0" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="0" end="100" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation type="WindowClose">
+-				<effect type="slide" start="0,0" end="0,-400" tween="cubic" easing="out" delay="0" time="900" reversible="false"/>
+-				<effect type="fade" start="100" end="0" delay="0" time="700" reversible="false" />
++				<effect type="slide" start="0,0" end="0,-400" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="100" end="0" delay="0" time="180" reversible="false" />
+ 			</animation>
+ 			<top>90</top>
+ 			<align>right</align>
+@@ -1976,12 +1974,12 @@
+ 			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
+             <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>
+ 			<animation type="WindowOpen">
+-				<effect type="slide" start="0,400" end="0,0" tween="cubic" easing="out" delay="0" time="450" reversible="false"/>
+-				<effect type="fade" start="0" end="100" delay="0" time="350" reversible="false"/>
++				<effect type="slide" start="0,400" end="0,0" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="0" end="100" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation type="WindowClose">
+-				<effect type="slide" start="0,0" end="0,400" tween="cubic" easing="out" delay="0" time="900" reversible="false"/>
+-				<effect type="fade" start="100" end="0" delay="0" time="700" reversible="false"/>
++				<effect type="slide" start="0,0" end="0,400" tween="cubic" easing="out" delay="0" time="220" reversible="false"/>
++				<effect type="fade" start="100" end="0" delay="0" time="180" reversible="false"/>
+ 			</animation>
+ 			<animation end="-45,0" time="0" effect="slide" condition="[Player.Seeking + [!String.IsEqual(Player.SeekTime(hh),00) | [VideoPlayer.HasEpg + !String.IsEqual(PVR.EpgEventSeekTime(hh),00)]]] | [VideoPlayer.HasEPG + !String.IsEqual(PVR.EpgEventElapsedTime(hh),00)] | !String.IsEqual(Player.Time(hh),00)">Conditional</animation>
+ 			<animation effect="fade" start="100" end="0" time="0" condition="Player.Forwarding | Player.Rewinding">Conditional</animation>
+@@ -1991,9 +1989,9 @@
+ 			<height>$PARAM[bottomsize]</height>
+ 			<itemgap>$PARAM[gap]</itemgap>
+ 			<onleft condition="!Player.SeekEnabled">noop</onleft>
+-            <onleft condition="Player.SeekEnabled + Player.Paused">PlayerControl(Play)</onleft>
+-            <onleft condition="Player.SeekEnabled">back</onleft>
+-			<onright>187</onright>
++			<onleft condition="Player.SeekEnabled">StepBack</onleft>
++			<onright condition="!Player.SeekEnabled">noop</onright>
++			<onright condition="Player.SeekEnabled">StepForward</onright>
+ 			<onup condition="Skin.HasSetting(EnableOSDCastInfo)">50</onup>
+ 			<onup condition="Skin.HasSetting(EnableOSDCrewInfo)">51</onup>
+ 			<onup condition="![Skin.HasSetting(EnableOSDCastInfo) | Skin.HasSetting(EnableOSDCrewInfo)]">300</onup>

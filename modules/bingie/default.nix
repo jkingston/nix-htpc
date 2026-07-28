@@ -12,6 +12,7 @@ kodiPackages.buildKodiAddon rec {
   patches = [
     ./htpc-playback.patch
     ./htpc-ux.patch
+    ./htpc-seeking.patch
   ];
 
   postPatch = ''

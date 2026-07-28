@@ -37,7 +37,11 @@ set_setting("videoplayer.adjustrefreshrate", 2)
 set_setting("videoscreen.whitelist", PLAYBACK_MODES)
 set_setting("videoscreen.whitelistpulldown", False)
 set_setting("videoscreen.whitelistdoublerefreshrate", False)
-set_setting("videoplayer.seekdelay", 0)
+# Keep one press predictable while allowing rapid CEC repeats to accumulate
+# into one final stream seek. This gives the OSD time to display Kodi's pending
+# seek target instead of repeatedly flushing the Jellyfin HTTP stream.
+set_setting("videoplayer.seeksteps", [-60, -30, -10, 10, 30, 60])
+set_setting("videoplayer.seekdelay", 500)
 set_setting("filelists.showparentdiritems", False)
 set_setting("input.enablemouse", False)
 
