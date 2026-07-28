@@ -4,7 +4,7 @@
 result into Kodi's user add-on directory with writable permissions because
 Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
 upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
-The local version is higher than upstream at `2.0.2.4`.
+The local version is higher than upstream at `2.0.2.5`.
 
 `htpc-playback.patch` contains the playback-start fixes:
 
@@ -42,7 +42,8 @@ target, and the short OSD transitions stay visible while Kodi is seeking.
 timeline. When the managed Jellyfin add-on supplies a preview, the same overlay
 shows the actual Jellyfin trickplay frame and current chapter above the
 timeline. Non-Jellyfin playback retains the native time bubble and seek
-indicator.
+indicator. The time bubble reads Kodi's pending target directly, so it remains
+responsive while Jellyfin is still fetching a cold preview image.
 
 `default.nix` adds the loading state to all ten information-dialog play controls
 and changes all 24 normal play timers from one second to zero seconds. Both

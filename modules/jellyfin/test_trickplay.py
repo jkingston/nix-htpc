@@ -1,8 +1,10 @@
 import importlib.util
 import pathlib
 import sys
+import threading
 import types
 import unittest
+from collections import OrderedDict
 
 
 def load_module():
@@ -21,6 +23,7 @@ def load_module():
     xbmc.getInfoLabel = lambda _label: ""
     requests = types.ModuleType("requests")
     requests.get = lambda *_args, **_kwargs: None
+    requests.Session = lambda: types.SimpleNamespace(headers={})
 
     sys.modules["jellyfin_kodi"] = package
     sys.modules["jellyfin_kodi.helper"] = helper
@@ -73,6 +76,14 @@ class TrickplayTest(unittest.TestCase):
             (139, 1, (2880, 720, 3200, 960)),
         )
 
+    def test_frame_coordinates_and_directional_sprite_prefetch(self):
+        self.assertEqual(
+            trickplay.tile_for_frame(101, INFO),
+            (101, 1, (320, 0, 640, 240)),
+        )
+        self.assertEqual(trickplay.adjacent_sprites(10, INFO, 1), (1,))
+        self.assertEqual(trickplay.adjacent_sprites(110, INFO, -1), (0,))
+
     def test_selects_nearest_resolution(self):
         metadata = {
             "source": {
@@ -99,6 +110,99 @@ class TrickplayTest(unittest.TestCase):
         ]
         self.assertEqual(trickplay.chapter_for_time(chapters, 59)[0], 0)
         self.assertEqual(trickplay.chapter_for_time(chapters, 60)[0], 1)
+
+    def test_target_text_is_published_before_image_work(self):
+        events = []
+        manager = trickplay.TrickplayPreviewManager(None)
+        manager._chapter_frame = lambda _state, index, _abort: (
+            events.append(("image", index)) or "/tmp/chapter.jpg"
+        )
+        original_window = trickplay.window
+        trickplay.window = lambda key, value=None, clear=False: events.append(
+            ("window", key, value, clear)
+        )
+        try:
+            manager._ensure_preview(
+                {
+                    "chapters": [
+                        {"Name": "Chapter two", "StartPositionTicks": 600000000}
+                    ],
+                    "last_seconds": 0,
+                    "info": None,
+                },
+                60,
+                threading.Event(),
+            )
+        finally:
+            trickplay.window = original_window
+
+        time_event = ("window", trickplay.PREVIEW_TIME, "1:00", False)
+        chapter_event = (
+            "window",
+            trickplay.PREVIEW_CHAPTER,
+            "Chapter two",
+            False,
+        )
+        self.assertLess(events.index(time_event), events.index(("image", 0)))
+        self.assertLess(events.index(chapter_event), events.index(("image", 0)))
+
+    def test_sprite_cache_is_byte_bounded_lru(self):
+        state = {
+            "sprites": OrderedDict(),
+            "sprite_bytes": 0,
+            "failed_sprites": {1},
+        }
+        original_limit = trickplay.SPRITE_CACHE_BYTES
+        trickplay.SPRITE_CACHE_BYTES = 5
+        try:
+            trickplay.TrickplayPreviewManager._remember_sprite_locked(
+                state, 0, b"aaa"
+            )
+            trickplay.TrickplayPreviewManager._remember_sprite_locked(
+                state, 1, b"bbb"
+            )
+        finally:
+            trickplay.SPRITE_CACHE_BYTES = original_limit
+
+        self.assertEqual(list(state["sprites"]), [1])
+        self.assertEqual(state["sprite_bytes"], 3)
+        self.assertNotIn(1, state["failed_sprites"])
+
+    def test_neighbor_warming_prefers_seek_direction(self):
+        frames = []
+        manager = trickplay.TrickplayPreviewManager(None)
+        manager._trickplay_frame_by_index = (
+            lambda _state, frame, _abort: frames.append(frame)
+        )
+        manager._warm_neighbor_frames(
+            {"info": INFO},
+            50,
+            1,
+            threading.Event(),
+        )
+        self.assertEqual(frames, [51, 49, 52, 48, 53, 47])
+
+    def test_persistent_session_carries_token_in_header(self):
+        class Session(object):
+            def __init__(self):
+                self.headers = {}
+
+        original_session = trickplay.requests.Session
+        trickplay.requests.Session = Session
+        try:
+            client = types.SimpleNamespace(
+                config=types.SimpleNamespace(
+                    data={
+                        "auth.token": "secret-token",
+                    }
+                )
+            )
+            session = trickplay.TrickplayPreviewManager._new_session(client)
+        finally:
+            trickplay.requests.Session = original_session
+
+        self.assertEqual(session.headers["X-Emby-Token"], "secret-token")
+        self.assertEqual(session.headers["Accept"], "image/jpeg")
 
     def test_download_does_not_put_token_in_url_or_params(self):
         calls = []

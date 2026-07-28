@@ -1,8 +1,8 @@
 diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
-index a9f8cc6..2ea1f58 100644
+index a9f8cc6..92d831b 100644
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
-@@ -1220,0 +1221,65 @@
+@@ -1220,0 +1221,52 @@
 +		<control type="group">
 +			<visible>Player.Seeking + Player.HasVideo</visible>
 +			<animation effect="fade" start="0" end="100" time="120">Visible</animation>
@@ -52,23 +52,10 @@ index a9f8cc6..2ea1f58 100644
 +				<align>center</align>
 +				<aligny>center</aligny>
 +				<textcolor>white</textcolor>
-+				<label>$INFO[Window(Home).Property(jellyfin.htpc.seekpreviewtime)]</label>
-+				<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreviewtime))</visible>
-+			</control>
-+			<control type="label">
-+				<posx>880</posx>
-+				<posy>915</posy>
-+				<width>160</width>
-+				<height>38</height>
-+				<font>Reg26</font>
-+				<align>center</align>
-+				<aligny>center</aligny>
-+				<textcolor>white</textcolor>
 +				<label>$INFO[Player.SeekTime]</label>
-+				<visible>String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreviewtime))</visible>
 +			</control>
 +		</control>
-@@ -1241 +1306,12 @@
+@@ -1241 +1293,12 @@
 -			<visible>Player.HasVideo | Player.HasAudio</visible>
 +			<visible>!Player.Seeking + [Player.HasVideo | Player.HasAudio]</visible>
 +		</control>
