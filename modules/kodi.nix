@@ -7,8 +7,11 @@ let
     version = "1.3.0";
     src = ./kodi-settings-addon;
   };
+  jellyfinHtpc = import ./jellyfin {
+    kodiPackages = rpiPackages.kodi-gbm.packages;
+  };
   kodiWithAddons = rpiPackages.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
-    jellyfin
+    jellyfinHtpc
     kodiSettingsAddon
   ]);
 in

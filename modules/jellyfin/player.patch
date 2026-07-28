@@ -1,0 +1,16 @@
+diff --git a/jellyfin_kodi/player.py b/jellyfin_kodi/player.py
+index 9e12988..f373bdf 100644
+--- a/jellyfin_kodi/player.py
++++ b/jellyfin_kodi/player.py
+@@ -15,0 +16 @@ from .helper.utils import translate_path
++from .trickplay import TrickplayPreviewManager
+@@ -33,0 +35 @@ class Player(xbmc.Player):
++        self.trickplay_preview = TrickplayPreviewManager(self)
+@@ -54,0 +57 @@ class Player(xbmc.Player):
++        self.trickplay_preview.stop()
+@@ -105,0 +109 @@ class Player(xbmc.Player):
++        self.trickplay_preview.start(item)
+@@ -417,0 +422 @@ class Player(xbmc.Player):
++        self.trickplay_preview.stop()
+@@ -423,0 +429 @@ class Player(xbmc.Player):
++        self.trickplay_preview.stop()
