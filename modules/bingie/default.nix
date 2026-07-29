@@ -107,9 +107,9 @@ kodiPackages.buildKodiAddon rec {
       1080i/IncludesOSD.xml
     grep -q 'htpc.service.ready.*htpc.seek.active.*htpc.service.ready.*htpc.chapter.open' \
       1080i/Custom_1158_AutoCloseOSD.xml
-    test "$(grep -c 'htpc.service.ready.*htpc.seek.active.*Player.HasVideo' 1080i/IncludesOSD.xml)" -eq 3
-    grep -q 'HTPC_Movie_Genres_Row' 1080i/IncludesHomeBingie.xml
-    grep -q 'HTPC_TV_Genres_Row' 1080i/IncludesHomeBingie.xml
+    test "$(grep -c '!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo' 1080i/IncludesOSD.xml)" -eq 3
+    test "$(grep -c 'HTPC_Movie_Genres_Row' 1080i/IncludesHomeBingie.xml)" -eq 2
+    test "$(grep -c 'HTPC_TV_Genres_Row' 1080i/IncludesHomeBingie.xml)" -eq 2
   '';
 
   meta = {

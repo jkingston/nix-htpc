@@ -70,17 +70,15 @@ index 4c59d4d..d0d9727 100644
                                  <top>-11</top>
                                  <left>214</left>
                                  <height>25</height>
-@@ -769,8 +770,10 @@
-                 <include condition="Window.IsActive(Home)">skinshortcuts-template-Widgets</include>
-                 <include condition="Window.IsActive(1110)">skinshortcuts-template-tvshowhub</include>
-                 <include condition="Window.IsActive(1111)">skinshortcuts-template-moviehub</include>
-                 <include condition="Window.IsActive(1112)">skinshortcuts-template-newhub</include>
+@@ -773,6 +774,8 @@
                  <include condition="Window.IsActive(1113)">skinshortcuts-template-customhub</include>
                  <include condition="Window.IsActive(1114)">skinshortcuts-template-mylisthub</include>
  				<include condition="Window.IsActive(1120)">skinshortcuts-template-musichub</include>				
 +                <include condition="Window.IsActive(1110)">HTPC_TV_Genres_Row</include>
 +                <include condition="Window.IsActive(1111)">HTPC_Movie_Genres_Row</include>
              </control>
+ 			
+ 			<include condition="String.IsEqual(Skin.String(widgetstyle),poster) + !Skin.HasSetting(DisableDummySpotlight)">SpotlightDummyPosterWidget</include>
 @@ -789,7 +792,7 @@
  	
  			<!--Bingie Logo Diffuse-->
