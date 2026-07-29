@@ -18,8 +18,11 @@ from .helper.utils import translate_path
 LOG = LazyLogger(__name__)
 
 PREVIEW_PATH = "jellyfin.htpc.seekpreview"
-PREVIEW_TIME = "jellyfin.htpc.seekpreviewtime"
 PREVIEW_CHAPTER = "jellyfin.htpc.seekpreviewchapter"
+PREVIEW_TARGET = "jellyfin.htpc.seekpreviewtarget"
+SEEK_ACTIVE = "htpc.seek.active"
+SEEK_GENERATION = "htpc.seek.generation"
+SEEK_TARGET = "htpc.seek.targetseconds"
 
 SEEK_POLL_SECONDS = 0.05
 PREFETCH_WAIT_SECONDS = 1.5
@@ -245,6 +248,7 @@ class TrickplayPreviewManager(object):
                 "prefetch_thread": None,
                 "pillow_available": True,
                 "last_seconds": None,
+                "preview_pending": False,
             }
 
             if info is not None:
@@ -261,22 +265,40 @@ class TrickplayPreviewManager(object):
                 current = self.player.getTime()
             except Exception:
                 current = 0
-            self._ensure_preview(state, current, abort)
+            self._warm_initial_frame(state, current, abort)
 
             last_target = None
+            retry_at = None
             while not abort.wait(SEEK_POLL_SECONDS):
-                if not xbmc.getCondVisibility("Player.Seeking"):
+                if not window(SEEK_ACTIVE):
+                    if last_target is not None:
+                        self._clear_properties()
                     last_target = None
+                    retry_at = None
                     continue
 
-                target = parse_time_label(
-                    xbmc.getInfoLabel("Player.SeekTime(hh:mm:ss)")
+                generation = window(SEEK_GENERATION)
+                target_label = window(SEEK_TARGET)
+                try:
+                    target = int(target_label)
+                except (TypeError, ValueError):
+                    continue
+
+                now = time.monotonic()
+                token = (generation, target)
+                if token == last_target and (
+                    retry_at is None or now < retry_at
+                ):
+                    continue
+
+                pending = self._ensure_preview(
+                    state,
+                    target,
+                    generation,
+                    abort,
                 )
-                if target is None or target == last_target:
-                    continue
-
-                last_target = target
-                self._ensure_preview(state, target, abort)
+                last_target = token
+                retry_at = now + 0.20 if pending else None
         except Exception as error:
             if not abort.is_set():
                 LOG.warning("HTPC trickplay preview unavailable: %s", error)
@@ -285,24 +307,27 @@ class TrickplayPreviewManager(object):
             if state is not None:
                 self._close_state(state, abort)
 
-    def _ensure_preview(self, state, seconds, abort):
+    def _warm_initial_frame(self, state, seconds, abort):
+        if state["info"] is None:
+            return
+        frame = frame_for_time(seconds, state["info"])
+        path = self._trickplay_frame_by_index(state, frame, abort)
+        if path:
+            self._warm_neighbor_frames(state, frame, 0, abort)
+            self._queue_adjacent_sprites(state, frame, 0)
+
+    def _ensure_preview(self, state, seconds, generation, abort):
         chapter = chapter_for_time(state["chapters"], seconds)
         chapter_name = ""
         if chapter is not None:
             chapter_name = chapter[1].get("Name") or ""
-
-        # Time and chapter text must not wait behind a cold sprite request.
-        window(PREVIEW_TIME, format_time(seconds))
-        if chapter_name:
-            window(PREVIEW_CHAPTER, chapter_name)
-        else:
-            window(PREVIEW_CHAPTER, clear=True)
 
         previous = state["last_seconds"]
         direction = 0
         if previous is not None:
             direction = 1 if seconds > previous else -1 if seconds < previous else 0
         state["last_seconds"] = seconds
+        state["preview_pending"] = False
 
         path = None
         frame = None
@@ -313,16 +338,35 @@ class TrickplayPreviewManager(object):
             path = self._chapter_frame(state, chapter[0], abort)
 
         if abort.is_set():
-            return
+            return False
+
+        # A cold download may finish after the user has moved again. Never
+        # attach that stale image or chapter to the new cursor.
+        if not self._target_is_current(seconds, generation):
+            return False
 
         if path:
             window(PREVIEW_PATH, path)
         else:
             window(PREVIEW_PATH, clear=True)
+        if chapter_name:
+            window(PREVIEW_CHAPTER, chapter_name)
+        else:
+            window(PREVIEW_CHAPTER, clear=True)
+        window(PREVIEW_TARGET, str(int(seconds)))
 
         if frame is not None and path:
             self._warm_neighbor_frames(state, frame, direction, abort)
             self._queue_adjacent_sprites(state, frame, direction)
+        return state["preview_pending"]
+
+    @staticmethod
+    def _target_is_current(seconds, generation):
+        return (
+            bool(window(SEEK_ACTIVE))
+            and window(SEEK_GENERATION) == generation
+            and window(SEEK_TARGET) == str(int(seconds))
+        )
 
     def _trickplay_frame_by_index(self, state, frame, abort):
         frame, sprite, box = tile_for_frame(frame, state["info"])
@@ -395,6 +439,11 @@ class TrickplayPreviewManager(object):
                     return cached
 
             if abort.is_set():
+                return None
+            if sprite in state["downloading_sprites"]:
+                # Keep the prefetch worker as the sole owner of this request.
+                # The target loop retries from the shared cache shortly.
+                state["preview_pending"] = True
                 return None
             state["downloading_sprites"].add(sprite)
 
@@ -627,5 +676,9 @@ class TrickplayPreviewManager(object):
 
     @staticmethod
     def _clear_properties():
-        for key in (PREVIEW_PATH, PREVIEW_TIME, PREVIEW_CHAPTER):
+        for key in (
+            PREVIEW_PATH,
+            PREVIEW_CHAPTER,
+            PREVIEW_TARGET,
+        ):
             window(key, clear=True)

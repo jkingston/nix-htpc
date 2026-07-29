@@ -1,17 +1,18 @@
-diff --git a/1080i/DialogVideoInfo.xml b/1080i/DialogVideoInfo.xml
-index 1e5d67d..c33b187 100644
 --- a/1080i/DialogVideoInfo.xml
 +++ b/1080i/DialogVideoInfo.xml
-@@ -5 +5,3 @@
--	<onload condition="!String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(8000)</onload>
-+	<onload condition="!String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(8000)</onload>
+@@ -3,6 +3,8 @@
+ <window>
+     <defaultcontrol always="true">8000</defaultcontrol>
+ 	<onload condition="!String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(8000)</onload>
 +	<onload condition="[String.IsEqual(ListItem.DBTYPE,movie) | String.IsEqual(ListItem.Property(DBTYPE),movie)] + !ListItem.IsResumable">SetFocus(80)</onload>
 +	<onload condition="[String.IsEqual(ListItem.DBTYPE,movie) | String.IsEqual(ListItem.Property(DBTYPE),movie)] + ListItem.IsResumable">SetFocus(90)</onload>
-diff --git a/1080i/Home.xml b/1080i/Home.xml
-index 67d72a3..1aac3be 100644
+ 	<onload condition="String.IsEqual(ListItem.Property(tmdb_type),person)">SetFocus(2999,0)</onload>
+ 	<onload condition="!String.IsEmpty(Window.Property(AdditionalInfo))">ClearProperty(AdditionalInfo)</onload>
+ 	<onload condition="!String.IsEmpty(Window.Property(ShowPlayBeginning))">ClearProperty(ShowPlayBeginning)</onload>
 --- a/1080i/Home.xml
 +++ b/1080i/Home.xml
-@@ -51,4 +51,19 @@
+@@ -50,6 +50,21 @@
+ 	
  		<!-- Home Screen -->
          <include>HomeBingie</include>
 +		<!-- Hide the home carousel while a video selected in the information
@@ -31,8 +32,7 @@ index 67d72a3..1aac3be 100644
 +		</control>
  
  		<!-- Debug -->
-diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
-index 6d770f7..91fb7e7 100644
+         <include condition="Skin.HasSetting(DebugGrid) | Skin.HasSetting(DebugInfo)">DebugInfo</include>
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
 @@ -242,7 +242,7 @@
@@ -53,8 +53,7 @@ index 6d770f7..91fb7e7 100644
  				</control>	
  				<control type="slider" id="401">
  					<description>Seek Slider</description>
-@@ -1210,7 +1210,8 @@
- 			<ondown>200</ondown>
+@@ -1211,6 +1211,7 @@
  			<onright>StepForward</onright>
  			<onleft>StepBack</onleft>
  			<onclick condition="Player.Forwarding | Player.Rewinding">PlayerControl(Play)</onclick>
@@ -62,11 +61,11 @@ index 6d770f7..91fb7e7 100644
  		</control>
  		<control type="slider">
  			<animation type="WindowOpen">
-diff --git a/1080i/VideoFullScreen.xml b/1080i/VideoFullScreen.xml
-index 5f22ed0..f73be68 100644
 --- a/1080i/VideoFullScreen.xml
 +++ b/1080i/VideoFullScreen.xml
-@@ -6,7 +6,9 @@
+@@ -4,8 +4,10 @@
+ 	<defaultcontrol/>
+ 	<onload condition="System.HasAlarm(preview_delay)">CancelAlarm(preview_delay,silent)</onload>
  	<onload condition="Player.HasVideo + !Window.IsVisible(videoosd) + !Player.Paused + !Skin.HasSetting(EnableOSDInfo)">AlarmClock(OpenMPAATopBar,SetProperty(DialogMPAATopBar,1,home),00:00,silent)</onload>
 +	<onload condition="System.HasAlarm(BingiePlaybackTimeout)">CancelAlarm(BingiePlaybackTimeout,silent)</onload>
 +	<onload>ClearProperty(BingiePlaybackStarting,Home)</onload>

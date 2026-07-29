@@ -111,16 +111,28 @@ class TrickplayTest(unittest.TestCase):
         self.assertEqual(trickplay.chapter_for_time(chapters, 59)[0], 0)
         self.assertEqual(trickplay.chapter_for_time(chapters, 60)[0], 1)
 
-    def test_target_text_is_published_before_image_work(self):
+    def test_resolved_preview_is_tagged_with_exact_controller_target(self):
         events = []
+        properties = {
+            trickplay.SEEK_ACTIVE: "true",
+            trickplay.SEEK_GENERATION: "7",
+            trickplay.SEEK_TARGET: "60",
+        }
         manager = trickplay.TrickplayPreviewManager(None)
         manager._chapter_frame = lambda _state, index, _abort: (
             events.append(("image", index)) or "/tmp/chapter.jpg"
         )
         original_window = trickplay.window
-        trickplay.window = lambda key, value=None, clear=False: events.append(
-            ("window", key, value, clear)
-        )
+
+        def fake_window(key, value=None, clear=False):
+            events.append(("window", key, value, clear))
+            if clear:
+                properties.pop(key, None)
+            elif value is not None:
+                properties[key] = value
+            return properties.get(key, "")
+
+        trickplay.window = fake_window
         try:
             manager._ensure_preview(
                 {
@@ -129,22 +141,112 @@ class TrickplayTest(unittest.TestCase):
                     ],
                     "last_seconds": 0,
                     "info": None,
+                    "preview_pending": False,
                 },
                 60,
+                "7",
                 threading.Event(),
             )
         finally:
             trickplay.window = original_window
 
-        time_event = ("window", trickplay.PREVIEW_TIME, "1:00", False)
         chapter_event = (
             "window",
             trickplay.PREVIEW_CHAPTER,
             "Chapter two",
             False,
         )
-        self.assertLess(events.index(time_event), events.index(("image", 0)))
-        self.assertLess(events.index(chapter_event), events.index(("image", 0)))
+        target_event = (
+            "window",
+            trickplay.PREVIEW_TARGET,
+            "60",
+            False,
+        )
+        self.assertIn(("window", trickplay.PREVIEW_PATH, "/tmp/chapter.jpg", False), events)
+        self.assertIn(chapter_event, events)
+        self.assertIn(target_event, events)
+        self.assertGreater(events.index(target_event), events.index(("image", 0)))
+
+    def test_stale_cold_preview_is_discarded(self):
+        events = []
+        properties = {
+            trickplay.SEEK_ACTIVE: "true",
+            trickplay.SEEK_GENERATION: "8",
+            trickplay.SEEK_TARGET: "60",
+        }
+        manager = trickplay.TrickplayPreviewManager(None)
+
+        def stale_chapter(_state, _index, _abort):
+            properties[trickplay.SEEK_TARGET] = "70"
+            return "/tmp/stale.jpg"
+
+        manager._chapter_frame = stale_chapter
+        original_window = trickplay.window
+
+        def fake_window(key, value=None, clear=False):
+            if value is not None or clear:
+                events.append((key, value, clear))
+            return properties.get(key, "")
+
+        trickplay.window = fake_window
+        try:
+            manager._ensure_preview(
+                {
+                    "chapters": [
+                        {"Name": "Chapter", "StartPositionTicks": 0}
+                    ],
+                    "last_seconds": 0,
+                    "info": None,
+                    "preview_pending": False,
+                },
+                60,
+                "8",
+                threading.Event(),
+            )
+        finally:
+            trickplay.window = original_window
+
+        self.assertNotIn(
+            (trickplay.PREVIEW_PATH, "/tmp/stale.jpg", False),
+            events,
+        )
+        self.assertFalse(
+            any(event[0] == trickplay.PREVIEW_TARGET for event in events)
+        )
+
+    def test_missing_metadata_publishes_no_empty_image_card(self):
+        events = []
+        properties = {
+            trickplay.SEEK_ACTIVE: "true",
+            trickplay.SEEK_GENERATION: "9",
+            trickplay.SEEK_TARGET: "90",
+        }
+        manager = trickplay.TrickplayPreviewManager(None)
+        original_window = trickplay.window
+
+        def fake_window(key, value=None, clear=False):
+            if value is not None or clear:
+                events.append((key, value, clear))
+            return properties.get(key, "")
+
+        trickplay.window = fake_window
+        try:
+            manager._ensure_preview(
+                {
+                    "chapters": [],
+                    "last_seconds": None,
+                    "info": None,
+                    "preview_pending": False,
+                },
+                90,
+                "9",
+                threading.Event(),
+            )
+        finally:
+            trickplay.window = original_window
+
+        self.assertIn((trickplay.PREVIEW_PATH, None, True), events)
+        self.assertIn((trickplay.PREVIEW_TARGET, "90", False), events)
 
     def test_sprite_cache_is_byte_bounded_lru(self):
         state = {

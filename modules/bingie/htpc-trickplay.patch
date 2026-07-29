@@ -1,16 +1,48 @@
-diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
-index a9f8cc6..92d831b 100644
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
-@@ -1220,0 +1221,52 @@
-+		<control type="group">
-+			<visible>Player.Seeking + Player.HasVideo</visible>
+@@ -1238,8 +1238,100 @@
+ 			<width>1152</width>
+ 			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
+ 			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
+-			<visible>Player.HasVideo | Player.HasAudio</visible>
++			<visible>String.IsEmpty(Window(Home).Property(htpc.seek.active)) + [Player.HasVideo | Player.HasAudio]</visible>
+         </control>
++		<control type="slider">
++			<description>Actual play position while previewing</description>
++			<info>Player.Progress</info>
++			<posx>384</posx>
++			<posy>957</posy>
++			<height>7</height>
++			<width>1152</width>
++			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
++			<textureslidernib colordiffuse="55ffffff">common/slider/slider_button_nofocus.png</textureslidernib>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
++		</control>
++		<control type="group" id="1901">
++			<description>HTPC target marker, positioned by service.htpc.settings</description>
++			<posx>368</posx>
++			<posy>941</posy>
++			<width>32</width>
++			<height>32</height>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
++			<control type="image">
++				<width>32</width>
++				<height>32</height>
++				<texture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</texture>
++				<aspectratio>keep</aspectratio>
++			</control>
++		</control>
++		<control type="group" id="1902">
++			<description>HTPC target card, positioned by service.htpc.settings</description>
++			<posx>770</posx>
++			<posy>635</posy>
++			<width>380</width>
++			<height>360</height>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +			<animation effect="fade" start="0" end="100" time="120">Visible</animation>
 +			<animation effect="fade" start="100" end="0" time="90">Hidden</animation>
 +			<control type="group">
-+				<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreview))</visible>
-+				<posx>770</posx>
-+				<posy>635</posy>
++				<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreview)) + Integer.IsEqual(Window(Home).Property(jellyfin.htpc.seekpreviewtarget),Window(Home).Property(htpc.seek.targetseconds))</visible>
 +				<control type="image">
 +					<posx>-10</posx>
 +					<posy>-10</posy>
@@ -36,36 +68,37 @@ index a9f8cc6..92d831b 100644
 +					<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreviewchapter))</visible>
 +				</control>
 +			</control>
++			<control type="label">
++				<posx>0</posx>
++				<posy>246</posy>
++				<width>380</width>
++				<height>32</height>
++				<font>Reg24</font>
++				<align>center</align>
++				<aligny>center</aligny>
++				<textcolor>ccffffff</textcolor>
++				<label>OK to seek  •  Back to cancel</label>
++				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.confirm))</visible>
++			</control>
 +			<control type="image">
-+				<posx>880</posx>
-+				<posy>915</posy>
-+				<width>160</width>
++				<posx>80</posx>
++				<posy>280</posy>
++				<width>220</width>
 +				<height>38</height>
 +				<texture border="18" colordiffuse="ee080808">diffuse/panel2.png</texture>
 +			</control>
 +			<control type="label">
-+				<posx>880</posx>
-+				<posy>915</posy>
-+				<width>160</width>
++				<posx>80</posx>
++				<posy>280</posy>
++				<width>220</width>
 +				<height>38</height>
 +				<font>Reg26</font>
 +				<align>center</align>
 +				<aligny>center</aligny>
 +				<textcolor>white</textcolor>
-+				<label>$INFO[Player.SeekTime]</label>
++				<label>$INFO[Window(Home).Property(htpc.seek.time)]  $INFO[Window(Home).Property(htpc.seek.delta)]</label>
 +			</control>
 +		</control>
-@@ -1241 +1293,12 @@
--			<visible>Player.HasVideo | Player.HasAudio</visible>
-+			<visible>!Player.Seeking + [Player.HasVideo | Player.HasAudio]</visible>
-+		</control>
-+		<control type="slider">
-+			<description>Pending Seek Slider</description>
-+			<info>Player.SeekBar</info>
-+			<posx>384</posx>
-+			<posy>957</posy>
-+			<height>11</height>
-+			<width>1152</width>
-+			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
-+			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
-+			<visible>Player.Seeking + Player.HasVideo</visible>
+ 	</include>
+     
+     <include name="OSDInfoPanel">

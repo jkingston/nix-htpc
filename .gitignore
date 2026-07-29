@@ -2,3 +2,5 @@
 /nixos.qcow2
 /result
 /*.img.zst
+__pycache__/
+*.py[cod]

@@ -4,7 +4,7 @@
 result into Kodi's user add-on directory with writable permissions because
 Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
 upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
-The local version is higher than upstream at `2.0.2.5`.
+The local version is higher than upstream at `2.0.2.6`.
 
 `htpc-playback.patch` contains the playback-start fixes:
 
@@ -29,21 +29,42 @@ The local version is higher than upstream at `2.0.2.5`.
   desktop-style power actions are omitted.
 
 The managed Kodi settings service complements the skin patch by removing
-parent-directory entries, applying seek steps immediately, disabling the mouse,
-and hiding low-value maintenance actions in movie details. The Home Manager
-keymap makes Up/Down/OK open the playback controls, Left/Right seek, and Back
-stop playback.
+parent-directory entries, disabling the mouse and debug overlay, and hiding
+low-value maintenance actions in movie details. The Home Manager keymap makes
+Up/Down reveal the controls without pausing, OK toggle Play/Pause and reveal
+the controls, Left/Right signal the managed seek controller, and Back stop
+playback after visible OSD layers have been dismissed.
 
-`htpc-seeking.patch` makes remote seeking predictable: the first Left/Right
-press always enters a pending seek, repeated presses accumulate against that
-target, and the short OSD transitions stay visible while Kodi is seeking.
+`htpc-seeking.patch` routes the BINGIE timeline to the same controller and
+keeps the OSD open while a target is pending. Discrete presses always move
+exactly ten seconds and auto-commit as one absolute seek after 550ms of
+inactivity. A measured held-button repeat signature enters gradually
+accelerating scrub mode; releasing freezes the target until OK confirms or
+Back cancels. The passive preview does not focus the timeline, so a new tap
+after a short pause is still an auto-committing ten-second skip. Up/Down exits
+that passive mode and exposes normal OSD navigation; explicitly focusing the
+timeline provides an untimed, confirmable scrub path. From there Up opens the
+chapter/bookmark picker when chapters exist.
 
-`htpc-trickplay.patch` displays the pending seek position on BINGIE's primary
-timeline. When the managed Jellyfin add-on supplies a preview, the same overlay
-shows the actual Jellyfin trickplay frame and current chapter above the
-timeline. Non-Jellyfin playback retains the native time bubble and seek
-indicator. The time bubble reads Kodi's pending target directly, so it remains
-responsive while Jellyfin is still fetching a cold preview image.
+`htpc-trickplay.patch` adds a smooth controller-driven target slider and a
+clamped target card to BINGIE's primary timeline. The live playhead remains as
+a small subdued marker while the bright target stays stable through decoder
+settlement, so the cursor cannot flicker between the two positions. The target
+time and delta work for every seekable video. When Jellyfin resolves an exact
+matching frame, the card also shows that frame and chapter; media without
+trickplay metadata does not display an empty image box.
+
+The persistent controller lives in `modules/kodi-settings-addon`. It owns the
+absolute target and commits exactly once with `Player.seekTime()`. It also
+positions BINGIE controls at floating-point precision, avoiding the old
+one-percent quantisation (72 seconds per step in a two-hour film). Jellyfin is
+only an asynchronous frame supplier and tags each result with the target it
+resolved, so a late cold-cache response cannot replace a newer preview.
+Playback item identity and Kodi lifecycle notifications cancel stale
+transactions during episode changes. Sliding quiet-period guards make held OK
+or Back one semantic action instead of allowing repeats to traverse several
+OSD layers, and per-event recovery keeps the service alive if a player call
+races playback teardown.
 
 `default.nix` adds the loading state to all ten information-dialog play controls
 and changes all 24 normal play timers from one second to zero seconds. Both

@@ -4,8 +4,20 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "1.3.0";
+    version = "2.0.0";
     src = ./kodi-settings-addon;
+    nativeCheckInputs = [ pkgs.buildPackages.python3 ];
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      PYTHONDONTWRITEBYTECODE=1 \
+        python3 -B -m unittest discover -s . -p 'test_*.py'
+      runHook postCheck
+    '';
+    postInstall = ''
+      test -f \
+        "$out/share/kodi/addons/service.htpc.settings/seek_controller.py"
+    '';
   };
   jellyfinHtpc = import ./jellyfin {
     kodiPackages = rpiPackages.kodi-gbm.packages;

@@ -15,30 +15,49 @@
     </advancedsettings>
   '';
 
-  # One predictable playback contract for the CEC remote and keyboard:
-  # Up/Down/OK reveal the controls, Left/Right use Kodi's additive short seek,
-  # and Back leaves playback by stopping it.
+  # One predictable playback contract for the CEC remote and keyboard. The
+  # managed service owns Left/Right seek transactions so Kodi never alternates
+  # its live playhead with a pending preview target.
   home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
     <keymap>
       <FullscreenVideo>
         <remote>
-          <up>OSD</up>
-          <down>OSD</down>
-          <left>StepBack</left>
-          <right>StepForward</right>
-          <select>OSD</select>
-          <back>Stop</back>
+          <up>NotifyAll(htpc.seek,osd-show)</up>
+          <down>NotifyAll(htpc.seek,osd-show)</down>
+          <left>NotifyAll(htpc.seek,left)</left>
+          <right>NotifyAll(htpc.seek,right)</right>
+          <select>NotifyAll(htpc.seek,primary)</select>
+          <back>NotifyAll(htpc.seek,fullscreen-back)</back>
         </remote>
         <keyboard>
-          <up>OSD</up>
-          <down>OSD</down>
-          <left>StepBack</left>
-          <right>StepForward</right>
-          <enter>OSD</enter>
-          <backspace>Stop</backspace>
-          <escape>Stop</escape>
+          <up>NotifyAll(htpc.seek,osd-show)</up>
+          <down>NotifyAll(htpc.seek,osd-show)</down>
+          <left>NotifyAll(htpc.seek,left)</left>
+          <right>NotifyAll(htpc.seek,right)</right>
+          <enter>NotifyAll(htpc.seek,primary)</enter>
+          <backspace>NotifyAll(htpc.seek,fullscreen-back)</backspace>
+          <escape>NotifyAll(htpc.seek,fullscreen-back)</escape>
         </keyboard>
       </FullscreenVideo>
+      <VideoOSD>
+        <remote>
+          <up>NotifyAll(htpc.seek,osd-up)</up>
+          <down>NotifyAll(htpc.seek,osd-down)</down>
+          <left>NotifyAll(htpc.seek,osd-left)</left>
+          <right>NotifyAll(htpc.seek,osd-right)</right>
+          <select>NotifyAll(htpc.seek,osd-primary)</select>
+          <back>NotifyAll(htpc.seek,osd-back)</back>
+        </remote>
+        <keyboard>
+          <up>NotifyAll(htpc.seek,osd-up)</up>
+          <down>NotifyAll(htpc.seek,osd-down)</down>
+          <left>NotifyAll(htpc.seek,osd-left)</left>
+          <right>NotifyAll(htpc.seek,osd-right)</right>
+          <enter>NotifyAll(htpc.seek,osd-primary)</enter>
+          <backspace>NotifyAll(htpc.seek,osd-back)</backspace>
+          <escape>NotifyAll(htpc.seek,osd-back)</escape>
+        </keyboard>
+      </VideoOSD>
     </keymap>
   '';
 
