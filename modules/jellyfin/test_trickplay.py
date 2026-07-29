@@ -31,7 +31,12 @@ def load_module():
     sys.modules["xbmc"] = xbmc
     sys.modules["requests"] = requests
 
-    path = pathlib.Path(__file__).with_name("trickplay.py")
+    path = pathlib.Path(
+        os.environ.get(
+            "TRICKPLAY_MODULE",
+            pathlib.Path(__file__).with_name("trickplay.py"),
+        )
+    )
     spec = importlib.util.spec_from_file_location("jellyfin_kodi.trickplay", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -24,6 +24,7 @@ kodiPackages.jellyfin.overrideAttrs (old: {
   checkPhase = ''
     runHook preCheck
     PYTHONDONTWRITEBYTECODE=1 \
+      TRICKPLAY_MODULE="$PWD/jellyfin_kodi/trickplay.py" \
       python3 -B ${./test_trickplay.py}
     runHook postCheck
   '';
