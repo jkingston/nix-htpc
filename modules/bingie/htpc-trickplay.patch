@@ -1,14 +1,27 @@
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
-@@ -1238,8 +1238,100 @@
+@@ -1245,8 +1245,101 @@
  			<width>1152</width>
  			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
  			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
--			<visible>Player.HasVideo | Player.HasAudio</visible>
-+			<visible>String.IsEmpty(Window(Home).Property(htpc.seek.active)) + [Player.HasVideo | Player.HasAudio]</visible>
+-			<visible>Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
++			<visible>[String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.seek.active))] + Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
          </control>
++		<control type="label">
++			<description>Chapter rail affordance for the focused timeline</description>
++			<posx>384</posx>
++			<posy>895</posy>
++			<width>1152</width>
++			<height>38</height>
++			<font>Reg24</font>
++			<align>center</align>
++			<aligny>center</aligny>
++			<textcolor>ccffffff</textcolor>
++			<label>↑  Chapters</label>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + Control.HasFocus(187) + !String.IsEmpty(Window(Home).Property(htpc.chapter.available)) + String.IsEmpty(Window(Home).Property(htpc.seek.confirm)) + Player.HasVideo</visible>
++		</control>
 +		<control type="slider">
-+			<description>Actual play position while previewing</description>
++			<description>Subdued actual play position during an optimistic skip or scrub</description>
 +			<info>Player.Progress</info>
 +			<posx>384</posx>
 +			<posy>957</posy>
@@ -16,82 +29,70 @@
 +			<width>1152</width>
 +			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
 +			<textureslidernib colordiffuse="55ffffff">common/slider/slider_button_nofocus.png</textureslidernib>
-+			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +		</control>
 +		<control type="group" id="1901">
-+			<description>HTPC target marker, positioned by service.htpc.settings</description>
-+			<posx>368</posx>
-+			<posy>941</posy>
-+			<width>32</width>
-+			<height>32</height>
-+			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
++			<description>Stable HTPC target marker positioned by service.htpc.settings</description>
++			<posx>374</posx>
++			<posy>952</posy>
++			<width>20</width>
++			<height>20</height>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +			<control type="image">
-+				<width>32</width>
-+				<height>32</height>
++				<width>20</width>
++				<height>20</height>
 +				<texture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</texture>
 +				<aspectratio>keep</aspectratio>
 +			</control>
 +		</control>
 +		<control type="group" id="1902">
-+			<description>HTPC target card, positioned by service.htpc.settings</description>
++			<description>Cursor-following exact preview and rounded seek time</description>
 +			<posx>770</posx>
-+			<posy>635</posy>
++			<posy>650</posy>
 +			<width>380</width>
-+			<height>360</height>
-+			<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
++			<height>320</height>
++			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +			<animation effect="fade" start="0" end="100" time="120">Visible</animation>
 +			<animation effect="fade" start="100" end="0" time="90">Hidden</animation>
 +			<control type="group">
-+				<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreview)) + Integer.IsEqual(Window(Home).Property(jellyfin.htpc.seekpreviewtarget),Window(Home).Property(htpc.seek.targetseconds))</visible>
++				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.previewready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.previewpath))</visible>
 +				<control type="image">
 +					<posx>-10</posx>
 +					<posy>-10</posy>
 +					<width>400</width>
-+					<height>272</height>
++					<height>234</height>
 +					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
 +				</control>
 +				<control type="image">
 +					<width>380</width>
 +					<height>214</height>
-+					<texture background="true">$INFO[Window(Home).Property(jellyfin.htpc.seekpreview)]</texture>
++					<texture background="true">$INFO[Window(Home).Property(htpc.seek.previewpath)]</texture>
 +					<aspectratio align="center" aligny="center">keep</aspectratio>
-+				</control>
-+				<control type="label">
-+					<posy>219</posy>
-+					<width>380</width>
-+					<height>38</height>
-+					<font>Reg26</font>
-+					<align>center</align>
-+					<aligny>center</aligny>
-+					<textcolor>white</textcolor>
-+					<label>$INFO[Window(Home).Property(jellyfin.htpc.seekpreviewchapter)]</label>
-+					<visible>!String.IsEmpty(Window(Home).Property(jellyfin.htpc.seekpreviewchapter))</visible>
 +				</control>
 +			</control>
 +			<control type="label">
-+				<posx>0</posx>
-+				<posy>246</posy>
++				<posy>224</posy>
 +				<width>380</width>
 +				<height>32</height>
 +				<font>Reg24</font>
 +				<align>center</align>
 +				<aligny>center</aligny>
 +				<textcolor>ccffffff</textcolor>
-+				<label>OK to seek  •  Back to cancel</label>
++				<label>OK  Seek   •   Back  Cancel</label>
 +				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.confirm))</visible>
 +			</control>
 +			<control type="image">
-+				<posx>80</posx>
-+				<posy>280</posy>
-+				<width>220</width>
-+				<height>38</height>
++				<posx>70</posx>
++				<posy>262</posy>
++				<width>240</width>
++				<height>42</height>
 +				<texture border="18" colordiffuse="ee080808">diffuse/panel2.png</texture>
 +			</control>
 +			<control type="label">
-+				<posx>80</posx>
-+				<posy>280</posy>
-+				<width>220</width>
-+				<height>38</height>
++				<posx>70</posx>
++				<posy>262</posy>
++				<width>240</width>
++				<height>42</height>
 +				<font>Reg26</font>
 +				<align>center</align>
 +				<aligny>center</aligny>

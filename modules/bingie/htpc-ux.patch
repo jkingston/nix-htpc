@@ -27,31 +27,23 @@ index 4f6c570..3c51b13 100644
                  <onback>ClearProperty(ShowViewSubMenu,Home)</onback>
                  <onback condition="!Window.IsActive(1109)">77777</onback>
  				<onback condition="Window.IsActive(1109) + String.IsEmpty(Window.Property(KeepSuggestions))">9000</onback>
-@@ -2236,6 +2235,7 @@
-             <onleft condition="String.IsEmpty(Window(Home).Property(spotlightinfo))">SetFocus(900,$INFO[Window(Home).Property(menupos)])</onleft>
+@@ -2231,10 +2230,14 @@
+                 <param name="widgetid" value="$PARAM[widgetid]"/>
+             </include>
+             <onright condition="String.IsEmpty(Window(Home).Property(spotlightinfo))">SetProperty(spotlightinfo,1,Home)</onright>
++            <onleft condition="!String.IsEmpty(Window(Home).Property(spotlightinfo))">SetProperty(BingieSpotlightInternalLeft,1,Home)</onleft>
+             <onleft condition="!String.IsEmpty(Window(Home).Property(spotlightinfo))">ClearProperty(spotlightinfo,Home)</onleft>
+-            <onleft condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + $EXP[IsPlayingUnrecognizedContent]">SetProperty(KeepPlayingPreview,1,Home)</onleft>
+-            <onleft condition="String.IsEmpty(Window(Home).Property(spotlightinfo))">SetFocus(900,$INFO[Window(Home).Property(menupos)])</onleft>
++            <onleft condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + String.IsEmpty(Window(Home).Property(BingieSpotlightInternalLeft)) + $EXP[IsPlayingUnrecognizedContent]">SetProperty(KeepPlayingPreview,1,Home)</onleft>
++            <onleft condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + String.IsEmpty(Window(Home).Property(BingieSpotlightInternalLeft))">SetFocus(900,$INFO[Window(Home).Property(menupos)])</onleft>
++            <onleft condition="!String.IsEmpty(Window(Home).Property(BingieSpotlightInternalLeft))">ClearProperty(BingieSpotlightInternalLeft,Home)</onleft>
              <onunfocus>ClearProperty(spotlightinfo,home)</onunfocus>
++            <onunfocus>ClearProperty(BingieSpotlightInternalLeft,Home)</onunfocus>
++			<onfocus>ClearProperty(spotlightinfo,Home)</onfocus>
  			<onfocus>SetProperty(FullImage,1,Home)</onfocus>
-+			<onfocus>SetProperty(spotlightinfo,1,Home)</onfocus>
  			<onunfocus>ClearProperty(FullImage,home)</onunfocus>
  			<onunfocus condition="System.HasAlarm(preview_delay)">CancelAlarm(preview_delay,silent)</onunfocus>
- 			<onunfocus condition="Skin.HasSetting(SpotLightTrailers) + $EXP[IsPlayingUnrecognizedContent] + String.IsEmpty(Window(Home).Property(KeepPlayingPreview))">PlayerControl(Stop)</onunfocus>
-@@ -2243,15 +2243,7 @@
- 			<onfocus condition="!String.IsEmpty(Window(Home).Property(DelayTransition))">ClearProperty(DelayTransition,home)</onfocus>
-             <onback>900</onback>
- 			<onback>SetFocus(900,$INFO[Window(Home).Property(menupos)])</onback>
--			<onclick condition="String.IsEmpty(Window(Home).Property(FullImage))">SetProperty(FullImage,1,Home)</onclick>
--			<onclick condition="!String.IsEmpty(Window(Home).Property(FullImage))">SetProperty(EpisodesAnimation,1,Home)</onclick>
--            <onclick condition="!String.IsEmpty(Window(Home).Property(spotlightinfo))">Action(info)</onclick>
--            <onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + !String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,tvshow) + !String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,album) + !String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,artist)">PlayMedia($ESCINFO[Container($PARAM[widgetid]).ListItem.FileNameAndPath],resume)</onclick>
--            <onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + !String.IsEmpty(Container($PARAM[widgetid]).ListItem.DBID) + String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,tvshow)">SetProperty(ListItem.TVShowID,$INFO[Container($PARAM[widgetid]).ListItem.DBID],Home)</onclick>
--            <onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + !String.IsEmpty(Container($PARAM[widgetid]).ListItem.DBID) + String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,tvshow)">SetProperty(KeepTVShowID,1,Home)</onclick>
--            <onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + !String.IsEmpty(Container($PARAM[widgetid]).ListItem.DBID) + String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,tvshow)">ActivateWindow(Videos,videodb://tvshows/titles/$INFO[Container($PARAM[widgetid]).ListItem.DBID]/-2/,return)</onclick>
--            <onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + String.IsEmpty(Container($PARAM[widgetid]).ListItem.DBID) + String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,tvshow)">ActivateWindow(Videos,$ESCINFO[Container($PARAM[widgetid]).ListItem.FileNameAndPath],return)</onclick>
--			<onclick condition="String.IsEmpty(Window(Home).Property(spotlightinfo)) + [String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,album) | String.IsEqual(Container($PARAM[widgetid]).ListItem.DBType,artist)]">ActivateWindow(Music,$INFO[ListItem.FolderPath],return)</onclick>
-+            <onclick>Action(info)</onclick>
-             
- 			<!-- HOME SPOTLIGHT SCROLLING -->
-             <itemlayout width="1920" height="210"></itemlayout>
 @@ -4093,4 +4085,3 @@
      </variable>
  	
@@ -78,7 +70,18 @@ index 4c59d4d..d0d9727 100644
                                  <top>-11</top>
                                  <left>214</left>
                                  <height>25</height>
-@@ -789,7 +790,7 @@
+@@ -769,8 +770,10 @@
+                 <include condition="Window.IsActive(Home)">skinshortcuts-template-Widgets</include>
+                 <include condition="Window.IsActive(1110)">skinshortcuts-template-tvshowhub</include>
+                 <include condition="Window.IsActive(1111)">skinshortcuts-template-moviehub</include>
+                 <include condition="Window.IsActive(1112)">skinshortcuts-template-newhub</include>
+                 <include condition="Window.IsActive(1113)">skinshortcuts-template-customhub</include>
+                 <include condition="Window.IsActive(1114)">skinshortcuts-template-mylisthub</include>
+ 				<include condition="Window.IsActive(1120)">skinshortcuts-template-musichub</include>				
++                <include condition="Window.IsActive(1110)">HTPC_TV_Genres_Row</include>
++                <include condition="Window.IsActive(1111)">HTPC_Movie_Genres_Row</include>
+             </control>
+@@ -789,7 +792,7 @@
  	
  			<!--Bingie Logo Diffuse-->
  			<control type="image">
@@ -87,7 +90,7 @@ index 4c59d4d..d0d9727 100644
  				<description>diffuse behind Bingie logo</description>
  				<animation effect="slide" end="-66" time="0" condition="Window.IsActive(1110) | Window.IsActive(1111) | Window.IsActive(1114)">Conditional</animation>
  				<right>470</right>
-@@ -803,7 +804,7 @@
+@@ -803,7 +806,7 @@
  			</control>
  			<!--Bingie Logo-->
  			<control type="image">
@@ -96,7 +99,7 @@ index 4c59d4d..d0d9727 100644
  				<description>Bingie logo</description>
  				<right>314</right>
  				<bottom>5</bottom>
-@@ -815,7 +816,7 @@
+@@ -815,7 +818,7 @@
  			</control>
  
  			<control type="grouplist">
@@ -105,12 +108,173 @@ index 4c59d4d..d0d9727 100644
  				<orientation>horizontal</orientation>
  				<height>56</height>
  				<width>300</width>
-@@ -852,4 +853,4 @@
+@@ -852,4 +855,165 @@
  		</control>
      </include>
  	
 -</includes>
 \ No newline at end of file
++    <!-- Stable library-backed genre rows. These deliberately live outside
++         Skin Shortcuts so rebuilding generated menus cannot remove them. -->
++    <include name="HTPC_Genre_Row">
++        <definition>
++            <include content="widget_header_multi">
++                <param name="widgetid" value="$PARAM[widgetid]" />
++                <param name="widgetName" value="$PARAM[widgetName]" />
++            </include>
++            <control type="fixedlist" id="$PARAM[widgetid]">
++                <visible>Container($PARAM[widgetid]).IsUpdating + Control.IsVisible($PARAM[widgetid]) | Integer.IsGreater(Container($PARAM[widgetid]).NumItems,0)</visible>
++                <orientation>horizontal</orientation>
++                <width>100%</width>
++                <height>341</height>
++                <focusedposition>0</focusedposition>
++                <itemgap>0</itemgap>
++                <preloaditems>5</preloaditems>
++                <include>ScrollTime</include>
++                <include>WidgetsBaseAnimation</include>
++                <include content="SetFixedVerticalNavigationProps">
++                    <param name="widgetid" value="$PARAM[widgetid]" />
++                </include>
++                <include content="Fixed_Focus_Navigation_Factory">
++                    <param name="widgetid" value="$PARAM[widgetid]" />
++                </include>
++                <include content="BingieUnfocusedWidgetFade">
++                    <param name="widgetid" value="$PARAM[widgetid]" />
++                </include>
++                <onfocus>ClearProperty(Animation,home)</onfocus>
++
++                <itemlayout width="$PARAM[itemwidth]" height="341">
++                    <control type="group">
++                        <include>No_Circular_Left</include>
++                        <width>$PARAM[cardwidth]</width>
++                        <height>$PARAM[cardheight]</height>
++                        <control type="image">
++                            <width>100%</width>
++                            <height>100%</height>
++                            <texture border="12">diffuse/panel2.png</texture>
++                            <colordiffuse>cc202020</colordiffuse>
++                        </control>
++                        <control type="label">
++                            <left>20</left>
++                            <right>20</right>
++                            <height>100%</height>
++                            <align>center</align>
++                            <aligny>center</aligny>
++                            <font>Bold31</font>
++                            <textcolor>white</textcolor>
++                            <label>[CAPITALIZE]$INFO[ListItem.Label][/CAPITALIZE]</label>
++                        </control>
++                    </control>
++                </itemlayout>
++
++                <focusedlayout width="$PARAM[itemwidth]" height="341" condition="!Control.HasFocus($PARAM[widgetid])">
++                    <control type="group">
++                        <include>No_Circular_Left</include>
++                        <width>$PARAM[cardwidth]</width>
++                        <height>$PARAM[cardheight]</height>
++                        <control type="image">
++                            <width>100%</width>
++                            <height>100%</height>
++                            <texture border="12">diffuse/panel2.png</texture>
++                            <colordiffuse>cc202020</colordiffuse>
++                        </control>
++                        <control type="label">
++                            <left>20</left>
++                            <right>20</right>
++                            <height>100%</height>
++                            <align>center</align>
++                            <aligny>center</aligny>
++                            <font>Bold31</font>
++                            <textcolor>white</textcolor>
++                            <label>[CAPITALIZE]$INFO[ListItem.Label][/CAPITALIZE]</label>
++                        </control>
++                    </control>
++                </focusedlayout>
++
++                <focusedlayout width="$PARAM[itemwidth]" height="341" condition="Control.HasFocus($PARAM[widgetid])">
++                    <control type="group">
++                        <include>No_Circular_Left</include>
++                        <width>$PARAM[cardwidth]</width>
++                        <height>$PARAM[cardheight]</height>
++                        <control type="image">
++                            <width>100%</width>
++                            <height>100%</height>
++                            <texture border="12">diffuse/panel2.png</texture>
++                            <colordiffuse>white</colordiffuse>
++                        </control>
++                        <control type="label">
++                            <left>20</left>
++                            <right>20</right>
++                            <height>100%</height>
++                            <align>center</align>
++                            <aligny>center</aligny>
++                            <font>Bold31</font>
++                            <scroll>true</scroll>
++                            <textcolor>black</textcolor>
++                            <label>[CAPITALIZE]$INFO[ListItem.Label][/CAPITALIZE]</label>
++                        </control>
++                    </control>
++                </focusedlayout>
++
++                <content browse="never" target="videos" sortby="label" sortorder="ascending">$PARAM[widgetPath]</content>
++            </control>
++        </definition>
++    </include>
++
++    <include name="HTPC_Movie_Genres_Row">
++        <include content="HTPC_Genre_Row" condition="String.IsEqual(Skin.String(widgetstyle),poster)">
++            <param name="widgetid" value="19501" />
++            <param name="widgetName" value="$LOCALIZE[342] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://movies/genres/" />
++            <param name="itemwidth" value="240" />
++            <param name="cardwidth" value="240" />
++            <param name="cardheight" value="340" />
++        </include>
++        <include content="HTPC_Genre_Row" condition="String.IsEqual(Skin.String(widgetstyle),square)">
++            <param name="widgetid" value="19501" />
++            <param name="widgetName" value="$LOCALIZE[342] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://movies/genres/" />
++            <param name="itemwidth" value="280" />
++            <param name="cardwidth" value="280" />
++            <param name="cardheight" value="280" />
++        </include>
++        <include content="HTPC_Genre_Row" condition="!String.IsEqual(Skin.String(widgetstyle),poster) + !String.IsEqual(Skin.String(widgetstyle),square)">
++            <param name="widgetid" value="19501" />
++            <param name="widgetName" value="$LOCALIZE[342] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://movies/genres/" />
++            <param name="itemwidth" value="418" />
++            <param name="cardwidth" value="419" />
++            <param name="cardheight" value="242" />
++        </include>
++    </include>
++
++    <include name="HTPC_TV_Genres_Row">
++        <include content="HTPC_Genre_Row" condition="String.IsEqual(Skin.String(widgetstyle),poster)">
++            <param name="widgetid" value="19502" />
++            <param name="widgetName" value="$LOCALIZE[20343] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://tvshows/genres/" />
++            <param name="itemwidth" value="240" />
++            <param name="cardwidth" value="240" />
++            <param name="cardheight" value="340" />
++        </include>
++        <include content="HTPC_Genre_Row" condition="String.IsEqual(Skin.String(widgetstyle),square)">
++            <param name="widgetid" value="19502" />
++            <param name="widgetName" value="$LOCALIZE[20343] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://tvshows/genres/" />
++            <param name="itemwidth" value="280" />
++            <param name="cardwidth" value="280" />
++            <param name="cardheight" value="280" />
++        </include>
++        <include content="HTPC_Genre_Row" condition="!String.IsEqual(Skin.String(widgetstyle),poster) + !String.IsEqual(Skin.String(widgetstyle),square)">
++            <param name="widgetid" value="19502" />
++            <param name="widgetName" value="$LOCALIZE[20343] $LOCALIZE[135]" />
++            <param name="widgetPath" value="videodb://tvshows/genres/" />
++            <param name="itemwidth" value="418" />
++            <param name="cardwidth" value="419" />
++            <param name="cardheight" value="242" />
++        </include>
++    </include>
++	
 +</includes>
 diff --git a/1080i/IncludesOSD.xml b/1080i/IncludesOSD.xml
 index 4923bde..89db063 100644
@@ -357,334 +521,6 @@ index 494bc0f..7c4c8ba 100644
 @@ -17,4 +16,4 @@
              <include>HideOsdConditions</include>
  		</control>
-     </controls>
--</window>
-\ No newline at end of file
-+</window>
-diff --git a/1080i/VideoOSDBookmarks.xml b/1080i/VideoOSDBookmarks.xml
-index be90b2d..744d735 100644
---- a/1080i/VideoOSDBookmarks.xml
-+++ b/1080i/VideoOSDBookmarks.xml
-@@ -1,189 +1,148 @@
- <?xml version="1.0" encoding="utf-8"?>
--<!-- BINGIE -->
-+<!-- HTPC chapter picker: a horizontal strip of frame previews, reached from
-+     the focused playback timeline. Kodi populates list 11 with chapters and
-+     bookmarks and supplies each item's captured frame as ListItem.Icon. -->
- <window>
--    <defaultcontrol always="true">1</defaultcontrol>
-+    <defaultcontrol always="true">11</defaultcontrol>
-     <controls>
--	
--	<control type="group">
--		<!-- osd setings background -->
--		<control type="image">
--			<include>FullscreenDimensions</include>
--			<texture background="true">diffuse/panel2.png</texture>
--			<colordiffuse>b3000000</colordiffuse>
--			<visible>Window.IsActive(fullscreenvideo)</visible>
--			<animation effect="fade" time="250" start="0" end="100" reversible="false">WindowOpen</animation>
--			<animation effect="fade" time="250" start="100" end="0" reversible="false">WindowClose</animation>
--		</control>
--			<posx>-660</posx>
--			<posy>0</posy>
--			<animation type="WindowOpen">
--				<effect type="slide" start="0" end="660" time="250" tween="cubic" easing="inout" />
--			</animation>
--			<animation type="WindowClose">
--				<effect type="slide" start="660" end="0" time="250" tween="cubic" easing="inout" />
--			</animation>
--		<!--Panel-->
-         <control type="image">
--			<posy>0</posy>
--			<posx>0</posx>
--			<width>585</width>
--			<height>100%</height>
--			<texture border="10">diffuse/panel2.png</texture>
--			<colordiffuse>$INFO[Skin.String(GeneralPanelsColor)]</colordiffuse>
--			<aspectratio>stretch</aspectratio>
--		</control>
--        <control type="image">
--			<posy>0</posy>
--			<posx>0</posx>
--			<width>585</width>
--			<height>100%</height>
--			<texture border="10">diffuse/panel2.png</texture>
--			<colordiffuse>$INFO[Skin.String(GeneralPanelsColor)]</colordiffuse>
--			<aspectratio>stretch</aspectratio>
--		</control>
--		
--		
--		<!-- header -->
-+            <include>FullscreenDimensions</include>
-+            <texture>colors/color_white.png</texture>
-+            <colordiffuse>e6000000</colordiffuse>
-+            <animation effect="fade" time="180" start="0" end="100">WindowOpen</animation>
-+            <animation effect="fade" time="160" start="100" end="0">WindowClose</animation>
-+        </control>
-+
-         <control type="label">
--            <posx>10</posx>
--            <posy>10</posy>
--            <width>565</width>
--            <height>100</height>
-+            <left>80</left>
-+            <top>105</top>
-+            <width>1760</width>
-+            <height>70</height>
-             <font>Bold45</font>
--            <align>center</align>
--            <textcolor>$INFO[Skin.String(HeaderTextColor)]</textcolor>
--            <label>$LOCALIZE[298] ($INFO[Container(11).NumItems])</label>
--			<visible>!Window.IsActive(notification) + !Window.IsActive(extendedprogressdialog)</visible>
-+            <textcolor>white</textcolor>
-+            <label>$LOCALIZE[298]</label>
-+        </control>
-+        <control type="label">
-+            <left>82</left>
-+            <top>177</top>
-+            <width>1760</width>
-+            <height>42</height>
-+            <font>Reg26</font>
-+            <textcolor>ccffffff</textcolor>
-+            <label>$INFO[Container(11).NumItems,, chapters]</label>
-         </control>
--            <!--Label Menu: -->
--			<control type="image">
--				<width>545</width>
--                <posx>20</posx>
--				<posy>123</posy>
--				<height>275</height>
--				<texture background="true" fallback="video.png">$INFO[Container(11).ListItem.Icon]</texture>
--				<aspectratio>scale</aspectratio>
--			</control>	
--			<control type="list" id="11">
--                <!--List ID=11-->
--                <width>545</width>
--                <posx>20</posx>
--                <posy>421</posy>
--				<onright>Dialog.Close(all,true)</onright>
--				<onleft>1</onleft>
--                <height>390</height>
--                <onup>11</onup>
--                <ondown>1</ondown>
--                <scrolltime>100</scrolltime>
--				
--				<itemlayout width="545" height="65">
--					<control type="group">
--						<control type="button">
--							<label/>
--							<width>545</width>
--							<height>60</height>
--							<font>Reg24</font>
--							<align>center</align>
--							<aligny>center</aligny>
--						</control>
--						<control type="label"> <!--label-->
--							<left>20</left>
--							<width>545</width>
--							<label>$INFO[ListItem.Label]$INFO[ListItem.Label2, (,)]</label>
--							<font>Reg24</font>
--							<scroll>false</scroll>
--							<textcolor>$INFO[Skin.String(ButtonTextColor)]</textcolor>
--							<selectedcolor>$INFO[Skin.String(ButtonTextColor)]</selectedcolor>
--						</control>
--					</control>
--				</itemlayout>
--				
--				<focusedlayout width="545" height="65">
--					<control type="group">
--						<control type="button">
--							<label/>
--							<width>545</width>
--							<height>60</height>
--							<font>Reg24</font>
--							<align>center</align>
--							<aligny>center</aligny>
--							<visible>!Control.HasFocus(11)</visible>
--						</control>
--						<control type="image">
--							<width>545</width>
--							<height>60</height>
--							<texture border="10" colordiffuse="$INFO[Skin.String(ButtonFocusColor)]">diffuse/panel.png</texture>
--							<visible>Control.HasFocus(11)</visible>
--						</control>
--						<control type="label"> <!--label-->
--							<left>20</left>
--							<width>545</width>
--							<label>$INFO[ListItem.Label]$INFO[ListItem.Label2, (,)]</label>
--							<font>Reg24</font>
--							<scroll>true</scroll>
--							<textcolor>$INFO[Skin.String(ButtonFocusTextColor)]</textcolor>
--							<selectedcolor>$INFO[Skin.String(ButtonFocusTextColor)]</selectedcolor>
--							<visible>Control.HasFocus(11)</visible>
--						</control>
--						<control type="label"> <!--label-->
--							<left>20</left>
--							<width>320</width>
--							<label>$INFO[ListItem.Label]$INFO[ListItem.Label2, (,)]</label>
--							<font>Reg24</font>
--							<scroll>false</scroll>
--							<textcolor>$INFO[Skin.String(ButtonTextColor)]</textcolor>
--							<selectedcolor>$INFO[Skin.String(ButtonTextColor)]</selectedcolor>
--							<visible>!Control.HasFocus(11)</visible>
--						</control>
--					</control>
--				</focusedlayout>
- 
--			</control>
--			
--            <control type="grouplist" id="1">
--                <!--Buttons-->
--                <posx>11</posx>
--                <posy>820</posy>
--                <height>250</height>
--                <width>563</width>
--                <itemgap>5</itemgap>
--                <orientation>vertical</orientation>
--                <onup>11</onup>
--                <onright>Dialog.Close(all,true)</onright>
--                <control type="button" id="2">
--                    <description>Add</description>
--					<width>563</width>
--					<include>DialogButtonOther</include>
--                    <height>60</height>
--					<label>$LOCALIZE[15019]</label>
-+        <control type="panel" id="11">
-+            <left>72</left>
-+            <top>310</top>
-+            <width>1776</width>
-+            <height>320</height>
-+            <orientation>horizontal</orientation>
-+            <onleft>11</onleft>
-+            <onright>11</onright>
-+            <onup>1</onup>
-+            <ondown>1</ondown>
-+            <pagecontrol>60</pagecontrol>
-+            <scrolltime>180</scrolltime>
-+            <preloaditems>2</preloaditems>
-+
-+            <itemlayout width="355" height="285">
-+                <control type="image">
-+                    <left>8</left>
-+                    <top>8</top>
-+                    <width>339</width>
-+                    <height>191</height>
-+                    <texture background="true" fallback="video.png">$INFO[ListItem.Icon]</texture>
-+                    <aspectratio>scale</aspectratio>
-                 </control>
--                <control type="button" id="3">
--                    <description>Delete</description>
--					<width>563</width>
--					<include>DialogButtonOther</include>
--                    <height>60</height>
--					<label>$LOCALIZE[117]</label>
-+                <control type="label">
-+                    <left>8</left>
-+                    <top>211</top>
-+                    <width>339</width>
-+                    <height>48</height>
-+                    <font>Reg24</font>
-+                    <align>center</align>
-+                    <aligny>center</aligny>
-+                    <textcolor>ccffffff</textcolor>
-+                    <label>$INFO[ListItem.Label]$INFO[ListItem.Label2,  ·  ]</label>
-                 </control>
--				<control type="button" id="4">
--                    <description>Episode Bookmarks</description>
--					<width>563</width>
--					<include>DialogButtonOther</include>
--                    <height>60</height>
--					<label>$LOCALIZE[20406]</label>
--					<visible>videoplayer.content(episodes)</visible>
-+            </itemlayout>
-+
-+            <focusedlayout width="355" height="285">
-+                <control type="image">
-+                    <left>1</left>
-+                    <top>1</top>
-+                    <width>353</width>
-+                    <height>207</height>
-+                    <texture border="8">diffuse/panel2.png</texture>
-+                    <colordiffuse>$INFO[Skin.String(ViewDetailsBorderFocusColor)]</colordiffuse>
-+                    <visible>Control.HasFocus(11)</visible>
-                 </control>
--				<control type="button" id="99">
--                    <description>Close</description>
--					<width>563</width>
--					<include>DialogButtonOther</include>
--                    <height>60</height>
--					<label>$LOCALIZE[222]</label>
--					<onclick>Dialog.Close(all,true)</onclick>
-+                <control type="image">
-+                    <left>8</left>
-+                    <top>8</top>
-+                    <width>339</width>
-+                    <height>191</height>
-+                    <texture background="true" fallback="video.png">$INFO[ListItem.Icon]</texture>
-+                    <aspectratio>scale</aspectratio>
-                 </control>
--            </control>
--			
-+                <control type="label">
-+                    <left>8</left>
-+                    <top>211</top>
-+                    <width>339</width>
-+                    <height>48</height>
-+                    <font>Reg24</font>
-+                    <align>center</align>
-+                    <aligny>center</aligny>
-+                    <textcolor>white</textcolor>
-+                    <label>[B]$INFO[ListItem.Label]$INFO[ListItem.Label2,  ·  ][/B]</label>
-+                </control>
-+            </focusedlayout>
-+        </control>
-+
-+        <control type="scrollbar" id="60">
-+            <left>80</left>
-+            <top>650</top>
-+            <width>1760</width>
-+            <height>6</height>
-+            <orientation>horizontal</orientation>
-+            <texturesliderbar colordiffuse="66414141">diffuse/panel2.png</texturesliderbar>
-+            <textureslidernib colordiffuse="$INFO[Skin.String(BingieProgressBarColor)]">diffuse/panel2.png</textureslidernib>
-+            <textureslidernibfocus colordiffuse="$INFO[Skin.String(BingieProgressBarColor)]">diffuse/panel2.png</textureslidernibfocus>
-+            <showonepage>false</showonepage>
-         </control>
--	
- 
-+        <control type="grouplist" id="1">
-+            <left>80</left>
-+            <top>735</top>
-+            <width>1760</width>
-+            <height>70</height>
-+            <orientation>horizontal</orientation>
-+            <itemgap>18</itemgap>
-+            <onup>11</onup>
-+            <ondown>11</ondown>
-+            <control type="button" id="2">
-+                <description>Add bookmark</description>
-+                <width>270</width>
-+                <height>60</height>
-+                <include>DialogButtonOther</include>
-+                <label>$LOCALIZE[15019]</label>
-+            </control>
-+            <control type="button" id="3">
-+                <description>Delete bookmark</description>
-+                <width>270</width>
-+                <height>60</height>
-+                <include>DialogButtonOther</include>
-+                <label>$LOCALIZE[117]</label>
-+            </control>
-+            <control type="button" id="4">
-+                <description>Episode bookmarks</description>
-+                <width>300</width>
-+                <height>60</height>
-+                <include>DialogButtonOther</include>
-+                <label>$LOCALIZE[20406]</label>
-+                <visible>VideoPlayer.Content(episodes)</visible>
-+            </control>
-+        </control>
      </controls>
 -</window>
 \ No newline at end of file

@@ -5,29 +5,36 @@
  <!-- BINGIE -->
  <window type="dialog" id="1158">
 -    <visible>System.IdleTime(1) + Skin.HasSetting(AutoCloseVideoOSD) + ![Skin.HasSetting(EnableOSDInfo) | Window.IsActive(OSDVideoSettings) | Window.IsActive(OSDAudioSettings) | Window.IsActive(OSDSubtitleSettings) | Window.IsActive(videobookmarks) | Window.IsActive(pvrchannelguide)]</visible>
-+    <visible>System.IdleTime(1) + String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Skin.HasSetting(AutoCloseVideoOSD) + ![Skin.HasSetting(EnableOSDInfo) | Window.IsActive(OSDVideoSettings) | Window.IsActive(OSDAudioSettings) | Window.IsActive(OSDSubtitleSettings) | Window.IsActive(videobookmarks) | Window.IsActive(pvrchannelguide)]</visible>
++    <visible>System.IdleTime(1) + [String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.seek.active))] + [String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.chapter.open))] + Skin.HasSetting(AutoCloseVideoOSD) + ![Skin.HasSetting(EnableOSDInfo) | Window.IsActive(OSDVideoSettings) | Window.IsActive(OSDAudioSettings) | Window.IsActive(OSDSubtitleSettings) | Window.IsActive(videobookmarks) | Window.IsActive(pvrchannelguide)]</visible>
  	<visible>System.IdleTime(1) + [Window.IsActive(videoosd) | Window.IsActive(musicosd)] + Player.Playing</visible>
      <onload>AlarmClock(CloseVideoOSD, Dialog.Close(videoosd),$INFO[Skin.String(AutoCloseVideoOSDTime),00:,],silent)</onload>
      <onload>AlarmClock(CloseMusicOSD, Dialog.Close(musicosd),$INFO[Skin.String(AutoCloseVideoOSDTime),00:,],silent)</onload>
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
-@@ -1211,22 +1211,22 @@
+@@ -1211,22 +1211,28 @@
  	<include name="SeekBar_Bingie">
  		<control type="button" id="187">
  			<include>HiddenObject</include>
 -			<onup>200</onup>
 -			<onunfocus condition="Player.Forwarding | Player.Rewinding">PlayerControl(Play)</onunfocus>
-+			<onup condition="Integer.IsGreater(Player.ChapterCount,1)">ActivateWindow(VideoBookmarks)</onup>
-+			<onup condition="!Integer.IsGreater(Player.ChapterCount,1)">300</onup>
-+			<onunfocus>NotifyAll(htpc.seek,timeline-cancel)</onunfocus>
- 			<ondown>200</ondown>
++			<onup condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</onup>
++			<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
++			<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">300</onup>
++			<onfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
++			<onunfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
+-			<ondown>200</ondown>
++			<ondown condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
++			<ondown condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal))">200</ondown>
 -			<onright>StepForward</onright>
 -			<onleft>StepBack</onleft>
 -			<onclick condition="Player.Forwarding | Player.Rewinding">PlayerControl(Play)</onclick>
 -			<onclick condition="Integer.IsGreater(Player.ChapterCount,1)">ActivateWindow(VideoBookmarks)</onclick>
-+			<onright>NotifyAll(htpc.seek,timeline-right)</onright>
-+			<onleft>NotifyAll(htpc.seek,timeline-left)</onleft>
-+			<onclick>NotifyAll(htpc.seek,timeline-confirm)</onclick>
++			<onright condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-right)</onright>
++			<onright condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepForward</onright>
++			<onleft condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
++			<onleft condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepBack</onleft>
++			<onclick condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
++			<onclick condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">PlayerControl(Play)</onclick>
  		</control>
  		<control type="slider">
  			<animation type="WindowOpen">
@@ -44,17 +51,17 @@
  			</animation>
  			<animation type="WindowClose" condition="Player.Forwarding | Player.Rewinding | !String.IsEmpty(Player.SeekNumeric) | !String.IsEmpty(PVR.ChannelNumberInput)">
  				<effect type="fade" start="100" end="0" delay="0" time="0" reversible="false"/>
-@@ -1239,8 +1238,7 @@
+@@ -1239,8 +1245,7 @@
  			<width>1152</width>
  			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
  			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
 -			<visible>!Player.Seeking + Player.HasVideo | Player.HasAudio</visible>
 -			<visible>Control.HasFocus(187)</visible>
-+			<visible>Player.HasVideo | Player.HasAudio</visible>
++			<visible>Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
          </control>
  	</include>
      
-@@ -1702,12 +1700,12 @@
+@@ -1702,12 +1707,12 @@
  			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
              <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>		
  			<animation type="WindowOpen">
@@ -71,7 +78,7 @@
  			</animation>		
  			<width>auto</width>
  			<height>290</height>
-@@ -1939,12 +1937,12 @@
+@@ -1939,12 +1944,12 @@
  			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
              <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>
  			<animation type="WindowOpen">
@@ -88,7 +95,7 @@
  			</animation>
  			<top>90</top>
  			<align>right</align>
-@@ -1976,12 +1974,12 @@
+@@ -1976,12 +1981,12 @@
  			<visible>!Player.FrameAdvance + !Window.IsActive(sliderdialog) + !Window.IsActive(script-upnext-upnext.xml) + !Window.IsVisible(playerprocessinfo)</visible>
              <visible>[Window.IsActive(visualisation) | Window.IsActive(fullscreenvideo)] + !Player.HasGame</visible>
  			<animation type="WindowOpen">
@@ -105,20 +112,19 @@
  			</animation>
  			<animation end="-45,0" time="0" effect="slide" condition="[Player.Seeking + [!String.IsEqual(Player.SeekTime(hh),00) | [VideoPlayer.HasEpg + !String.IsEqual(PVR.EpgEventSeekTime(hh),00)]]] | [VideoPlayer.HasEPG + !String.IsEqual(PVR.EpgEventElapsedTime(hh),00)] | !String.IsEqual(Player.Time(hh),00)">Conditional</animation>
  			<animation effect="fade" start="100" end="0" time="0" condition="Player.Forwarding | Player.Rewinding">Conditional</animation>
-@@ -1990,13 +1988,9 @@
+@@ -1990,13 +1995,9 @@
  			<width>1540</width>
  			<height>$PARAM[bottomsize]</height>
  			<itemgap>$PARAM[gap]</itemgap>
 -			<onleft condition="!Player.SeekEnabled">noop</onleft>
 -            <onleft condition="Player.SeekEnabled + Player.Paused">PlayerControl(Play)</onleft>
 -            <onleft condition="Player.SeekEnabled">back</onleft>
--			<onright>187</onright>
++			<onleft>200</onleft>
+ 			<onright>187</onright>
 -			<onup condition="Skin.HasSetting(EnableOSDCastInfo)">50</onup>
 -			<onup condition="Skin.HasSetting(EnableOSDCrewInfo)">51</onup>
 -			<onup condition="![Skin.HasSetting(EnableOSDCastInfo) | Skin.HasSetting(EnableOSDCrewInfo)]">300</onup>
-+			<onleft>200</onleft>
-+			<onright>200</onright>
-+			<onup>187</onup>
++			<onup>300</onup>
  			<ondown condition="Player.HasAudio">2000</ondown>
  			<ondown condition="Skin.HasSetting(EnableOSDInfo)">3000</ondown>
  			<orientation>horizontal</orientation>			

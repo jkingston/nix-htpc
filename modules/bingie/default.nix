@@ -2,7 +2,7 @@
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-htpc";
   namespace = "skin.bingie";
-  version = "2.0.2.6";
+  version = "2.0.2.7";
 
   src = pkgs.fetchzip {
     url = "https://raw.githubusercontent.com/matke-84/repository.bingie/main/omega/skin.bingie/skin.bingie-2.0.2.zip";
@@ -15,6 +15,8 @@ kodiPackages.buildKodiAddon rec {
     ./htpc-seeking.patch
     ./htpc-trickplay.patch
   ];
+
+  nativeBuildInputs = [ pkgs.libxml2 ];
 
   postPatch = ''
     # The higher version keeps an older/equal per-user copy from shadowing the
@@ -77,6 +79,37 @@ kodiPackages.buildKodiAddon rec {
       echo "A delayed BINGIE play handler remains after patching" >&2
       exit 1
     fi
+
+    # Validate every well-formed XML file touched by this fork. A few unrelated
+    # upstream includes are not strict XML, so keep this list intentionally
+    # scoped instead of hiding real regressions with a blanket best-effort pass.
+    xmllint --noout \
+      addon.xml \
+      1080i/Home.xml \
+      1080i/IncludesBingie.xml \
+      1080i/IncludesHomeBingie.xml \
+      1080i/IncludesOSD.xml \
+      1080i/IncludesViewsLayoutLandscape.xml \
+      1080i/IncludesViewsLayoutPoster.xml \
+      1080i/IncludesViewsLayoutSquare.xml \
+      1080i/MyVideoNav.xml \
+      1080i/VideoFullScreen.xml \
+      1080i/VideoOSD.xml \
+      1080i/VideoOSDBookmarks.xml \
+      1080i/Custom_1158_AutoCloseOSD.xml
+
+    test "$(grep -c 'NotifyAll(htpc.seek,timeline-left)' 1080i/IncludesOSD.xml)" -eq 1
+    test "$(grep -c 'NotifyAll(htpc.seek,timeline-right)' 1080i/IncludesOSD.xml)" -eq 1
+    test "$(grep -ci 'ActivateWindow(VideoBookmarks)' 1080i/IncludesOSD.xml)" -eq 2
+    test "$(grep -c 'id="1901"' 1080i/IncludesOSD.xml)" -eq 1
+    test "$(grep -c 'id="1902"' 1080i/IncludesOSD.xml)" -eq 1
+    grep -q 'Window(Home).Property(htpc.service.ready).*StepForward' \
+      1080i/IncludesOSD.xml
+    grep -q 'htpc.service.ready.*htpc.seek.active.*htpc.service.ready.*htpc.chapter.open' \
+      1080i/Custom_1158_AutoCloseOSD.xml
+    test "$(grep -c 'htpc.service.ready.*htpc.seek.active.*Player.HasVideo' 1080i/IncludesOSD.xml)" -eq 3
+    grep -q 'HTPC_Movie_Genres_Row' 1080i/IncludesHomeBingie.xml
+    grep -q 'HTPC_TV_Genres_Row' 1080i/IncludesHomeBingie.xml
   '';
 
   meta = {

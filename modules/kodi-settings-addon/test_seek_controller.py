@@ -3,6 +3,14 @@ from __future__ import absolute_import, division, print_function
 import unittest
 
 from seek_controller import (
+    CANCEL_WAIT_PAUSE,
+    COMMITTING,
+    IDLE,
+    PAUSE_PENDING,
+    RESUME_PENDING,
+    SCRUB_ACTIVE,
+    SKIP_ACTIVE,
+    SKIP_SETTLING,
     RepeatGuard,
     SeekController,
     format_delta,
@@ -13,36 +21,46 @@ from seek_controller import (
 
 class FakePlayer(object):
     def __init__(self, current=100.0, duration=3600.0, paused=False):
-        self.current = current
-        self.duration = duration
-        self.paused = paused
+        self.current = float(current)
+        self.duration = float(duration)
+        self.paused = bool(paused)
         self.seekable = True
         self.identity = "item-one"
-        self.seeks = []
-        self.play_calls = 0
+        self.epoch = 1
+        self.pause_requests = []
+        self.resume_requests = []
+        self.seek_requests = []
+        self.retired = []
 
-    def is_seekable(self):
-        return self.seekable
+    def snapshot(self):
+        return {
+            "seekable": self.seekable,
+            "current": self.current,
+            "duration": self.duration,
+            "paused": self.paused,
+            "identity": self.identity,
+            "epoch": self.epoch,
+        }
 
-    def get_time(self):
-        return self.current
+    def request_pause(self, operation, identity, epoch):
+        self.pause_requests.append((operation, identity, epoch))
+        return True
 
-    def get_duration(self):
-        return self.duration
+    def request_resume(self, operation, identity, epoch):
+        self.resume_requests.append((operation, identity, epoch))
+        return True
 
-    def is_paused(self):
-        return self.paused
+    def request_seek(self, seconds, operation, identity, epoch):
+        self.seek_requests.append(
+            (float(seconds), operation, identity, epoch)
+        )
+        return True
 
-    def get_identity(self):
-        return self.identity
+    def retire_operation(self, operation):
+        self.retired.append(operation)
 
-    def seek(self, seconds):
-        self.seeks.append(seconds)
-
-    def ensure_playing(self):
-        if self.paused:
-            self.paused = False
-            self.play_calls += 1
+    def retire_operations(self, operations):
+        self.retired.extend(operations)
 
 
 class FakePublisher(object):
@@ -57,223 +75,511 @@ class FakePublisher(object):
         self.clears += 1
 
 
-class SeekControllerTest(unittest.TestCase):
-    def make_controller(self, **player_kwargs):
-        player = FakePlayer(**player_kwargs)
-        publisher = FakePublisher()
-        return player, publisher, SeekController(player, publisher)
+class ControllerHarness(object):
+    def __init__(self, **player_kwargs):
+        self.player = FakePlayer(**player_kwargs)
+        self.publisher = FakePublisher()
+        self.controller = SeekController(self.player, self.publisher)
 
-    def test_formatting_and_velocity(self):
+    def ack_pause(self, now=0.0, matching=True):
+        operation = (
+            self.player.pause_requests[-1][0]
+            if matching and self.player.pause_requests
+            else None
+        )
+        self.player.paused = True
+        self.controller.on_player_event(
+            "paused",
+            {
+                "operation": operation,
+                "identity": self.player.identity,
+                "epoch": self.player.epoch,
+            },
+            now,
+        )
+
+    def ack_seek(self, index=-1, now=0.0):
+        target, operation, _identity, _epoch = self.player.seek_requests[index]
+        self.player.current = target
+        self.controller.on_player_event(
+            "seeked",
+            {
+                "operation": operation,
+                "identity": self.player.identity,
+                "epoch": self.player.epoch,
+            },
+            now,
+        )
+
+    def ack_resume(self, now=0.0):
+        operation = self.player.resume_requests[-1][0]
+        self.player.paused = False
+        self.controller.on_player_event(
+            "resumed",
+            {
+                "operation": operation,
+                "identity": self.player.identity,
+                "epoch": self.player.epoch,
+            },
+            now,
+        )
+
+    def start_timeline_hold(self, direction=1):
+        for timestamp in (0.0, 0.40, 0.508, 0.616):
+            self.controller.timeline_step(direction, timestamp)
+
+
+class SeekControllerTest(unittest.TestCase):
+    def test_formatting_and_gradual_velocity(self):
         self.assertEqual(format_time(3723), "1:02:03")
         self.assertEqual(format_time(754), "12:34")
         self.assertEqual(format_delta(-10), "\N{MINUS SIGN}0:10")
         self.assertEqual(format_delta(80), "+1:20")
-        self.assertAlmostEqual(hold_velocity(0, 3600), 10)
-        self.assertAlmostEqual(hold_velocity(1.25, 3600), 20)
-        self.assertLessEqual(hold_velocity(20, 3600), 360)
+        speeds = [hold_velocity(t, 3600) for t in (0, 1, 2, 4, 10)]
+        self.assertEqual(speeds[0], 10)
+        self.assertEqual(speeds, sorted(speeds))
+        self.assertLess(speeds[1], 20)
+        self.assertLessEqual(speeds[-1], 360)
 
-    def test_one_tap_publishes_target_then_commits_once(self):
-        player, publisher, controller = self.make_controller()
-        controller.arrow(-1, now=0)
-        self.assertEqual(controller.snapshot()["target_seconds"], 90)
-        self.assertEqual(player.seeks, [])
+    def test_one_hidden_tap_is_optimistic_then_one_absolute_seek(self):
+        h = ControllerHarness()
+        self.assertTrue(h.controller.hidden_step(1, 0.0))
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 110)
+        self.assertEqual(h.player.seek_requests, [])
 
-        controller.tick(0.56)
-        self.assertEqual(player.seeks, [90])
-        self.assertEqual(controller.state, "settling")
-        self.assertFalse(player.paused)
+        h.controller.tick(0.549)
+        self.assertEqual(h.player.seek_requests, [])
+        h.controller.tick(0.55)
+        self.assertEqual(len(h.player.seek_requests), 1)
+        self.assertEqual(h.player.seek_requests[0][0], 110)
+        self.assertEqual(h.player.seek_requests[0][2:], ("item-one", 1))
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
+        self.assertFalse(h.player.paused)
 
-        controller.tick(0.80)
-        self.assertEqual(player.seeks, [90])
-        player.current = 90
-        controller.tick(0.92)
-        self.assertEqual(controller.state, "idle")
-        self.assertGreaterEqual(publisher.clears, 2)
+        h.ack_seek(now=0.7)
+        self.assertEqual(h.controller.state, IDLE)
 
-    def test_rapid_human_taps_are_exact_fixed_steps(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(-1, now=0)
-        controller.arrow(-1, now=0.18)
-        controller.arrow(-1, now=0.36)
-        self.assertEqual(controller.snapshot()["target_seconds"], 70)
-        controller.tick(0.92)
-        self.assertEqual(player.seeks, [70])
+    def test_rapid_discrete_taps_never_accelerate_and_coalesce_once(self):
+        h = ControllerHarness()
+        for timestamp in (0.0, 0.10, 0.20, 0.30):
+            h.controller.hidden_step(1, timestamp)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 140)
+        self.assertFalse(h.controller.hold_active)
+        self.assertEqual(h.player.pause_requests, [])
+        self.assertEqual(h.player.seek_requests, [])
 
-    def test_slow_ambiguous_events_resolve_as_taps(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(-1, now=0)
-        controller.arrow(-1, now=0.43)
-        self.assertEqual(controller.snapshot()["target_seconds"], 90)
-        controller.tick(0.62)
-        self.assertEqual(controller.snapshot()["target_seconds"], 80)
-        controller.arrow(-1, now=0.86)
-        controller.tick(1.05)
-        self.assertEqual(controller.snapshot()["target_seconds"], 70)
-        controller.tick(1.42)
-        self.assertEqual(player.seeks, [70])
+        h.controller.tick(0.849)
+        self.assertEqual(h.player.seek_requests, [])
+        h.controller.tick(0.85)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [140])
 
-    def test_measured_repeat_signature_becomes_confirmable_hold(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        controller.arrow(1, now=0.40)
-        controller.arrow(1, now=0.508)
-        controller.arrow(1, now=0.616)
-        self.assertEqual(controller.state, "hold")
-        self.assertEqual(player.seeks, [])
+    def test_brief_pause_does_not_lose_or_accelerate_a_tap(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.hidden_step(1, 0.40)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 110)
+        self.assertEqual(h.controller.probe_count, 1)
 
-        controller.tick(0.90)
-        self.assertEqual(controller.state, "hold-pending")
-        self.assertGreater(controller.target, 110)
-        self.assertEqual(player.seeks, [])
+        h.controller.tick(0.579)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 110)
+        h.controller.tick(0.581)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 120)
+        self.assertFalse(h.controller.hold_active)
+        h.controller.tick(0.951)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [120])
 
-        target = controller.target
-        self.assertTrue(controller.confirm(now=1.0))
-        self.assertEqual(player.seeks, [target])
-        self.assertEqual(controller.state, "settling")
+    def test_failed_hold_probe_materializes_every_event(self):
+        h = ControllerHarness()
+        for timestamp in (0.0, 0.40, 0.508, 0.80):
+            h.controller.hidden_step(1, timestamp)
+        # The .40 and .508 candidates are materialized when the signature
+        # breaks, and .80 begins a new candidate.
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 130)
+        h.controller.tick(0.99)
+        self.assertEqual(h.controller.snapshot()["target_seconds"], 140)
+        self.assertFalse(h.controller.hold_active)
 
-    def test_single_ambiguous_repeat_is_a_second_tap(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        controller.arrow(1, now=0.40)
-        controller.tick(0.59)
-        self.assertEqual(controller.snapshot()["target_seconds"], 120)
-        controller.tick(0.96)
-        self.assertEqual(player.seeks, [120])
+    def test_proven_hold_buffers_probe_without_target_rollback(self):
+        h = ControllerHarness()
+        visible_targets = []
+        for timestamp in (0.0, 0.40, 0.508, 0.616):
+            h.controller.hidden_step(1, timestamp)
+            visible_targets.append(h.controller.target)
+        self.assertEqual(visible_targets, [110, 110, 110, 110])
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+        self.assertTrue(h.controller.manual)
+        self.assertTrue(h.controller.snapshot()["modal"])
+        self.assertEqual(len(h.player.pause_requests), 1)
+        self.assertEqual(h.player.seek_requests, [])
 
-    def test_irregular_hold_onset_still_requires_dense_repeat_pattern(self):
-        player, _publisher, controller = self.make_controller()
-        for timestamp in (0, 0.40, 0.564, 0.765, 0.865, 0.965, 1.065):
-            controller.arrow(1, now=timestamp)
-        self.assertEqual(controller.state, "hold")
-        self.assertEqual(player.seeks, [])
-        controller.tick(1.31)
-        self.assertEqual(controller.state, "hold-pending")
-        self.assertEqual(player.seeks, [])
+        h.ack_pause(0.65)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        self.assertTrue(h.controller.controller_paused)
+        h.controller.tick(0.90)
+        frozen = h.controller.target
+        h.controller.tick(2.0)
+        self.assertAlmostEqual(h.controller.target, frozen)
+        self.assertTrue(h.controller.hold_released)
 
-    def test_dense_repeat_fails_safe_to_hold_without_large_skip(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        previous_target = controller.target
-        for timestamp in (0.14, 0.28, 0.42, 0.56):
-            controller.arrow(1, now=timestamp)
-            self.assertGreaterEqual(controller.target, previous_target)
-            previous_target = controller.target
-        self.assertEqual(controller.state, "hold")
-        self.assertLess(controller.target, 120)
-        self.assertEqual(player.seeks, [])
+    def test_hold_direction_reversal_is_one_fine_step_and_resets_ramp(self):
+        h = ControllerHarness()
+        for timestamp in (0.0, 0.40, 0.508, 0.616):
+            h.controller.hidden_step(1, timestamp)
+        h.ack_pause(0.65)
+        h.controller.tick(0.72)
+        before = h.controller.target
+        h.controller.hidden_step(-1, 0.73)
+        self.assertLess(h.controller.target, before)
+        self.assertAlmostEqual(h.controller.target, before - 10.0, delta=0.2)
+        self.assertEqual(h.controller.gesture_direction, -1)
+        self.assertEqual(h.controller.hold_started, 0.73)
 
-    def test_fast_measured_human_taps_remain_exact_steps(self):
-        player, _publisher, controller = self.make_controller()
-        for timestamp in (0, 0.166, 0.332, 0.498, 0.664):
-            controller.arrow(1, now=timestamp)
-        self.assertEqual(controller.state, "tap")
-        self.assertEqual(controller.snapshot()["target_seconds"], 150)
-        controller.tick(1.215)
-        self.assertEqual(player.seeks, [150])
+    def test_press_after_released_hold_is_a_new_ten_second_gesture(self):
+        h = ControllerHarness()
+        for timestamp in (0.0, 0.40, 0.508, 0.616):
+            h.controller.hidden_step(1, timestamp)
+        h.ack_pause(0.65)
+        h.controller.tick(0.90)
+        self.assertTrue(h.controller.hold_released)
+        before = h.controller.target
 
-    def test_timeline_never_auto_commits_and_back_cancels(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, source="timeline", now=0)
-        controller.arrow(1, source="timeline", now=0.20)
-        controller.tick(20)
-        self.assertEqual(controller.state, "timeline")
-        self.assertEqual(controller.snapshot()["target_seconds"], 120)
-        self.assertEqual(player.seeks, [])
-        self.assertTrue(controller.cancel())
-        self.assertEqual(player.seeks, [])
+        h.controller.hidden_step(1, 3.0)
+        self.assertAlmostEqual(h.controller.target, before + 10.0)
+        self.assertFalse(h.controller.hold_active)
+        h.controller.tick(3.05)
+        self.assertAlmostEqual(h.controller.target, before + 10.0)
 
-    def test_timeline_hold_uses_buffered_classifier_without_jumping(self):
-        player, _publisher, controller = self.make_controller()
-        for timestamp in (0, 0.40, 0.508, 0.616):
-            controller.arrow(1, source="timeline", now=timestamp)
-        self.assertEqual(controller.state, "hold")
-        self.assertEqual(controller.snapshot()["target_seconds"], 110)
-        self.assertEqual(player.seeks, [])
+    def test_isolated_timeline_tap_auto_commits_without_pause(self):
+        h = ControllerHarness()
+        h.controller.timeline_step(1, 0.0)
+        self.assertEqual(h.controller.target, 110)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(h.player.pause_requests, [])
+        self.assertEqual(h.player.seek_requests, [])
+        h.controller.tick(0.55)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
 
-    def test_timeline_confirm_plays_after_one_seek(self):
-        player, _publisher, controller = self.make_controller(paused=True)
-        controller.arrow(-1, source="timeline", now=0)
-        controller.arrow(-1, source="timeline", now=0.2)
-        controller.confirm(now=0.3)
-        self.assertEqual(player.seeks, [80])
-        self.assertEqual(player.play_calls, 1)
-        self.assertFalse(player.paused)
+    def test_hidden_commit_then_separated_timeline_tap_is_another_skip(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        h.ack_seek(now=0.70)
+        self.assertEqual(h.player.current, 110)
 
-    def test_hold_reversal_preserves_target_and_resets_velocity(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        controller.arrow(1, now=0.40)
-        controller.arrow(1, now=0.505)
-        controller.arrow(1, now=0.610)
-        controller.tick(0.70)
-        controller.tick(0.71)
-        before = controller.target
-        controller.arrow(-1, now=0.71)
-        self.assertAlmostEqual(controller.target, before - 10, places=5)
-        self.assertEqual(controller.last_direction, -1)
-        self.assertEqual(controller.hold_started, 0.71)
-
-    def test_new_tap_during_settlement_uses_logical_target(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        controller.tick(0.56)
-        self.assertEqual(player.seeks, [110])
-        self.assertEqual(player.current, 100)
-        controller.arrow(1, now=0.60)
-        self.assertEqual(controller.snapshot()["target_seconds"], 120)
-        controller.tick(1.16)
-        self.assertEqual(player.seeks, [110, 120])
-
-    def test_paused_tap_preserves_pause(self):
-        player, _publisher, controller = self.make_controller(paused=True)
-        controller.arrow(-1, now=0)
-        controller.tick(0.56)
-        self.assertEqual(player.seeks, [90])
-        self.assertTrue(player.paused)
-        self.assertEqual(player.play_calls, 0)
-
-    def test_boundaries_clamp_without_wrapping(self):
-        player, _publisher, controller = self.make_controller(
-            current=5, duration=100
+        h.controller.timeline_step(1, 0.90)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(h.controller.target, 120)
+        self.assertEqual(h.player.pause_requests, [])
+        h.controller.tick(1.451)
+        self.assertEqual(
+            [item[0] for item in h.player.seek_requests],
+            [110, 120],
         )
-        controller.arrow(-1, now=0)
-        controller.arrow(-1, now=0.20)
-        self.assertEqual(controller.snapshot()["target_seconds"], 0)
-        controller.tick(0.76)
-        self.assertEqual(player.seeks, [0])
 
-    def test_end_boundary_never_seeks_exact_duration_or_backwards(self):
-        player, _publisher, controller = self.make_controller(
-            current=99.5, duration=100
+    def test_timeline_taps_with_brief_pause_remain_exact_slow_skips(self):
+        h = ControllerHarness()
+        h.controller.timeline_step(1, 0.0)
+        h.controller.timeline_step(1, 0.40)
+        self.assertEqual(h.controller.target, 110)
+        h.controller.tick(0.581)
+        self.assertEqual(h.controller.target, 120)
+        self.assertEqual(h.player.pause_requests, [])
+        h.controller.tick(0.951)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [120])
+
+    def test_timeline_only_proven_hold_pauses_then_commits_and_resumes(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        self.assertEqual(h.controller.target, 110)
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+        self.assertEqual(h.player.pause_requests[0][1:], ("item-one", 1))
+        self.assertEqual(h.player.seek_requests, [])
+        h.ack_pause(0.65)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+
+        h.controller.confirm(0.70)
+        self.assertEqual(h.controller.state, COMMITTING)
+        self.assertEqual(
+            [item[0] for item in h.player.seek_requests],
+            [h.controller.target],
         )
-        controller.arrow(1, now=0)
-        self.assertEqual(controller.target, 99.5)
-        controller.tick(0.56)
-        self.assertEqual(player.seeks, [99.5])
+        h.ack_seek(now=0.80)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+        self.assertEqual(h.player.resume_requests[0][1:], ("item-one", 1))
+        h.ack_resume(0.90)
+        self.assertEqual(h.controller.state, IDLE)
 
-    def test_playback_loss_clears_without_seek(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        player.seekable = False
-        controller.tick(0.2)
-        self.assertEqual(controller.state, "idle")
-        self.assertEqual(player.seeks, [])
+    def test_ok_during_pause_pending_queues_commit(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(-1)
+        self.assertTrue(h.controller.confirm(0.62))
+        self.assertEqual(h.player.seek_requests, [])
+        h.ack_pause(0.65)
+        self.assertEqual(h.controller.state, COMMITTING)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [90])
 
-    def test_item_change_clears_without_seeking_new_video(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        player.identity = "item-two"
-        controller.tick(0.2)
-        self.assertEqual(controller.state, "idle")
-        self.assertEqual(player.seeks, [])
+    def test_user_paused_content_remains_paused_after_commit(self):
+        h = ControllerHarness(paused=True)
+        h.start_timeline_hold(1)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        self.assertEqual(h.player.pause_requests, [])
+        h.controller.confirm(0.70)
+        h.ack_seek(now=0.80)
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertTrue(h.player.paused)
+        self.assertEqual(h.player.resume_requests, [])
 
-    def test_commit_revalidates_identity_before_touching_player(self):
-        player, _publisher, controller = self.make_controller()
-        controller.arrow(1, now=0)
-        player.identity = "item-two"
-        self.assertFalse(controller.commit(play_after=False, now=0.1))
-        self.assertEqual(controller.state, "idle")
-        self.assertEqual(player.seeks, [])
+    def test_cancel_owned_scrub_resumes_without_seeking(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        h.controller.cancel(0.70)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(h.player.seek_requests, [])
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_cancel_before_matching_pause_resumes_late_pause(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.controller.cancel(0.62)
+        self.assertEqual(h.controller.state, CANCEL_WAIT_PAUSE)
+        h.ack_pause(0.70)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_cancel_before_external_pause_never_toggles_user_state(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.controller.cancel(0.62)
+        h.ack_pause(0.70, matching=False)
+        self.assertEqual(h.controller.state, CANCEL_WAIT_PAUSE)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_missing_pause_callback_is_retired_and_owned_pause_resumed(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        pause_operation = h.player.pause_requests[-1][0]
+        # Kodi applied the validated toggle, but its callback was lost.
+        h.player.paused = True
+        h.controller.tick(1.366)
+        self.assertIn(pause_operation, h.player.retired)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_untagged_and_wrong_seek_callbacks_never_commit(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        h.controller.confirm(0.70)
+        expected = h.controller.pending_operation
+        h.controller.on_player_event(
+            "seeked",
+            {
+                "operation": None,
+                "identity": h.player.identity,
+                "epoch": h.player.epoch,
+            },
+            0.80,
+        )
+        self.assertEqual(h.controller.state, COMMITTING)
+        h.controller.on_player_event(
+            "seeked",
+            {
+                "operation": "old-seek",
+                "identity": h.player.identity,
+                "epoch": h.player.epoch,
+            },
+            0.90,
+        )
+        self.assertEqual(h.controller.state, COMMITTING)
+        h.controller.on_player_event(
+            "seeked",
+            {
+                "operation": expected,
+                "identity": h.player.identity,
+                "epoch": h.player.epoch,
+            },
+            1.00,
+        )
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+
+    def test_wrong_resume_callback_does_not_complete_transaction(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        h.controller.cancel(0.70)
+        expected = h.controller.pending_operation
+        h.controller.on_player_event(
+            "resumed",
+            {
+                "operation": None,
+                "identity": h.player.identity,
+                "epoch": h.player.epoch,
+            },
+            0.80,
+        )
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        h.controller.on_player_event(
+            "resumed",
+            {
+                "operation": expected,
+                "identity": h.player.identity,
+                "epoch": h.player.epoch,
+            },
+            0.90,
+        )
+        self.assertEqual(h.controller.state, IDLE)
+
+    def test_reset_and_timeouts_retire_outstanding_intents(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        operation = h.player.pause_requests[-1][0]
+        h.controller.reset()
+        self.assertIn(operation, h.player.retired)
+
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        operation = h.player.seek_requests[-1][1]
+        h.controller.tick(4.55)
+        self.assertIn(operation, h.player.retired)
+
+    def test_back_discards_uncommitted_skip_without_seeking(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.cancel(0.1)
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.player.seek_requests, [])
+
+    def test_back_during_skip_settlement_never_queues_second_seek(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        operation = h.player.seek_requests[0][1]
+        h.controller.cancel(0.60)
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(len(h.player.seek_requests), 1)
+        self.assertIn(operation, h.player.retired)
+
+    def test_item_or_epoch_change_clears_conservatively(self):
+        for attribute, value in (("identity", "item-two"), ("epoch", 2)):
+            h = ControllerHarness()
+            h.controller.timeline_step(1, 0.0)
+            setattr(h.player, attribute, value)
+            h.controller.tick(0.1)
+            self.assertEqual(h.controller.state, IDLE)
+            self.assertEqual(h.player.seek_requests, [])
+            self.assertEqual(h.player.resume_requests, [])
+
+    def test_empty_identity_cannot_start_transaction(self):
+        h = ControllerHarness()
+        h.player.identity = ""
+        self.assertFalse(h.controller.timeline_step(1, 0.0))
+        self.assertFalse(h.controller.hidden_step(1, 0.0))
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.player.pause_requests, [])
+        self.assertEqual(h.player.seek_requests, [])
+
+    def test_chapter_browse_is_pause_owned_zero_delta_transaction(self):
+        h = ControllerHarness()
+        self.assertTrue(h.controller.begin_chapter_browse(0.0))
+        self.assertEqual(h.controller.source, "chapter")
+        self.assertEqual(h.controller.target, 100)
+        h.controller.set_target(600)
+        self.assertEqual(h.controller.target, 600)
+        h.controller.confirm(0.02)
+        h.ack_pause(0.1)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [600])
+
+    def test_delayed_skip_callback_serializes_later_timeline_skip(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+
+        h.controller.timeline_step(1, 0.60)
+        self.assertEqual(h.controller.target, 120)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(h.player.pause_requests, [])
+        h.controller.tick(1.151)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+
+        h.ack_seek(index=0, now=1.20)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110, 120])
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
+
+    def test_proven_timeline_hold_serializes_behind_inflight_skip(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+
+        for timestamp in (0.60, 1.00, 1.108, 1.216):
+            h.controller.timeline_step(1, timestamp)
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+        self.assertEqual(h.controller.target, 120)
+        h.ack_pause(1.25)
+        h.controller.confirm(1.30)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+
+        h.ack_seek(index=0, now=1.35)
+        self.assertEqual(len(h.player.seek_requests), 2)
+        self.assertEqual(h.controller.state, COMMITTING)
+
+    def test_new_gesture_revokes_stale_queued_flush_watermark(self):
+        h = ControllerHarness()
+        # A commits while its callback remains in flight.
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110])
+
+        # B starts from A's logical target, then becomes quiet and requests a
+        # deferred flush behind A.
+        h.controller.timeline_step(1, 0.60)
+        h.controller.tick(1.151)
+        self.assertTrue(h.controller.skip_flush_requested)
+
+        # C starts after that boundary. It must invalidate B's stale flush.
+        h.controller.timeline_step(1, 1.20)
+        self.assertFalse(h.controller.skip_flush_requested)
+        h.ack_seek(index=0, now=1.21)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(len(h.player.seek_requests), 1)
+
+        # C's cadence remains intact after A's acknowledgement and can still
+        # prove a hold instead of being reset into a new fixed-skip gesture.
+        for timestamp in (1.60, 1.708, 1.816):
+            h.controller.timeline_step(1, timestamp)
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+        self.assertEqual(h.controller.target, 130)
+        self.assertEqual(len(h.player.pause_requests), 1)
+        self.assertEqual(len(h.player.seek_requests), 1)
+
+    def test_inflight_skip_timeout_does_not_strand_new_gesture(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        h.controller.hidden_step(1, 0.60)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        h.controller.tick(4.56)
+        # The old operation expires before SKIP_ACTIVE returns, allowing the
+        # new logical target to issue its own single seek.
+        self.assertEqual([item[0] for item in h.player.seek_requests], [110, 120])
+
+    def test_boundary_clamping_never_wraps_or_seeks_exact_duration(self):
+        low = ControllerHarness(current=5, duration=100)
+        low.controller.hidden_step(-1, 0.0)
+        low.controller.hidden_step(-1, 0.1)
+        self.assertEqual(low.controller.target, 0)
+        low.controller.tick(0.65)
+        self.assertEqual(low.player.seek_requests[0][0], 0)
+
+        high = ControllerHarness(current=99.5, duration=100)
+        high.controller.hidden_step(1, 0.0)
+        self.assertEqual(high.controller.target, 99.5)
 
 
 class RepeatGuardTest(unittest.TestCase):
@@ -289,6 +595,13 @@ class RepeatGuardTest(unittest.TestCase):
         guard = RepeatGuard(quiet_period=0.50)
         self.assertTrue(guard.accept("select", 0.0))
         self.assertTrue(guard.accept("back", 0.1))
+
+    def test_modal_layer_can_arm_an_already_consumed_train(self):
+        guard = RepeatGuard(quiet_period=0.50)
+        guard.arm("select", 1.0)
+        self.assertFalse(guard.accept("select", 1.1))
+        self.assertTrue(guard.accept("back", 1.1))
+        self.assertTrue(guard.accept("select", 1.61))
 
 
 if __name__ == "__main__":

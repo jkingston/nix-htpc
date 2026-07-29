@@ -1,88 +1,96 @@
 # HTPC BINGIE fork
 
-`default.nix` packages the pinned Bingie 2.0.2 archive. Home Manager copies the
-result into Kodi's user add-on directory with writable permissions because
-Skin Shortcuts generates XML inside the skin directory at runtime. It keeps the
-upstream add-on ID, `skin.bingie`, so the selected skin and settings survive.
-The local version is higher than upstream at `2.0.2.6`.
+`default.nix` packages the pinned BINGIE 2.0.2 archive as `skin.bingie`
+version 2.0.2.7. The NixOS greetd pre-start stages and validates the immutable
+package, then checksum-synchronises it into Kodi's writable user add-on
+directory while Kodi is stopped. It preserves only Skin Shortcuts' generated
+`1080i/script-skinshortcuts-includes.xml`; managed skin sources remain
+declarative.
 
-`htpc-playback.patch` contains the playback-start fixes:
+`htpc-playback.patch` contains playback-start and exit fixes:
 
-- a black loading shield and spinner over Home while Jellyfin resolves a video;
-- always-visible chapter markers and native chapter selection from the timeline;
-- Play (or Resume for a partially watched movie) receives focus when movie
-  details open;
-- stop VOD playback whenever fullscreen video is left while BINGIE's
+- a black loading shield covers Home while Jellyfin resolves a selected video;
+- all information-dialog play timers start immediately instead of exposing
+  Home for one second;
+- Play, or Resume for a partially watched movie, receives initial focus in
+  movie details;
+- chapter markers are always visible when the player reports chapters;
+- leaving fullscreen VOD stops playback when BINGIE's
   `ForceVideoPlaybackStop` setting is enabled.
 
-`htpc-ux.patch` is the TV-first interaction and presentation pass:
+`htpc-ux.patch` is the Home and library polish pass:
 
-- playback controls no longer pause merely because the OSD opened, animate
-  faster, and hide VOD controls already covered by the remote;
-- choosing the focused timeline opens Kodi's chapter/bookmark picker as a
-  secondary navigation path;
-- Home spotlight selection always opens details, with the information action
-  visibly selected and no extra Right/Left mode-switch press;
+- spotlight opens on Play, Right selects More Info, and Left from Play opens
+  the sidebar without the old double-action focus bug;
+- Right closes the sidebar instead of opening Movies/TV submenu blades;
+- ordinary movie, episode, and TV rows open details;
+- separate Movie Genres and TV Genres rows appear only in their matching hub
+  and only when populated;
 - resume items use a thin edge-to-edge progress bar and the bottom-right
-  BINGIE branding is hidden;
-- the single-profile avatar, maintenance-heavy library blade actions, and
-  desktop-style power actions are omitted.
+  BINGIE logo is hidden;
+- single-profile, maintenance-heavy, and desktop-style actions are omitted.
 
-The managed Kodi settings service complements the skin patch by removing
-parent-directory entries, disabling the mouse and debug overlay, and hiding
-low-value maintenance actions in movie details. The Home Manager keymap makes
-Up/Down reveal the controls without pausing, OK toggle Play/Pause and reveal
-the controls, Left/Right signal the managed seek controller, and Back stop
-playback after visible OSD layers have been dismissed.
+The managed settings service disables parent-directory entries, the mouse,
+debug overlays, OSD auto-pause, and low-value video-information actions.
+Fullscreen Up/Down reveal the OSD without pausing. OK toggles play/pause and
+reveals it. Left/Right enter the managed seek path. Back unwinds a pending
+interaction, then the OSD, then stops playback.
 
-`htpc-seeking.patch` routes the BINGIE timeline to the same controller and
-keeps the OSD open while a target is pending. Discrete presses always move
-exactly ten seconds and auto-commit as one absolute seek after 550ms of
-inactivity. A measured held-button repeat signature enters gradually
-accelerating scrub mode; releasing freezes the target until OK confirms or
-Back cancels. The passive preview does not focus the timeline, so a new tap
-after a short pause is still an auto-committing ten-second skip. Up/Down exits
-that passive mode and exposes normal OSD navigation; explicitly focusing the
-timeline provides an untimed, confirmable scrub path. From there Up opens the
-chapter/bookmark picker when chapters exist.
+`htpc-seeking.patch` connects BINGIE's focused timeline to the same controller
+and keeps the OSD open while a seek transaction is active:
 
-`htpc-trickplay.patch` adds a smooth controller-driven target slider and a
-clamped target card to BINGIE's primary timeline. The live playhead remains as
-a small subdued marker while the bright target stays stable through decoder
-settlement, so the cursor cannot flicker between the two positions. The target
-time and delta work for every seekable video. When Jellyfin resolves an exact
-matching frame, the card also shows that frame and chapter; media without
-trickplay metadata does not display an empty image box.
+- a Left/Right tap, whether the OSD was hidden or its timeline is focused,
+  previews an exact ten-second skip and commits one coalesced absolute seek
+  after 550 ms of inactivity;
+- rapid distinct taps remain exact ten-second steps;
+- the measured CEC repeat signature of a held button enters pause-owned,
+  gradually accelerating scrubbing without rolling the cursor backwards while
+  the hold is classified;
+- after a released hold, the next press starts again as an exact ten-second
+  step and must prove a fresh hold before acceleration resumes;
+- only a proven hold pauses playback and enters a pending scrub; OK commits it
+  and Back cancels it;
+- focus movement is native when no modal seek is pending, with safe Kodi
+  fallbacks if the service readiness lease expires.
 
-The persistent controller lives in `modules/kodi-settings-addon`. It owns the
-absolute target and commits exactly once with `Player.seekTime()`. It also
-positions BINGIE controls at floating-point precision, avoiding the old
-one-percent quantisation (72 seconds per step in a two-hour film). Jellyfin is
-only an asynchronous frame supplier and tags each result with the target it
-resolved, so a late cold-cache response cannot replace a newer preview.
-Playback item identity and Kodi lifecycle notifications cancel stale
-transactions during episode changes. Sliding quiet-period guards make held OK
-or Back one semantic action instead of allowing repeats to traverse several
-OSD layers, and per-event recovery keeps the service alive if a player call
-races playback teardown.
+`htpc-trickplay.patch` adds one cursor-following exact preview, a rounded target
+time/delta, a stable target marker, and a subdued actual playhead. The live
+playhead is never reused as the target, so decoder settlement cannot flicker
+the cursor back to the current position. Up from the focused timeline exposes
+a custom chapter-only thumbnail rail after Jellyfin has atomically published
+every retained chapter frame. Up exits that rail to the top controls;
+Down/Back return to the timeline. Kodi's native bookmark window remains a
+separate OSD facility.
 
-`default.nix` adds the loading state to all ten information-dialog play controls
-and changes all 24 normal play timers from one second to zero seconds. Both
-counts are asserted during the build so an upstream layout change fails
-visibly instead of silently leaving some handlers unpatched. Fullscreen video
-clears the shield immediately; a 30-second timeout clears it if playback fails.
+The persistent controller in `modules/kodi-settings-addon` owns absolute
+targets, pause/resume ownership, commit/cancel state, input routing, focus, and
+presentation. It rejects stale player callbacks and media changes. The
+readiness property is a two-second renewable lease. Custom presentation and
+OSD-timeout suppression are gated on that lease so stale state cannot leave the
+interface stuck if the service exits.
 
-The package does not yet make BINGIE's third-party helper add-ons declarative.
-The currently installed BINGIE dependencies remain in the Kodi user profile
-and satisfy the system skin. A fresh profile needs those dependencies installed
-before Kodi can enable BINGIE.
+`modules/jellyfin/trickplay.py` is only the asynchronous media supplier. Exact
+previews use a latest-target-wins foreground lane, complete playback/seek/frame
+tokens, and double-buffered files. Neighbor and chapter prefetching share one
+bounded background lane with in-flight sprite deduplication and bounded
+caches/retries. Late or partially published results cannot replace the current
+preview. The chapter contract is explicit, sanitized, capped at 24, and becomes
+ready as one stable manifest only after every retained frame exists. If the
+server's chapter-image endpoint fails, the producer materializes the exact
+chapter-position trick-play frame instead.
+
+The package does not yet declare BINGIE's third-party helper add-ons. The
+already-installed Pi profile retains those dependencies. A fresh profile must
+install them before Kodi can enable BINGIE.
 
 When updating the pin:
 
 1. Change the archive URL, `version`, and expected upstream version in
    `default.nix`.
 2. Update the source hash.
-3. Rebase all four `htpc-*.patch` files, and update the asserted play-handler
-   count if upstream intentionally changes it.
-4. Build the skin through the Pi configuration, then test playback from both
-   the BINGIE information dialog and the Jellyfin library.
+3. Rebase all four `htpc-*.patch` files and update intentional build-time
+   assertions.
+4. Run both Python test suites and the Pi configuration build.
+5. Test Home details, spotlight/sidebar navigation, hidden taps, held scrubs,
+   OK/Back, chapter browsing, playback exit, and a cold-cache trick-play seek
+   on the Pi.

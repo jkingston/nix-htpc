@@ -1,4 +1,4 @@
-{ bingieMod, lib, osConfig, pkgs, ... }:
+{ lib, osConfig, pkgs, ... }:
 {
   home.file.".kodi/userdata/advancedsettings.xml".text = ''
     <advancedsettings>
@@ -15,23 +15,25 @@
     </advancedsettings>
   '';
 
-  # One predictable playback contract for the CEC remote and keyboard. The
-  # managed service owns Left/Right seek transactions so Kodi never alternates
-  # its live playhead with a pending preview target.
+  # VideoOSD directions are delivered directly to the focused skin control.
+  # During fullscreen playback the managed service distinguishes exact
+  # ten-second taps from the CEC adapter's repeat cadence for a held button,
+  # then owns the resulting pause/scrub transaction. Up/Down stay native and
+  # never pause merely to reveal the OSD.
   home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
     <keymap>
       <FullscreenVideo>
         <remote>
-          <up>NotifyAll(htpc.seek,osd-show)</up>
-          <down>NotifyAll(htpc.seek,osd-show)</down>
+          <up>ActivateWindow(VideoOSD)</up>
+          <down>ActivateWindow(VideoOSD)</down>
           <left>NotifyAll(htpc.seek,left)</left>
           <right>NotifyAll(htpc.seek,right)</right>
           <select>NotifyAll(htpc.seek,primary)</select>
           <back>NotifyAll(htpc.seek,fullscreen-back)</back>
         </remote>
         <keyboard>
-          <up>NotifyAll(htpc.seek,osd-show)</up>
-          <down>NotifyAll(htpc.seek,osd-show)</down>
+          <up>ActivateWindow(VideoOSD)</up>
+          <down>ActivateWindow(VideoOSD)</down>
           <left>NotifyAll(htpc.seek,left)</left>
           <right>NotifyAll(htpc.seek,right)</right>
           <enter>NotifyAll(htpc.seek,primary)</enter>
@@ -41,18 +43,10 @@
       </FullscreenVideo>
       <VideoOSD>
         <remote>
-          <up>NotifyAll(htpc.seek,osd-up)</up>
-          <down>NotifyAll(htpc.seek,osd-down)</down>
-          <left>NotifyAll(htpc.seek,osd-left)</left>
-          <right>NotifyAll(htpc.seek,osd-right)</right>
           <select>NotifyAll(htpc.seek,osd-primary)</select>
           <back>NotifyAll(htpc.seek,osd-back)</back>
         </remote>
         <keyboard>
-          <up>NotifyAll(htpc.seek,osd-up)</up>
-          <down>NotifyAll(htpc.seek,osd-down)</down>
-          <left>NotifyAll(htpc.seek,osd-left)</left>
-          <right>NotifyAll(htpc.seek,osd-right)</right>
           <enter>NotifyAll(htpc.seek,osd-primary)</enter>
           <backspace>NotifyAll(htpc.seek,osd-back)</backspace>
           <escape>NotifyAll(htpc.seek,osd-back)</escape>
@@ -68,18 +62,6 @@
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f \
         /home/htpc/.kodi/userdata/keymaps/cec-stop-playback.xml
     '';
-
-  # Bingie uses Skin Shortcuts to generate XML inside its own add-on directory,
-  # so it cannot run directly from the read-only Nix store. Keep the source and
-  # patches reproducible in Nix, then install a writable managed copy in Kodi's
-  # user add-on directory.
-  home.activation.installBingie = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p /home/htpc/.kodi/addons/skin.bingie
-    $DRY_RUN_CMD ${pkgs.rsync}/bin/rsync \
-      -a --checksum --delete --chmod=Du+rwx,Fu+rw \
-      ${bingieMod}/share/kodi/addons/skin.bingie/ \
-      /home/htpc/.kodi/addons/skin.bingie/
-  '';
 
   # Note: Jellyfin addon settings are NOT managed by Home Manager.
   # The addon stores auth tokens, sync state, and SyncInstallRunDone flag

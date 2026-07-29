@@ -1,22 +1,43 @@
-{ nixos-raspberrypi, pkgs, ... }:
+{ lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
+  bingieMod = import ./bingie {
+    inherit pkgs;
+    kodiPackages = rpiPackages.kodi-gbm.packages;
+  };
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "2.0.0";
+    version = "2.1.0";
     src = ./kodi-settings-addon;
-    nativeCheckInputs = [ pkgs.buildPackages.python3 ];
+    nativeCheckInputs = [
+      pkgs.buildPackages.libxml2
+      pkgs.buildPackages.python3
+    ];
     doCheck = true;
     checkPhase = ''
       runHook preCheck
       PYTHONDONTWRITEBYTECODE=1 \
         python3 -B -m unittest discover -s . -p 'test_*.py'
+      xmllint --noout \
+        addon.xml \
+        resources/skins/Default/1080i/ChapterRail.xml
       runHook postCheck
     '';
     postInstall = ''
-      test -f \
-        "$out/share/kodi/addons/service.htpc.settings/seek_controller.py"
+      addon_dir="$out/share/kodi/addons/service.htpc.settings"
+      for runtime_file in \
+        service.py \
+        seek_controller.py \
+        player_adapter.py \
+        input_router.py \
+        presenter.py \
+        media_contract.py \
+        chapter_dialog.py \
+        resources/skins/Default/1080i/ChapterRail.xml
+      do
+        test -f "$addon_dir/$runtime_file"
+      done
     '';
   };
   jellyfinHtpc = import ./jellyfin {
@@ -28,6 +49,60 @@ let
   ]);
 in
 {
+  # BINGIE must be writable because Skin Shortcuts generates an include inside
+  # the skin directory. Install it from greetd's pre-start so Kodi is always
+  # stopped while the staged, validated copy replaces managed skin files.
+  systemd.services.greetd = {
+    # The upstream greetd module protects interactive sessions from rebuild
+    # restarts. This appliance deliberately restarts its sole Kodi session so
+    # the pre-start skin sync and changed add-on closure take effect atomically.
+    restartIfChanged = lib.mkForce true;
+
+    path = [
+      pkgs.coreutils
+      pkgs.gnugrep
+      pkgs.libxml2
+      pkgs.rsync
+    ];
+
+    preStart = ''
+      set -eu
+
+      source_skin=${bingieMod}/share/kodi/addons/skin.bingie
+      addon_root=/home/htpc/.kodi/addons
+      target_skin="$addon_root/skin.bingie"
+      staged_skin="$addon_root/.skin.bingie.staged"
+
+      install -d -m 0755 -o htpc -g users "$addon_root"
+      install -d -m 0755 -o htpc -g users "$staged_skin"
+
+      rsync \
+        -a --checksum --delete --chmod=Du+rwx,Fu+rw \
+        "$source_skin/" "$staged_skin/"
+
+      test -f "$staged_skin/addon.xml"
+      test -f "$staged_skin/1080i/Home.xml"
+      xmllint --noout \
+        "$staged_skin/addon.xml" \
+        "$staged_skin/1080i/Home.xml" \
+        "$staged_skin/1080i/IncludesOSD.xml"
+      grep -q 'id="skin.bingie"' "$staged_skin/addon.xml"
+
+      install -d -m 0755 -o htpc -g users "$target_skin"
+      rsync \
+        -a --checksum --delete --chmod=Du+rwx,Fu+rw \
+        --exclude=/1080i/script-skinshortcuts-includes.xml \
+        "$staged_skin/" "$target_skin/"
+      chown -R htpc:users "$target_skin"
+    '';
+
+    restartTriggers = [
+      bingieMod
+      jellyfinHtpc
+      kodiSettingsAddon
+    ];
+  };
+
   # Auto-login to Kodi via greetd.
   services.greetd = {
     enable = true;
