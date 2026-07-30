@@ -24,6 +24,10 @@
   outputs = { self, nixos-raspberrypi, home-manager, ... }@inputs:
     let
       configurationRevision = self.rev or self.dirtyRev or "unknown-dirty";
+      checkSystems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+      ];
       htpcPi = nixos-raspberrypi.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [
@@ -45,6 +49,20 @@
     in
     {
       nixosConfigurations.htpc-pi = htpcPi;
-      checks.aarch64-linux.htpc-pi = htpcPi.config.system.build.toplevel;
+      checks = inputs.nixpkgs.lib.genAttrs checkSystems (
+        system:
+        let
+          pkgs = inputs.nixpkgs.legacyPackages.${system};
+          qualityChecks = import ./checks {
+            inherit pkgs;
+            lib = pkgs.lib;
+            repositoryRoot = ./.;
+          };
+        in
+        qualityChecks
+        // inputs.nixpkgs.lib.optionalAttrs (system == "aarch64-linux") {
+          htpc-pi = htpcPi.config.system.build.toplevel;
+        }
+      );
     };
 }
