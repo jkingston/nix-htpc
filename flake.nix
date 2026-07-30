@@ -21,9 +21,10 @@
     };
   };
 
-  outputs = { self, nixos-raspberrypi, home-manager, ... }@inputs: {
-    nixosConfigurations = {
-      htpc-pi = nixos-raspberrypi.lib.nixosSystem {
+  outputs = { self, nixos-raspberrypi, home-manager, ... }@inputs:
+    let
+      configurationRevision = self.rev or self.dirtyRev or "unknown-dirty";
+      htpcPi = nixos-raspberrypi.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [
           nixos-raspberrypi.nixosModules.sd-image
@@ -36,8 +37,14 @@
           ./modules/home.nix
           ./modules/kodi.nix
           ./modules/cec.nix
+          {
+            system.configurationRevision = configurationRevision;
+          }
         ];
       };
+    in
+    {
+      nixosConfigurations.htpc-pi = htpcPi;
+      checks.aarch64-linux.htpc-pi = htpcPi.config.system.build.toplevel;
     };
-  };
 }
