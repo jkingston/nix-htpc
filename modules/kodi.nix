@@ -8,7 +8,7 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "2.1.1";
+    version = "2.1.2";
     src = ./kodi-settings-addon;
     nativeCheckInputs = [
       pkgs.buildPackages.libxml2
@@ -32,6 +32,7 @@ let
         player_adapter.py \
         input_router.py \
         presenter.py \
+        playback_view_model.py \
         media_contract.py \
         chapter_dialog.py \
         resources/skins/Default/1080i/ChapterRail.xml

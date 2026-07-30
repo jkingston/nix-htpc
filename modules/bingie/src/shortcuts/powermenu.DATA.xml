@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<shortcuts>
+	<shortcut>
+		<defaultID>5</defaultID>
+		<label>$LOCALIZE[5]</label>
+		<label2 />
+		<icon>common/settings1.png</icon>
+		<thumb />
+		<action>ActivateWindow(Settings)</action>
+	</shortcut>
+	<shortcut>
+		<defaultID>13016</defaultID>
+		<label>$LOCALIZE[13016]</label>
+		<label2 />
+		<icon>common/shutdown1.png</icon>
+		<thumb />
+		<action>Powerdown()</action>
+	</shortcut>
+	<shortcut>
+		<defaultID>13013</defaultID>
+		<label>$LOCALIZE[13013]</label>
+		<label2 />
+		<icon>common/reboot1.png</icon>
+		<thumb />
+		<action>Reset()</action>
+	</shortcut>
+</shortcuts>

@@ -150,8 +150,14 @@ class InputRouter(object):
                     self.controller.cancel(timestamp)
                 self.pending_focus = "timeline"
             elif self.controller.active:
+                dismiss_osd = bool(
+                    getattr(self.controller, "back_dismisses_osd", False)
+                )
                 self.controller.cancel(timestamp)
-                self.pending_focus = "transport"
+                if dismiss_osd:
+                    self.presenter.close_osd()
+                else:
+                    self.pending_focus = "transport"
             else:
                 self.presenter.close_osd()
             return True
@@ -165,8 +171,14 @@ class InputRouter(object):
                     self.controller.cancel(timestamp)
                 self.pending_focus = "timeline"
             elif self.controller.active:
+                dismiss_osd = bool(
+                    getattr(self.controller, "back_dismisses_osd", False)
+                )
                 self.controller.cancel(timestamp)
-                self.pending_focus = "transport"
+                if dismiss_osd:
+                    self.presenter.close_osd()
+                else:
+                    self.pending_focus = "transport"
             elif self.presenter.osd_active():
                 self.presenter.close_osd()
             else:

@@ -14,7 +14,20 @@ CHAPTER_AVAILABLE = "htpc.chapter.available"
 CHAPTER_OPEN = "htpc.chapter.open"
 
 SEEK_PREFIX = "htpc.seek."
-SEEK_PROPERTY_KEYS = (
+VIEW_SLOT_FIELDS = (
+    "revision",
+    "phase",
+    "targetvalid",
+    "targetfill",
+    "targetmarker",
+    "time",
+    "delta",
+    "prompt",
+    "previewstatus",
+    "previewpath",
+    "previewanchor",
+)
+SEEK_CONTROLLER_PROPERTY_KEYS = (
     "active",
     "generation",
     "state",
@@ -35,6 +48,15 @@ SEEK_PROPERTY_KEYS = (
     "previewready",
     "previewpath",
 )
+SEEK_VIEW_PROPERTY_KEYS = (
+    "viewactive",
+    "viewslot",
+) + tuple(
+    "%s.%s" % (slot, field)
+    for slot in ("a", "b")
+    for field in VIEW_SLOT_FIELDS
+)
+SEEK_PROPERTY_KEYS = SEEK_CONTROLLER_PROPERTY_KEYS + SEEK_VIEW_PROPERTY_KEYS
 
 # Jellyfin lane chapter contract. The producer publishes the sanitized manifest
 # first, its commit token next, and AVAILABLE last.

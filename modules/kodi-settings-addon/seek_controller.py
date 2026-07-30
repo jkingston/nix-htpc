@@ -18,6 +18,9 @@ PAUSE_TIMEOUT = 0.75
 LATE_PAUSE_TIMEOUT = 2.0
 SEEK_TIMEOUT = 4.0
 RESUME_TIMEOUT = 1.0
+HANDOFF_TOLERANCE_SECONDS = 1.5
+HANDOFF_STABLE_SAMPLES = 2
+HANDOFF_MAX_SECONDS = 4.0
 
 IDLE = "idle"
 SKIP_ACTIVE = "skip-active"
@@ -96,6 +99,11 @@ class SeekController(object):
         self.generation = 0
         self.operation_sequence = 0
         self.issued_operations = set()
+        self.handoff_target = None
+        self.handoff_identity = None
+        self.handoff_epoch = None
+        self.handoff_deadline = None
+        self.handoff_samples = 0
         self._clear_fields()
         self.publisher.clear()
 
@@ -116,6 +124,13 @@ class SeekController(object):
     @property
     def confirmable(self):
         return self.state == SCRUB_ACTIVE
+
+    @property
+    def back_dismisses_osd(self):
+        """Whether Back dismisses chrome but cannot undo the issued mutation."""
+        return self.state == SKIP_SETTLING or (
+            self.state == SKIP_ACTIVE and self.skip_inflight is not None
+        )
 
     def _clear_fields(self):
         self.state = IDLE
@@ -140,6 +155,7 @@ class SeekController(object):
         self.hold_started = None
         self.last_integrated = None
         self.skip_inflight = None
+        self.skip_requested_target = None
         self.skip_deadline = None
         self.skip_flush_requested = False
 
@@ -200,15 +216,86 @@ class SeekController(object):
             and snapshot.get("epoch") == self.epoch
         )
 
+    def _snapshot_media_matches(self, snapshot):
+        """Match lifecycle identity without trusting transient seekability."""
+        return (
+            bool(snapshot)
+            and snapshot.get("identity") == self.identity
+            and snapshot.get("epoch") == self.epoch
+        )
+
     def _read_snapshot(self):
         try:
             return self.player.snapshot()
         except Exception:
             return None
 
-    def _capture(self, snapshot, source, base=None):
+    def _clear_handoff(self):
+        self.handoff_target = None
+        self.handoff_identity = None
+        self.handoff_epoch = None
+        self.handoff_deadline = None
+        self.handoff_samples = 0
+
+    def _handoff_matches(self, snapshot):
+        return (
+            self.handoff_target is not None
+            and self._valid_snapshot(snapshot)
+            and snapshot.get("identity") == self.handoff_identity
+            and snapshot.get("epoch") == self.handoff_epoch
+        )
+
+    def _start_handoff(self, target, now):
+        try:
+            numeric = float(target)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if (
+            not math.isfinite(numeric)
+            or not self.identity
+            or self.epoch is None
+            or self.duration <= 0.0
+        ):
+            return
+        self.handoff_target = clamp(numeric, 0.0, self.duration)
+        self.handoff_identity = self.identity
+        self.handoff_epoch = self.epoch
+        self.handoff_deadline = float(now) + HANDOFF_MAX_SECONDS
+        self.handoff_samples = 0
+
+    def _update_handoff(self, snapshot, now):
+        if self.handoff_target is None:
+            return
+        if (
+            not self._handoff_matches(snapshot)
+            or self.handoff_deadline is None
+            or float(now) >= self.handoff_deadline
+        ):
+            self._clear_handoff()
+            return
+        try:
+            observed = float(snapshot.get("current"))
+        except (TypeError, ValueError, OverflowError):
+            self.handoff_samples = 0
+            return
+        if (
+            math.isfinite(observed)
+            and abs(observed - self.handoff_target)
+            <= HANDOFF_TOLERANCE_SECONDS
+        ):
+            self.handoff_samples += 1
+        else:
+            self.handoff_samples = 0
+        if self.handoff_samples >= HANDOFF_STABLE_SAMPLES:
+            self._clear_handoff()
+
+    def _capture(self, snapshot, source, base=None, now=None):
         self.generation += 1
         self.source = source
+        if now is not None:
+            self._update_handoff(snapshot, now)
+        if base is None and self._handoff_matches(snapshot):
+            base = self.handoff_target
         current = (
             float(snapshot.get("current", 0.0))
             if base is None
@@ -244,7 +331,7 @@ class SeekController(object):
             snapshot = self._read_snapshot()
             if not self._valid_snapshot(snapshot):
                 return False
-            self._capture(snapshot, source)
+            self._capture(snapshot, source, now=now)
             self.state = SKIP_ACTIVE
             self.gesture_direction = direction
             self.last_input = now
@@ -320,7 +407,7 @@ class SeekController(object):
         snapshot = self._read_snapshot()
         if not self._valid_snapshot(snapshot):
             return False
-        self._capture(snapshot, "chapter")
+        self._capture(snapshot, "chapter", now=now)
         self.last_input = now
         if snapshot.get("paused"):
             self.state = SCRUB_ACTIVE
@@ -510,6 +597,7 @@ class SeekController(object):
         operation = self._next_operation("skip")
         self._track_operation(operation)
         self.skip_inflight = operation
+        self.skip_requested_target = self.target
         self.skip_deadline = now + SKIP_SETTLE_TIMEOUT
         self.skip_flush_requested = False
         self.state = SKIP_SETTLING
@@ -581,13 +669,16 @@ class SeekController(object):
             return False
         if self.state == SKIP_ACTIVE:
             # Back means abandon the still-optimistic target; it must never
-            # turn navigation into an unexpected seek.
-            self.reset()
+            # turn navigation into an unexpected seek. If an older absolute
+            # seek is already in flight, retain that immutable operation and
+            # abandon only the newer optimistic gesture.
+            if not self._return_to_inflight_skip():
+                self.reset()
             return True
         if self.state == SKIP_SETTLING:
-            # Kodi is already processing the sole absolute seek. Clear the UI
-            # and retire its tag without queuing a follow-up seek.
-            self.reset()
+            # The decoder mutation is already issued and cannot be cancelled.
+            # Keep attribution alive until its callback/timeout rather than
+            # falsely reporting that Back cancelled the seek.
             return True
         if self.state == PAUSE_PENDING:
             self.confirm_when_paused = False
@@ -601,7 +692,8 @@ class SeekController(object):
             if self.controller_paused and self.was_playing:
                 self._request_resume("cancel", now)
             else:
-                self.reset()
+                if not self._return_to_inflight_skip():
+                    self.reset()
             return True
         if self.state in (COMMITTING, RESUME_PENDING):
             return True
@@ -612,18 +704,24 @@ class SeekController(object):
         now = self.clock() if now is None else float(now)
 
         if kind in ("started", "stopped", "ended"):
-            self.reset()
+            self.reset(clear_handoff=True)
             return
         if not self.active:
             return
-        if payload.get("epoch") is not None and payload.get("epoch") != self.epoch:
-            self.reset()
-            return
-        if (
+        event_media_mismatch = (
+            payload.get("epoch") is not None
+            and payload.get("epoch") != self.epoch
+        ) or (
             payload.get("identity") is not None
             and payload.get("identity") != self.identity
-        ):
-            self.reset()
+        )
+        if event_media_mismatch:
+            # Adapter callbacks can be delayed beyond a media boundary. Ignore
+            # a stale payload while the live player snapshot still belongs to
+            # this transaction; only actual player replacement may reset it.
+            if self._snapshot_media_matches(self._read_snapshot()):
+                return
+            self.reset(clear_handoff=True)
             return
 
         operation = payload.get("operation")
@@ -632,10 +730,13 @@ class SeekController(object):
             and operation is not None
             and operation == self.skip_inflight
         ):
+            requested_target = self.skip_requested_target
             self._complete_operation(operation)
             self.skip_inflight = None
+            self.skip_requested_target = None
             self.skip_deadline = None
             if self.state == SKIP_SETTLING:
+                self._start_handoff(requested_target, now)
                 self.reset()
             elif self.state == SKIP_ACTIVE and self.skip_flush_requested:
                 self.skip_flush_requested = False
@@ -672,20 +773,35 @@ class SeekController(object):
                     self.controller_paused = True
                     self._request_resume("cancel", now)
                 else:
-                    self.reset()
+                    if not self._return_to_inflight_skip():
+                        self.reset()
                 return
-            if operation != self.pending_operation:
-                self.controller_paused = False
+            # A delayed same-media pause callback cannot revoke ownership of a
+            # pause already acknowledged for this scrub transaction.
             return
 
         if kind == "resumed":
             if self.state == RESUME_PENDING:
                 if operation is None or operation != self.pending_operation:
                     return
+                resume_reason = self.resume_reason
                 self._complete_operation(operation)
+                if (
+                    resume_reason in ("cancel", "pause-timeout")
+                    and self._return_to_inflight_skip()
+                ):
+                    return
                 self.reset()
             elif self.state in (PAUSE_PENDING, SCRUB_ACTIVE):
-                self.reset()
+                # Treat only the live player state as authoritative. A delayed
+                # resumed notification from an older same-media operation must
+                # not abandon an active controller-owned pause.
+                snapshot = self._read_snapshot()
+                if (
+                    self._snapshot_matches(snapshot)
+                    and not snapshot.get("paused")
+                ):
+                    self.reset()
             return
 
         if kind == "seeked" and self.state == COMMITTING:
@@ -693,15 +809,19 @@ class SeekController(object):
             if operation is None or operation != self.pending_operation:
                 return
             self._complete_operation(operation)
+            self._start_handoff(self.target, now)
             self._finish_commit(now)
 
     def tick(self, now=None):
         now = self.clock() if now is None else float(now)
-        if self.state == IDLE:
+        if self.state == IDLE and self.handoff_target is None:
             return
         snapshot = self._read_snapshot()
+        self._update_handoff(snapshot, now)
+        if self.state == IDLE:
+            return
         if not self._snapshot_matches(snapshot):
-            self.reset()
+            self.reset(clear_handoff=True)
             return
 
         # A second fixed-skip gesture may begin before Kodi acknowledges the
@@ -713,9 +833,15 @@ class SeekController(object):
             and self.skip_deadline is not None
             and now >= self.skip_deadline
         ):
+            requested_target = self.skip_requested_target
             self._retire_operation(self.skip_inflight)
             self.skip_inflight = None
+            self.skip_requested_target = None
             self.skip_deadline = None
+            # The issued mutation may have applied even though its callback
+            # was lost. Keep that logical anchor through any newer gesture,
+            # not only while the controller still says SKIP_SETTLING.
+            self._start_handoff(requested_target, now)
             if self.state == SKIP_SETTLING:
                 self.reset()
                 return
@@ -754,9 +880,11 @@ class SeekController(object):
         elif self.state == COMMITTING and now >= self.pending_deadline:
             self._retire_operation(self.pending_operation)
             self.pending_operation = None
+            self._start_handoff(self.target, now)
             self._finish_commit(now)
         elif self.state == RESUME_PENDING and now >= self.pending_deadline:
-            self.reset()
+            if not self._return_to_inflight_skip():
+                self.reset()
 
     def _finish_commit(self, now):
         if self.controller_paused and self.was_playing:
@@ -784,11 +912,20 @@ class SeekController(object):
             self.controller_paused = True
             self._request_resume("pause-timeout", now)
         else:
-            self.reset()
+            if not self._return_to_inflight_skip():
+                self.reset()
 
     def _request_resume(self, reason, now):
         snapshot = self._read_snapshot()
-        if not self._snapshot_matches(snapshot) or not snapshot.get("paused"):
+        if not self._snapshot_matches(snapshot):
+            self.reset(clear_handoff=True)
+            return
+        if not snapshot.get("paused"):
+            if (
+                reason in ("cancel", "pause-timeout")
+                and self._return_to_inflight_skip()
+            ):
+                return
             self.reset()
             return
         operation = self._next_operation("resume")
@@ -810,21 +947,52 @@ class SeekController(object):
             issued = False
         if not issued:
             self._retire_operation(operation)
-            self.reset()
+            if not self._return_to_inflight_skip():
+                self.reset()
+
+    def _return_to_inflight_skip(self):
+        """Abandon only mutable gesture state around an issued fixed skip."""
+        if self.skip_inflight is None:
+            return False
+        if self.skip_requested_target is not None:
+            self.target = self.skip_requested_target
+        self.state = SKIP_SETTLING
+        self.controller_paused = False
+        self.pending_operation = None
+        self.pending_deadline = None
+        self.resume_reason = None
+        self.confirm_when_paused = False
+        self.confirm_after_skip = False
+        self.last_input = None
+        self.gesture_direction = 0
+        self.probe_count = 0
+        self.hold_active = False
+        self.hold_released = False
+        self.hold_started = None
+        self.last_integrated = None
+        self.skip_flush_requested = False
+        self._publish()
+        return True
 
     def shutdown(self, now=None):
         now = self.clock() if now is None else float(now)
         if self.controller_paused and self.was_playing:
             self._request_resume("shutdown", now)
         else:
-            self.reset()
+            self.reset(clear_handoff=True)
 
-    def reset(self):
+    def reset(self, clear_handoff=False):
         self._retire_all_operations()
         if self.state != IDLE:
             self.generation += 1
         self._clear_fields()
-        self.publisher.clear()
+        if clear_handoff:
+            self._clear_handoff()
+        clear_controller = getattr(self.publisher, "clear_controller", None)
+        if clear_controller is not None:
+            clear_controller()
+        else:
+            self.publisher.clear()
 
     def _clamp_target(self, value):
         upper = max(0.0, self.duration - 1.0)
@@ -863,6 +1031,16 @@ class SeekController(object):
             "playback_epoch": self.epoch if self.epoch is not None else "",
             "hold": self.hold_active,
             "hold_released": self.hold_released,
+            # Pure rendering consumers use these internal watermarks to
+            # attribute callbacks without exposing them to the skin.
+            "pending_operation": self.pending_operation,
+            "skip_operation": self.skip_inflight,
+            "skip_requested_target": self.skip_requested_target,
+            "resume_reason": self.resume_reason,
+            "handoff_active": self.handoff_target is not None,
+            "handoff_target": self.handoff_target,
+            "handoff_identity": self.handoff_identity,
+            "handoff_epoch": self.handoff_epoch,
         }
 
     def _publish(self):

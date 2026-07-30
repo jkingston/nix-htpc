@@ -10,6 +10,7 @@ import xbmcaddon
 
 from chapter_dialog import ChapterDialogManager
 from input_router import InputRouter, KodiCommands
+from playback_view_model import PlaybackViewModel
 from player_adapter import KodiPlayerAdapter
 from presenter import BingiePresenter, KodiPropertyPublisher, ServiceLease
 from seek_controller import SeekController
@@ -158,6 +159,7 @@ class SeekService(object):
         self.lease = ServiceLease()
         self.player = KodiPlayerAdapter(event_sink=monitor.post_player, logger=log)
         self.controller = SeekController(self.player, self.publisher)
+        self.view = PlaybackViewModel()
         addon_path = addon_path or xbmcaddon.Addon().getAddonInfo("path")
         self.chapters = ChapterDialogManager(
             addon_path,
@@ -181,6 +183,14 @@ class SeekService(object):
             for event_type, name, payload, timestamp in self.monitor.drain():
                 try:
                     if event_type == "player":
+                        # Register the controller's current operation watermark
+                        # before its callback can reset/advance the transaction.
+                        self.view.update(
+                            self.controller.snapshot(),
+                            self.player.snapshot(),
+                            timestamp,
+                        )
+                        self.view.on_player_event(name, payload, timestamp)
                         self.controller.on_player_event(name, payload, timestamp)
                         if name in ("started", "stopped", "ended"):
                             self.chapters.close()
@@ -196,7 +206,15 @@ class SeekService(object):
             try:
                 self.controller.tick()
                 snapshot = self.controller.snapshot()
-                self.publisher.refresh_preview(snapshot)
+                player_snapshot = self.player.snapshot()
+                self.view.update(snapshot, player_snapshot)
+                preview_path = self.publisher.refresh_preview(snapshot)
+                self.view.offer_preview(
+                    preview_path,
+                    snapshot.get("generation"),
+                    snapshot.get("target_seconds"),
+                )
+                self.publisher.publish_view(self.view.snapshot())
                 self.presenter.update(snapshot)
                 self.router.tick()
                 self.chapters.validate()
@@ -222,6 +240,7 @@ class SeekService(object):
         try:
             self.controller.shutdown()
         finally:
+            self.view.reset()
             self.publisher.clear()
             self.lease.stop()
 

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import time
 
 import xbmc
@@ -7,8 +8,10 @@ import xbmcgui
 
 from media_contract import (
     HOME_WINDOW_ID,
+    SEEK_CONTROLLER_PROPERTY_KEYS,
     SEEK_PREFIX,
     SEEK_PROPERTY_KEYS,
+    VIEW_SLOT_FIELDS,
     SERVICE_PROTOCOL,
     SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
@@ -31,6 +34,8 @@ class KodiPropertyPublisher(object):
     def __init__(self, window=None):
         self.window = window or xbmcgui.Window(HOME_WINDOW_ID)
         self.last = {}
+        self.view_slot = None
+        self.view_signature = None
 
     def publish(self, snapshot):
         percent = max(0.0, min(100.0, float(snapshot["percent"])))
@@ -64,7 +69,7 @@ class KodiPropertyPublisher(object):
                 self.window.setProperty(SEEK_PREFIX + key, value)
             else:
                 self.window.clearProperty(SEEK_PREFIX + key)
-        self.last = values
+        self.last.update(values)
 
     def refresh_preview(self, snapshot):
         keys = (
@@ -94,11 +99,100 @@ class KodiPropertyPublisher(object):
             else:
                 self.window.clearProperty(SEEK_PREFIX + key)
             self.last[key] = value
+        return path
+
+    @staticmethod
+    def _safe_percent(value):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError):
+            numeric = 0.0
+        if not math.isfinite(numeric):
+            numeric = 0.0
+        return max(0.0, min(100.0, numeric))
+
+    def publish_view(self, view):
+        """Publish one coherent semantic frame through a double buffer.
+
+        Kodi does not offer a batch Window-property mutation. The inactive
+        slot is therefore populated completely and ``viewslot`` is flipped
+        only after every component is ready. The skin never observes fields
+        from different revisions if it binds its two groups to slots a/b.
+        """
+        active = bool(view.get("active"))
+        percent = self._safe_percent(view.get("target_percent", 0.0))
+        formatted = "%.4f" % percent
+        if not active and self.last.get("viewactive"):
+            self.window.clearProperty(SEEK_PREFIX + "viewactive")
+            self.last["viewactive"] = ""
+
+        values = (
+            ("revision", str(view.get("target_revision", 0))),
+            ("phase", str(view.get("phase", "idle"))),
+            ("targetvalid", "true" if view.get("target_valid") else ""),
+            ("targetfill", "0.0000,%s" % formatted),
+            ("targetmarker", "%s,%s" % (formatted, formatted)),
+            ("time", str(view.get("time", ""))),
+            ("delta", str(view.get("delta", ""))),
+            ("prompt", str(view.get("prompt", ""))),
+            (
+                "previewstatus",
+                str(view.get("preview_status", "none")),
+            ),
+            (
+                "previewpath",
+                str(view.get("preview_path", ""))
+                if view.get("preview_status") == "ready"
+                else "",
+            ),
+            (
+                "previewanchor",
+                str(int(math.floor(percent + 0.5))),
+            ),
+        )
+        if tuple(field for field, _value in values) != VIEW_SLOT_FIELDS:
+            raise RuntimeError("incomplete playback view slot")
+        signature = (active, values)
+        if signature == self.view_signature:
+            return
+
+        next_slot = "b" if self.view_slot == "a" else "a"
+        for field, value in values:
+            key = "%s.%s" % (next_slot, field)
+            if self.last.get(key) == value:
+                continue
+            if value:
+                self.window.setProperty(SEEK_PREFIX + key, value)
+            else:
+                self.window.clearProperty(SEEK_PREFIX + key)
+            self.last[key] = value
+
+        # This is the atomic commit point consumed by the two skin groups.
+        self.window.setProperty(SEEK_PREFIX + "viewslot", next_slot)
+        self.last["viewslot"] = next_slot
+        self.view_slot = next_slot
+        self.view_signature = signature
+
+        value = "true" if active else ""
+        if self.last.get("viewactive") != value:
+            if value:
+                self.window.setProperty(SEEK_PREFIX + "viewactive", value)
+            else:
+                self.window.clearProperty(SEEK_PREFIX + "viewactive")
+            self.last["viewactive"] = value
 
     def clear(self):
         for key in SEEK_PROPERTY_KEYS:
             self.window.clearProperty(SEEK_PREFIX + key)
         self.last = {}
+        self.view_slot = None
+        self.view_signature = None
+
+    def clear_controller(self):
+        """Clear the transaction contract without tearing the latched view."""
+        for key in SEEK_CONTROLLER_PROPERTY_KEYS:
+            self.window.clearProperty(SEEK_PREFIX + key)
+            self.last.pop(key, None)
 
 
 class ServiceLease(object):

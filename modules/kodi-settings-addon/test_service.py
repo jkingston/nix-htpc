@@ -25,11 +25,14 @@ class FakeWindow(object):
     def __init__(self):
         self.properties = {}
         self.controls = {}
+        self.operations = []
 
     def setProperty(self, name, value):
+        self.operations.append(("set", name, value))
         self.properties[name] = value
 
     def clearProperty(self, name):
+        self.operations.append(("clear", name, ""))
         self.properties.pop(name, None)
 
     def getProperty(self, name):
@@ -151,6 +154,10 @@ class FakeController(object):
             "committing",
             "resume-pending",
         )
+
+    @property
+    def back_dismisses_osd(self):
+        return self.state == "skip-settling"
 
     def hidden_step(self, direction, timestamp):
         self.hidden.append((direction, timestamp))
@@ -459,6 +466,19 @@ class InputRouterTest(unittest.TestCase):
         self.router.handle("fullscreen-back", 0.7)
         self.assertIn("PlayerControl(Stop)", self.builtins)
 
+    def test_back_dismisses_osd_while_issued_skip_stays_attributed(self):
+        for action in ("osd-back", "fullscreen-back"):
+            with self.subTest(action=action):
+                self.setUp()
+                self.controller.state = "skip-settling"
+                self.presenter.osd = True
+                self.router.handle(action, 1.0)
+                self.assertEqual(self.controller.cancels, [1.0])
+                self.assertEqual(self.controller.state, "skip-settling")
+                self.assertIn("close", self.presenter.calls)
+                self.assertIsNone(self.router.pending_focus)
+                self.assertEqual(self.builtins, [])
+
 
 def chapter_properties():
     manifest = {
@@ -657,6 +677,165 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish(snapshot)
         self.assertEqual(window.getProperty("htpc.seek.modal"), "")
         self.assertEqual(window.getProperty("htpc.seek.previewbucket"), "20")
+
+    def test_view_publisher_commits_complete_inactive_slot_then_flips(self):
+        window = FakeWindow()
+        publisher = KodiPropertyPublisher(window)
+        view = {
+            "active": True,
+            "target_revision": 1,
+            "phase": "ready",
+            "actual_percent": 10,
+            "target_valid": True,
+            "target_percent": 12.5,
+            "time": "2:05",
+            "delta": "+0:25",
+            "prompt": "OK Seek",
+            "preview_status": "ready",
+            "preview_path": "/tmp/frame.jpg",
+        }
+        publisher.publish_view(view)
+        self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")
+        self.assertEqual(
+            window.getProperty("htpc.seek.a.targetfill"),
+            "0.0000,12.5000",
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.a.targetmarker"),
+            "12.5000,12.5000",
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.a.previewanchor"),
+            "13",
+        )
+        selector = next(
+            index
+            for index, operation in enumerate(window.operations)
+            if operation[1] == "htpc.seek.viewslot"
+        )
+        active = next(
+            index
+            for index, operation in enumerate(window.operations)
+            if operation[1] == "htpc.seek.viewactive"
+        )
+        slot_writes = [
+            index
+            for index, operation in enumerate(window.operations)
+            if operation[1].startswith("htpc.seek.a.")
+        ]
+        self.assertTrue(slot_writes)
+        self.assertLess(max(slot_writes), selector)
+        self.assertLess(selector, active)
+
+        window.operations[:] = []
+        changed = dict(view)
+        changed.update(
+            target_revision=2,
+            target_percent=67.5,
+            time="11:15",
+            delta="+9:35",
+        )
+        publisher.publish_view(changed)
+        self.assertEqual(window.getProperty("htpc.seek.viewslot"), "b")
+        self.assertEqual(
+            window.getProperty("htpc.seek.b.targetfill"),
+            "0.0000,67.5000",
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.b.previewanchor"),
+            "68",
+        )
+        self.assertEqual(
+            window.operations[-1],
+            ("set", "htpc.seek.viewslot", "b"),
+        )
+
+        window.operations[:] = []
+        changed_only_in_unrendered_actual = dict(changed)
+        changed_only_in_unrendered_actual["actual_percent"] = 42
+        publisher.publish_view(changed_only_in_unrendered_actual)
+        self.assertEqual(window.operations, [])
+
+    def test_view_publisher_clamps_bad_geometry_and_hides_first(self):
+        window = FakeWindow()
+        publisher = KodiPropertyPublisher(window)
+        publisher.publish_view(
+            {
+                "active": True,
+                "target_percent": float("inf"),
+                "actual_percent": float("nan"),
+                "target_valid": True,
+            }
+        )
+        slot = window.getProperty("htpc.seek.viewslot")
+        self.assertEqual(
+            window.getProperty("htpc.seek.%s.targetfill" % slot),
+            "0.0000,0.0000",
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.%s.targetmarker" % slot),
+            "0.0000,0.0000",
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.%s.previewanchor" % slot),
+            "0",
+        )
+
+        window.operations[:] = []
+        publisher.publish_view({"active": False, "target_percent": 200})
+        self.assertEqual(
+            window.operations[0],
+            ("clear", "htpc.seek.viewactive", ""),
+        )
+        self.assertEqual(window.getProperty("htpc.seek.viewactive"), "")
+        window.operations[:] = []
+        publisher.publish_view({"active": False, "target_percent": 200})
+        self.assertEqual(window.operations, [])
+
+    def test_controller_clear_cannot_erase_latched_view_slot(self):
+        window = FakeWindow()
+        publisher = KodiPropertyPublisher(window)
+        publisher.publish(
+            {
+                "active": True,
+                "generation": 1,
+                "state": "skip-settling",
+                "mode": "skip",
+                "source": "timeline",
+                "target_seconds": 110,
+                "percent": 11,
+                "time": "1:50",
+                "delta": "+0:10",
+                "confirm": False,
+                "modal": False,
+                "controller_paused": False,
+                "was_playing": True,
+                "playback_epoch": 1,
+                "hold": False,
+                "hold_released": False,
+            }
+        )
+        publisher.publish_view(
+            {
+                "active": True,
+                "target_revision": 1,
+                "phase": "applying",
+                "actual_percent": 10,
+                "target_valid": True,
+                "target_percent": 11,
+                "preview_status": "ready",
+                "preview_path": "/tmp/frame.jpg",
+            }
+        )
+        slot = window.getProperty("htpc.seek.viewslot")
+        publisher.clear_controller()
+        self.assertEqual(window.getProperty("htpc.seek.active"), "")
+        self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
+        self.assertEqual(window.getProperty("htpc.seek.viewslot"), slot)
+        self.assertEqual(
+            window.getProperty("htpc.seek.%s.previewpath" % slot),
+            "/tmp/frame.jpg",
+        )
 
     def test_lease_rearms_before_crash_expiry_and_clears_on_stop(self):
         self.assertEqual(SERVICE_READY, "htpc.service.ready")

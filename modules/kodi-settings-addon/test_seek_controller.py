@@ -446,6 +446,88 @@ class SeekControllerTest(unittest.TestCase):
         operation = h.player.seek_requests[-1][1]
         h.controller.tick(4.55)
         self.assertIn(operation, h.player.retired)
+        handoff = h.controller.snapshot()
+        self.assertTrue(handoff["handoff_active"])
+        self.assertEqual(handoff["handoff_target"], 110)
+
+    def test_stale_media_callback_cannot_abandon_controller_owned_pause(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        self.assertTrue(h.controller.controller_paused)
+
+        h.controller.on_player_event(
+            "seeked",
+            {
+                "operation": "old-operation",
+                "identity": "old-item",
+                "epoch": 0,
+            },
+            0.70,
+        )
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        self.assertTrue(h.controller.controller_paused)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_stale_same_media_callbacks_cannot_abandon_owned_pause(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+
+        for kind in ("paused", "resumed"):
+            h.controller.on_player_event(
+                kind,
+                {
+                    "operation": "old-operation",
+                    "identity": h.player.identity,
+                    "epoch": h.player.epoch,
+                },
+                0.70,
+            )
+            self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+            self.assertTrue(h.controller.controller_paused)
+
+        h.controller.cancel(0.80)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_new_gesture_uses_logical_target_until_raw_clock_converges(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        h.ack_seek(now=0.70)
+        self.assertEqual(h.controller.snapshot()["handoff_target"], 110)
+
+        # Kodi can report the pre-seek decoder clock for several samples.
+        h.player.current = 100
+        h.controller.hidden_step(1, 0.80)
+        self.assertEqual(h.controller.target, 120)
+
+    def test_chapter_browse_uses_logical_handoff_origin(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        h.ack_seek(now=0.70)
+        h.player.current = 100
+
+        self.assertTrue(h.controller.begin_chapter_browse(0.80))
+        self.assertEqual(h.controller.origin, 110)
+        self.assertEqual(h.controller.target, 110)
+
+    def test_missing_commit_callback_still_hands_target_to_renderer(self):
+        h = ControllerHarness(paused=True)
+        h.start_timeline_hold(1)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        h.controller.confirm(0.70)
+        target = h.controller.target
+        self.assertEqual(h.controller.state, COMMITTING)
+
+        h.controller.tick(4.70)
+        snapshot = h.controller.snapshot()
+        self.assertEqual(snapshot["state"], IDLE)
+        self.assertTrue(snapshot["handoff_active"])
+        self.assertEqual(snapshot["handoff_target"], target)
 
     def test_back_discards_uncommitted_skip_without_seeking(self):
         h = ControllerHarness()
@@ -460,9 +542,53 @@ class SeekControllerTest(unittest.TestCase):
         h.controller.tick(0.55)
         operation = h.player.seek_requests[0][1]
         h.controller.cancel(0.60)
-        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
+        self.assertTrue(h.controller.back_dismisses_osd)
+        self.assertEqual(
+            h.controller.snapshot()["skip_operation"],
+            operation,
+        )
         self.assertEqual(len(h.player.seek_requests), 1)
-        self.assertIn(operation, h.player.retired)
+        self.assertNotIn(operation, h.player.retired)
+        h.ack_seek(now=0.70)
+        self.assertEqual(h.controller.state, IDLE)
+
+    def test_back_abandons_new_gesture_but_keeps_issued_skip_attributed(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        operation = h.player.seek_requests[0][1]
+        h.controller.hidden_step(1, 0.60)
+        self.assertEqual(h.controller.state, SKIP_ACTIVE)
+        self.assertEqual(h.controller.target, 120)
+        self.assertTrue(h.controller.back_dismisses_osd)
+
+        h.controller.cancel(0.70)
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
+        self.assertEqual(h.controller.target, 110)
+        self.assertEqual(h.controller.skip_inflight, operation)
+        self.assertNotIn(operation, h.player.retired)
+        h.ack_seek(now=0.80)
+        self.assertEqual(h.controller.state, IDLE)
+
+    def test_cancelled_hold_keeps_older_issued_skip_attributed(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        skip_operation = h.player.seek_requests[0][1]
+        for timestamp in (0.60, 1.00, 1.108, 1.216):
+            h.controller.timeline_step(1, timestamp)
+        h.ack_pause(1.25)
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+
+        h.controller.cancel(1.30)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        h.ack_resume(1.40)
+        self.assertEqual(h.controller.state, SKIP_SETTLING)
+        self.assertEqual(h.controller.skip_inflight, skip_operation)
+        self.assertNotIn(skip_operation, h.player.retired)
+        h.ack_seek(index=0, now=1.50)
+        self.assertEqual(h.controller.state, IDLE)
 
     def test_item_or_epoch_change_clears_conservatively(self):
         for attribute, value in (("identity", "item-two"), ("epoch", 2)):
@@ -473,6 +599,24 @@ class SeekControllerTest(unittest.TestCase):
             self.assertEqual(h.controller.state, IDLE)
             self.assertEqual(h.player.seek_requests, [])
             self.assertEqual(h.player.resume_requests, [])
+
+    def test_transient_nonseekable_snapshot_cannot_make_stale_event_reset(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        h.player.seekable = False
+        h.controller.on_player_event(
+            "seeked",
+            {
+                "operation": "old-operation",
+                "identity": "old-item",
+                "epoch": 0,
+            },
+            0.70,
+        )
+        self.assertEqual(h.controller.state, SCRUB_ACTIVE)
+        self.assertTrue(h.controller.controller_paused)
+        self.assertEqual(h.player.resume_requests, [])
 
     def test_empty_identity_cannot_start_transaction(self):
         h = ControllerHarness()
@@ -568,6 +712,25 @@ class SeekControllerTest(unittest.TestCase):
         # The old operation expires before SKIP_ACTIVE returns, allowing the
         # new logical target to issue its own single seek.
         self.assertEqual([item[0] for item in h.player.seek_requests], [110, 120])
+
+    def test_inflight_timeout_keeps_anchor_behind_new_pause_gesture(self):
+        h = ControllerHarness()
+        h.controller.hidden_step(1, 0.0)
+        h.controller.tick(0.55)
+        for timestamp in (3.80, 4.20, 4.308, 4.416):
+            h.controller.timeline_step(1, timestamp)
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+
+        h.controller.tick(4.56)
+        self.assertEqual(h.controller.state, PAUSE_PENDING)
+        self.assertTrue(h.controller.snapshot()["handoff_active"])
+        self.assertEqual(h.controller.snapshot()["handoff_target"], 110)
+
+        h.controller.cancel(4.60)
+        h.controller.tick(6.61)
+        self.assertEqual(h.controller.state, IDLE)
+        h.controller.hidden_step(1, 6.70)
+        self.assertEqual(h.controller.target, 120)
 
     def test_boundary_clamping_never_wraps_or_seeks_exact_duration(self):
         low = ControllerHarness(current=5, duration=100)

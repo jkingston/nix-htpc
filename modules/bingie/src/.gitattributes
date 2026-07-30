@@ -1,0 +1,6 @@
+# Preserve upstream text without turning its pre-existing whitespace into
+# thousands of import-time diagnostics. Keep strict checking on fork-owned
+# playback files and packaging metadata.
+* text=auto
+* -whitespace
+1080i/IncludesHTPCPlayback.xml whitespace=blank-at-eol,blank-at-eof,space-before-tab

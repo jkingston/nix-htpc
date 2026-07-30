@@ -1,99 +1,44 @@
 # HTPC BINGIE fork
 
-`default.nix` packages the pinned BINGIE 2.0.2 archive as `skin.bingie`
-version 2.0.2.8. The NixOS greetd pre-start stages and validates the immutable
-package, then checksum-synchronises it into Kodi's writable user add-on
-directory while Kodi is stopped. It preserves only Skin Shortcuts' generated
-`1080i/script-skinshortcuts-includes.xml`; managed skin sources remain
-declarative.
+This directory owns the reviewable source for the HTPC's `skin.bingie` fork.
+It starts from upstream BINGIE 2.0.2 and keeps the add-on ID unchanged so Kodi
+retains the existing skin settings and generated menu shortcuts.
 
-`htpc-playback.patch` contains playback-start and exit fixes:
+`src/` is the authoritative XML, language, shortcut, and other textual source.
+`upstream-assets.nix` fetches only the large immutable fonts, compiled media,
+and raster/video assets from the hash-pinned upstream archive. `default.nix`
+assembles those two inputs without applying source patches or build-time text
+rewrites.
 
-- a black loading shield covers Home while Jellyfin resolves a selected video;
-- all information-dialog play timers start immediately instead of exposing
-  Home for one second;
-- Play, or Resume for a partially watched movie, receives initial focus in
-  movie details;
-- chapter markers are always visible when the player reports chapters;
-- leaving fullscreen VOD stops playback when BINGIE's
-  `ForceVideoPlaybackStop` setting is enabled.
+The greetd pre-start in `modules/kodi.nix` validates and synchronises the
+assembled skin while Kodi is stopped. It deliberately preserves the user's
+runtime-generated `1080i/script-skinshortcuts-includes.xml`.
 
-`htpc-ux.patch` is the Home and library polish pass:
+## Fork behaviour
 
-- spotlight opens on Play, Right selects More Info, and Left from Play opens
-  the sidebar without the old double-action focus bug;
-- Right closes the sidebar instead of opening Movies/TV submenu blades;
-- ordinary movie, episode, and TV rows open details;
-- separate Movie Genres and TV Genres rows appear only in their matching hub
-  and only when populated;
-- resume items use a thin edge-to-edge progress bar and the bottom-right
-  BINGIE logo is hidden;
-- single-profile, maintenance-heavy, and desktop-style actions are omitted.
+The local source contains the previously deployed Home, library, information
+screen, playback-start, playback-exit, chapter, remote-navigation, and OSD
+polish. The managed service in `modules/kodi-settings-addon` owns gesture
+classification and playback intent; the skin owns focus, layout, and rendering.
 
-The managed settings service disables parent-directory entries, the mouse,
-debug overlays, OSD auto-pause, and low-value video-information actions.
-Fullscreen Up/Down reveal the OSD without pausing. OK toggles play/pause and
-reveals it. Left/Right enter the managed seek path. Back unwinds a pending
-interaction, then the OSD, then stops playback.
+During a managed seek, the service publishes a finite, clamped semantic view
+model. BINGIE renders its target fill and marker using Kodi ranges controls and
+positions the trick-play card with deterministic one-percent anchors. No Python
+code retains or mutates live Kodi window controls.
 
-`htpc-seeking.patch` connects BINGIE's focused timeline to the same controller
-and keeps the OSD open while a seek transaction is active:
+See `UPSTREAM.md` for import provenance and asset boundaries, and
+`FORK_CHANGES.md` for the maintained behavioural delta.
 
-- a Left/Right tap, whether the OSD was hidden or its timeline is focused,
-  previews an exact ten-second skip and commits one coalesced absolute seek
-  after 550 ms of inactivity;
-- rapid distinct taps remain exact ten-second steps;
-- the measured CEC repeat signature of a held button enters pause-owned,
-  gradually accelerating scrubbing without rolling the cursor backwards while
-  the hold is classified;
-- after a released hold, the next press starts again as an exact ten-second
-  step and must prove a fresh hold before acceleration resumes;
-- only a proven hold pauses playback and enters a pending scrub; OK commits it
-  and Back cancels it;
-- focus movement is native when no modal seek is pending, with safe Kodi
-  fallbacks if the service readiness lease expires.
+## Updating upstream
 
-`htpc-trickplay.patch` adds one cursor-following exact preview, a rounded target
-time/delta, a stable target marker, and a subdued actual playhead. The marker
-is a native skin slider driven by the target percentage; the preview position
-uses mutually exclusive skin animation buckets. Python never retains or moves
-live OSD control pointers, which Kodi can invalidate while reconstructing the
-OSD during a seek. The target marker shares the normal playhead's exact
-geometry, so entering or leaving a seek does not move or resize it. Up from the
-focused timeline exposes a custom chapter-only thumbnail rail after Jellyfin
-has atomically published every retained chapter frame. Up exits that rail to
-the top controls; Down/Back return to the timeline. Kodi's native bookmark
-window remains a separate OSD facility.
+1. Fetch and hash the new upstream archive.
+2. Import all mutable/textual source into `src/`, retaining local changes as a
+   normal source merge.
+3. Review the explicit binary paths in `upstream-assets.nix`.
+4. Update provenance and fork-change documentation.
+5. Run the Python, XML, generator, flake, native Pi build, CEC, visual, and
+   playback-soak checks before deployment.
 
-The persistent controller in `modules/kodi-settings-addon` owns absolute
-targets, pause/resume ownership, commit/cancel state, input routing, focus, and
-presentation. It rejects stale player callbacks and media changes. The
-readiness property is a two-second renewable lease. Custom presentation and
-OSD-timeout suppression are gated on that lease so stale state cannot leave the
-interface stuck if the service exits.
-
-`modules/jellyfin/trickplay.py` is only the asynchronous media supplier. Exact
-previews use a latest-target-wins foreground lane, complete playback/seek/frame
-tokens, and double-buffered files. Neighbor and chapter prefetching share one
-bounded background lane with in-flight sprite deduplication and bounded
-caches/retries. Late or partially published results cannot replace the current
-preview. The chapter contract is explicit, sanitized, capped at 24, and becomes
-ready as one stable manifest only after every retained frame exists. If the
-server's chapter-image endpoint fails, the producer materializes the exact
-chapter-position trick-play frame instead.
-
-The package does not yet declare BINGIE's third-party helper add-ons. The
-already-installed Pi profile retains those dependencies. A fresh profile must
-install them before Kodi can enable BINGIE.
-
-When updating the pin:
-
-1. Change the archive URL, `version`, and expected upstream version in
-   `default.nix`.
-2. Update the source hash.
-3. Rebase all four `htpc-*.patch` files and update intentional build-time
-   assertions.
-4. Run both Python test suites and the Pi configuration build.
-5. Test Home details, spotlight/sidebar navigation, hidden taps, held scrubs,
-   OK/Back, chapter browsing, playback exit, and a cold-cache trick-play seek
-   on the Pi.
+The bundled fonts and artwork are retained byte-for-byte from upstream. Their
+individual redistribution terms still need a separate audit before publishing
+binary releases of this fork.
