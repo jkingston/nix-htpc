@@ -1,0 +1,1 @@
+"""Headless Kodi capture tooling."""
