@@ -228,6 +228,10 @@ class BingiePresenter(object):
     def __init__(self, logger=None, clock=None):
         self.logger = logger
         self.clock = clock or time.monotonic
+        self.reset()
+
+    def reset(self):
+        """Discard focus delivery and generation state at service boundaries."""
         self.last_generation = None
         self.last_active = False
         self.pending_timeline_focus = False

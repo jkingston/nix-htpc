@@ -128,6 +128,7 @@ from player_adapter import KodiPlayerAdapter
 from seek_controller import SCRUB_ACTIVE, RESUME_PENDING, SeekController
 from service import (
     ManagedSettings,
+    SeekService,
     ServiceMonitor,
     get_setting,
     json_rpc_response,
@@ -758,7 +759,7 @@ class InputRouterTest(unittest.TestCase):
         self.router.handle("chapter-select", 1.1, chapter)
         self.assertEqual(self.controller.targets, [600.0, 600.0])
         self.assertEqual(self.controller.confirms, [None])
-        self.assertEqual(self.router.pending_focus, "transport")
+        self.assertEqual(self.router.pending_transition, "transport")
 
     def test_chapter_selection_from_another_transaction_is_ignored(self):
         self.controller.state = "scrub-active"
@@ -788,7 +789,7 @@ class InputRouterTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(self.controller.cancels), 1)
-        self.assertEqual(self.router.pending_focus, "timeline")
+        self.assertEqual(self.router.pending_transition, "timeline")
         self.controller.state = "idle"
         self.router.tick()
         self.assertEqual(self.presenter.calls[-1], "timeline")
@@ -801,7 +802,7 @@ class InputRouterTest(unittest.TestCase):
             1.0,
             {"destination": "top"},
         )
-        self.assertEqual(self.router.pending_focus, "top")
+        self.assertEqual(self.router.pending_transition, "top")
         self.assertNotIn("top", self.presenter.calls)
         self.controller.state = "idle"
         self.router.tick()
@@ -816,7 +817,7 @@ class InputRouterTest(unittest.TestCase):
                 1.0,
                 {"destination": destination},
             )
-            self.assertEqual(self.router.pending_focus, "timeline")
+            self.assertEqual(self.router.pending_transition, "timeline")
             self.controller.state = "idle"
             self.router.tick()
             self.assertEqual(self.presenter.calls[-1], "timeline")
@@ -892,8 +893,84 @@ class InputRouterTest(unittest.TestCase):
                 self.assertEqual(self.controller.cancels, [1.0])
                 self.assertEqual(self.controller.state, "skip-settling")
                 self.assertIn("close", self.presenter.calls)
-                self.assertIsNone(self.router.pending_focus)
+                self.assertIsNone(self.router.pending_transition)
                 self.assertEqual(self.builtins, [])
+
+    def test_pending_transitions_are_validated_and_delivered(self):
+        deliveries = {
+            "transport": "transport",
+            "timeline": "timeline",
+            "top": "top",
+        }
+        for transition, expected in deliveries.items():
+            with self.subTest(transition=transition):
+                self.presenter.calls = []
+                self.router._defer_transition(transition)
+                self.router.tick()
+                self.assertEqual(self.presenter.calls, [expected])
+                self.assertIsNone(self.router.pending_transition)
+
+        with self.assertRaises(ValueError):
+            self.router._defer_transition("unsupported")
+
+    def test_deferred_timeline_up_opens_chapter_rail(self):
+        self.controller.state = "skip-active"
+        self.chapters.is_available = True
+        self.router.handle("timeline-up", 1.0)
+        self.assertEqual(self.router.pending_transition, "timeline-up")
+        self.assertEqual(self.chapters.open_calls, [])
+
+        self.controller.state = "idle"
+        self.router.tick()
+        self.assertEqual(self.controller.chapter_begins, 1)
+        self.assertEqual(self.chapters.open_calls, [123.0])
+        self.assertIsNone(self.router.pending_transition)
+
+    def test_deferred_timeline_up_falls_back_to_top(self):
+        self.controller.state = "skip-active"
+        self.router.handle("timeline-up", 1.0)
+
+        self.controller.state = "idle"
+        self.router.tick()
+
+        self.assertEqual(self.presenter.calls, ["top"])
+        self.assertEqual(self.controller.chapter_begins, 0)
+        self.assertIsNone(self.router.pending_transition)
+
+    def test_last_input_wins_when_deferred_transitions_overlap(self):
+        self.controller.state = "skip-active"
+        self.router.handle("timeline-up", 1.0)
+        self.assertEqual(self.router.pending_transition, "timeline-up")
+
+        self.router.handle("timeline-back", 1.1)
+        self.assertEqual(self.router.pending_transition, "transport")
+
+        self.controller.state = "idle"
+        self.router.tick()
+        self.assertEqual(self.presenter.calls, ["transport"])
+        self.assertEqual(self.chapters.open_calls, [])
+
+    def test_reset_preserves_repeat_guards_while_clearing_transition(self):
+        self.router._defer_transition("timeline")
+        self.router.repeat_guard.arm("select", 1.0)
+        self.router.repeat_guard.arm("back", 1.0)
+
+        self.router.reset()
+
+        self.assertIsNone(self.router.pending_transition)
+        self.assertFalse(self.router.repeat_guard.accept("select", 1.1))
+        self.assertFalse(self.router.repeat_guard.accept("back", 1.1))
+
+    def test_clear_discards_transition_and_repeat_guards(self):
+        self.router._defer_transition("timeline")
+        self.router.repeat_guard.arm("select", 1.0)
+        self.router.repeat_guard.arm("back", 1.0)
+
+        self.router.clear()
+
+        self.assertIsNone(self.router.pending_transition)
+        self.assertTrue(self.router.repeat_guard.accept("select", 1.1))
+        self.assertTrue(self.router.repeat_guard.accept("back", 1.1))
 
 
 def chapter_properties():
@@ -1284,6 +1361,18 @@ class PresenterAndLeaseTest(unittest.TestCase):
         presenter.update({"active": True, "generation": 1, "percent": 25.0})
         self.assertNotIn(12901, WINDOWS)
 
+    def test_presenter_reset_discards_deferred_focus_and_generation_state(self):
+        presenter = BingiePresenter()
+        presenter.last_generation = 7
+        presenter.last_active = True
+        presenter.pending_timeline_focus = True
+
+        presenter.reset()
+
+        self.assertIsNone(presenter.last_generation)
+        self.assertFalse(presenter.last_active)
+        self.assertFalse(presenter.pending_timeline_focus)
+
     def test_bingie_settings_enable_information_bypass(self):
         calls = []
         with mock.patch("service.set_skin_setting", side_effect=lambda k, v: calls.append((k, v))):
@@ -1380,6 +1469,227 @@ class ServiceMonitorTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0][1], "timeline-left")
         self.assertEqual(events[0][2], {"source": "skin"})
+
+
+class SeekServiceCleanupTest(unittest.TestCase):
+    def setUp(self):
+        self.service = SeekService.__new__(SeekService)
+        self.service.view = mock.Mock()
+        self.service.controller = mock.Mock()
+        self.service.controller.snapshot.return_value = {"state": "idle"}
+        self.service.player = mock.Mock()
+        self.service.player.snapshot.return_value = {"playing": True}
+        self.service.router = mock.Mock()
+        self.service.presenter = mock.Mock()
+        self.service.chapters = mock.Mock()
+        self.service.publisher = mock.Mock()
+        self.service.lease = mock.Mock()
+
+    @staticmethod
+    def _record(trace, label, fail=False):
+        def effect(*_args, **_kwargs):
+            trace.append(label)
+            if fail:
+                raise RuntimeError(label)
+
+        return effect
+
+    def test_non_boundary_keeps_callback_order_without_cleanup(self):
+        trace = []
+        self.service.view.update.side_effect = self._record(
+            trace,
+            "watermark",
+        )
+        self.service.view.on_player_event.side_effect = self._record(
+            trace,
+            "view-event",
+        )
+        self.service.controller.on_player_event.side_effect = self._record(
+            trace,
+            "controller-event",
+        )
+
+        self.service._handle_player_event("paused", {}, 1.0)
+
+        self.assertEqual(
+            trace,
+            ["watermark", "view-event", "controller-event"],
+        )
+        self.service.router.reset.assert_not_called()
+        self.service.presenter.reset.assert_not_called()
+        self.service.chapters.close.assert_not_called()
+
+    def test_every_player_boundary_runs_navigation_and_visual_cleanup(self):
+        for name in ("started", "stopped", "ended"):
+            with self.subTest(name=name):
+                self.service.router.reset.reset_mock()
+                self.service.presenter.reset.reset_mock()
+                self.service.chapters.reset_mock()
+                self.service.publisher.reset_mock()
+                self.service._handle_player_event(name, {}, 2.0)
+                self.service.router.reset.assert_called_once_with()
+                self.service.presenter.reset.assert_called_once_with()
+                self.service.chapters.close.assert_called_once_with()
+                self.service.chapters.clear_properties.assert_called_once_with()
+                publisher = self.service.publisher
+                publisher.clear_controller.assert_called_once_with()
+
+    def test_boundary_callbacks_precede_failure_isolated_cleanup(self):
+        trace = []
+        self.service.view.update.side_effect = self._record(
+            trace,
+            "watermark",
+        )
+        self.service.view.on_player_event.side_effect = self._record(
+            trace,
+            "view-event",
+            fail=True,
+        )
+        self.service.controller.on_player_event.side_effect = self._record(
+            trace,
+            "controller-event",
+            fail=True,
+        )
+        self.service.view.reset.side_effect = self._record(
+            trace,
+            "view-fallback",
+        )
+        self.service.controller.reset.side_effect = self._record(
+            trace,
+            "controller-fallback",
+        )
+        self.service.router.reset.side_effect = self._record(
+            trace,
+            "router",
+            fail=True,
+        )
+        self.service.presenter.reset.side_effect = self._record(
+            trace,
+            "presenter",
+        )
+        self.service.chapters.close.side_effect = self._record(
+            trace,
+            "chapter-close",
+            fail=True,
+        )
+        self.service.chapters.clear_properties.side_effect = self._record(
+            trace,
+            "chapter-properties",
+        )
+        self.service.publisher.clear_controller.side_effect = self._record(
+            trace,
+            "publisher",
+        )
+
+        with mock.patch("service.log"):
+            self.service._handle_player_event("started", {}, 1.0)
+
+        self.assertEqual(
+            trace,
+            [
+                "watermark",
+                "view-event",
+                "controller-event",
+                "view-fallback",
+                "controller-fallback",
+                "router",
+                "presenter",
+                "chapter-close",
+                "chapter-properties",
+                "publisher",
+            ],
+        )
+        self.service.controller.reset.assert_called_once_with(
+            clear_handoff=True,
+        )
+
+    def test_recovery_isolates_failures_and_closes_chapter_state(self):
+        trace = []
+        self.service.router.reset.side_effect = self._record(
+            trace,
+            "router",
+            fail=True,
+        )
+        self.service.presenter.reset.side_effect = self._record(
+            trace,
+            "presenter",
+        )
+        self.service.chapters.close.side_effect = self._record(
+            trace,
+            "chapter-close",
+            fail=True,
+        )
+        self.service.chapters.clear_properties.side_effect = self._record(
+            trace,
+            "chapter-properties",
+        )
+        self.service.controller.cancel.side_effect = self._record(
+            trace,
+            "controller-cancel",
+            fail=True,
+        )
+        self.service.controller.shutdown.side_effect = self._record(
+            trace,
+            "controller-shutdown",
+        )
+        self.service.view.reset.side_effect = self._record(trace, "view")
+        self.service.publisher.clear.side_effect = self._record(
+            trace,
+            "publisher",
+        )
+
+        with mock.patch("service.log"):
+            self.service._recover("failed")
+
+        self.assertEqual(
+            trace,
+            [
+                "router",
+                "presenter",
+                "chapter-close",
+                "chapter-properties",
+                "controller-cancel",
+                "controller-shutdown",
+                "view",
+                "publisher",
+            ],
+        )
+
+    def test_close_attempts_every_safety_step_despite_failures(self):
+        trace = []
+        steps = (
+            (self.service.router.clear, "router", True),
+            (self.service.presenter.reset, "presenter", False),
+            (self.service.chapters.close, "chapter-close", True),
+            (
+                self.service.chapters.clear_properties,
+                "chapter-properties",
+                False,
+            ),
+            (self.service.controller.shutdown, "controller", True),
+            (self.service.view.reset, "view", False),
+            (self.service.publisher.clear, "publisher", True),
+            (self.service.lease.stop, "lease", False),
+        )
+        for action, label, fail in steps:
+            action.side_effect = self._record(trace, label, fail=fail)
+
+        with mock.patch("service.log"):
+            self.service.close()
+
+        self.assertEqual(
+            trace,
+            [
+                "router",
+                "presenter",
+                "chapter-close",
+                "chapter-properties",
+                "controller",
+                "view",
+                "publisher",
+                "lease",
+            ],
+        )
 
 
 class AdapterDouble(KodiPlayerAdapter):

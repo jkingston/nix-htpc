@@ -326,18 +326,7 @@ class SeekService(object):
             for event_type, name, payload, timestamp in self.monitor.drain():
                 try:
                     if event_type == "player":
-                        # Register the controller's current operation watermark
-                        # before its callback can reset/advance the transaction.
-                        self.view.update(
-                            self.controller.snapshot(),
-                            self.player.snapshot(),
-                            timestamp,
-                        )
-                        self.view.on_player_event(name, payload, timestamp)
-                        self.controller.on_player_event(name, payload, timestamp)
-                        if name in ("started", "stopped", "ended"):
-                            self.chapters.close()
-                            self.chapters.clear_properties()
+                        self._handle_player_event(name, payload, timestamp)
                     else:
                         self.router.handle(name, timestamp, payload)
                 except Exception as error:
@@ -370,22 +359,102 @@ class SeekService(object):
             except Exception as error:
                 log("managed settings retry failed: %s" % error, xbmc.LOGERROR)
 
+    def _handle_player_event(self, name, payload, timestamp):
+        if name not in ("started", "stopped", "ended"):
+            # Register the controller's current operation watermark before its
+            # callback can reset/advance the transaction.
+            self.view.update(
+                self.controller.snapshot(),
+                self.player.snapshot(),
+                timestamp,
+            )
+            self.view.on_player_event(name, payload, timestamp)
+            self.controller.on_player_event(name, payload, timestamp)
+            return
+
+        # Preserve callback ordering at a media boundary, while ensuring one
+        # failing observer cannot prevent the remaining state from clearing.
+        self._attempt(
+            "player boundary watermark",
+            lambda: self.view.update(
+                self.controller.snapshot(),
+                self.player.snapshot(),
+                timestamp,
+            ),
+        )
+        view_event_handled = self._attempt(
+            "view player boundary",
+            lambda: self.view.on_player_event(name, payload, timestamp),
+        )
+        controller_event_handled = self._attempt(
+            "controller player boundary",
+            lambda: self.controller.on_player_event(
+                name,
+                payload,
+                timestamp,
+            ),
+        )
+        if not view_event_handled:
+            self._attempt("view boundary fallback reset", self.view.reset)
+        if not controller_event_handled:
+            self._attempt(
+                "controller boundary fallback reset",
+                lambda: self.controller.reset(clear_handoff=True),
+            )
+        self._attempt("input router boundary reset", self.router.reset)
+        self._attempt("presenter boundary reset", self.presenter.reset)
+        self._attempt("chapter boundary close", self.chapters.close)
+        self._attempt(
+            "chapter boundary property clear",
+            self.chapters.clear_properties,
+        )
+        self._attempt(
+            "publisher boundary controller clear",
+            self.publisher.clear_controller,
+        )
+
     def _recover(self, message):
         log(message, xbmc.LOGERROR)
-        try:
-            self.controller.cancel()
-        except Exception as error:
-            log("controller recovery failed: %s" % error, xbmc.LOGERROR)
+        self._attempt("input router recovery reset", self.router.reset)
+        self._attempt("presenter recovery reset", self.presenter.reset)
+        self._attempt("chapter recovery close", self.chapters.close)
+        self._attempt(
+            "chapter recovery property clear",
+            self.chapters.clear_properties,
+        )
+        cancel_handled = self._attempt(
+            "controller recovery cancel",
+            self.controller.cancel,
+        )
+        if not cancel_handled:
+            self._attempt(
+                "controller recovery shutdown",
+                self.controller.shutdown,
+            )
+        self._attempt("view recovery reset", self.view.reset)
+        self._attempt("publisher recovery clear", self.publisher.clear)
 
     def close(self):
-        self.chapters.close()
-        self.chapters.clear_properties()
+        self._attempt("input router shutdown clear", self.router.clear)
+        self._attempt("presenter shutdown reset", self.presenter.reset)
+        self._attempt("chapter shutdown close", self.chapters.close)
+        self._attempt(
+            "chapter shutdown property clear",
+            self.chapters.clear_properties,
+        )
+        self._attempt("controller shutdown", self.controller.shutdown)
+        self._attempt("view shutdown reset", self.view.reset)
+        self._attempt("publisher shutdown clear", self.publisher.clear)
+        self._attempt("service lease shutdown", self.lease.stop)
+
+    @staticmethod
+    def _attempt(label, action):
         try:
-            self.controller.shutdown()
-        finally:
-            self.view.reset()
-            self.publisher.clear()
-            self.lease.stop()
+            action()
+        except Exception as error:
+            log("%s failed: %s" % (label, error), xbmc.LOGERROR)
+            return False
+        return True
 
 
 def main():

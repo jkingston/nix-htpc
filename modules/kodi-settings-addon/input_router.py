@@ -20,6 +20,10 @@ class KodiCommands(object):
 class InputRouter(object):
     """Explicit source-aware routing; never infer focus after delivery."""
 
+    PENDING_TRANSITIONS = frozenset(
+        ("transport", "timeline", "timeline-up", "top")
+    )
+
     def __init__(
         self,
         controller,
@@ -35,9 +39,16 @@ class InputRouter(object):
         self.chapters = chapters
         self.commands = commands
         self.repeat_guard = repeat_guard or RepeatGuard()
-        self.focus_zone = "unknown"
-        self.pending_focus = None
-        self.pending_timeline_up = False
+        self.pending_transition = None
+
+    def reset(self):
+        """Discard deferred navigation while preserving physical input trains."""
+        self.pending_transition = None
+
+    def clear(self):
+        """Discard all transient input state during full shutdown or tests."""
+        self.reset()
+        self.repeat_guard.reset()
 
     def handle(self, action, timestamp, payload=None):
         payload = payload or {}
@@ -51,23 +62,19 @@ class InputRouter(object):
         if action in ("timeline-left", "timeline-right"):
             direction = -1 if action.endswith("left") else 1
             if self.controller.timeline_step(direction, timestamp):
-                self.focus_zone = "timeline"
                 self.presenter.emphasize_timeline()
             return True
 
         if action == "timeline-focus":
-            self.focus_zone = "timeline"
             return True
 
         if action == "timeline-blur":
-            if not self.controller.manual:
-                self.focus_zone = "unknown"
             return True
 
         if action == "timeline-confirm":
             if self.controller.manual:
                 self.controller.confirm(timestamp)
-                self.pending_focus = "transport"
+                self._defer_transition("transport")
             else:
                 self.controller.end_optimistic_skip(timestamp)
                 self.commands.toggle_play()
@@ -76,7 +83,7 @@ class InputRouter(object):
         if action in ("timeline-back", "timeline-cancel"):
             if self.controller.active:
                 self.controller.cancel(timestamp)
-                self.pending_focus = "transport"
+                self._defer_transition("transport")
             return True
 
         if action in ("timeline-up", "chapter-open"):
@@ -86,7 +93,6 @@ class InputRouter(object):
             if self.controller.manual:
                 return True
             self.controller.end_optimistic_skip()
-            self.focus_zone = "transport"
             self.commands.osd_action("Down")
             return True
 
@@ -113,7 +119,7 @@ class InputRouter(object):
             # Preserve the requested layer destination throughout the
             # asynchronous owned-pause resume. Up goes to the top bar;
             # Down/Back return to the timeline.
-            self.pending_focus = (
+            self._defer_transition(
                 "top" if destination == "top" else "timeline"
             )
             return True
@@ -123,7 +129,7 @@ class InputRouter(object):
                 return True
             if self.controller.manual:
                 self.controller.confirm(timestamp)
-                self.pending_focus = "transport"
+                self._defer_transition("transport")
                 return True
             self.controller.end_optimistic_skip(timestamp)
             self.commands.toggle_play()
@@ -135,7 +141,7 @@ class InputRouter(object):
                 return True
             if self.controller.manual:
                 self.controller.confirm(timestamp)
-                self.pending_focus = "transport"
+                self._defer_transition("transport")
                 return True
             self.controller.end_optimistic_skip(timestamp)
             self.commands.osd_action("Select")
@@ -148,7 +154,7 @@ class InputRouter(object):
                 self.chapters.close()
                 if self.controller.manual:
                     self.controller.cancel(timestamp)
-                self.pending_focus = "timeline"
+                self._defer_transition("timeline")
             elif self.controller.active:
                 dismiss_osd = bool(
                     getattr(self.controller, "back_dismisses_osd", False)
@@ -157,7 +163,7 @@ class InputRouter(object):
                 if dismiss_osd:
                     self.presenter.close_osd()
                 else:
-                    self.pending_focus = "transport"
+                    self._defer_transition("transport")
             else:
                 self.presenter.close_osd()
             return True
@@ -169,7 +175,7 @@ class InputRouter(object):
                 self.chapters.close()
                 if self.controller.manual:
                     self.controller.cancel(timestamp)
-                self.pending_focus = "timeline"
+                self._defer_transition("timeline")
             elif self.controller.active:
                 dismiss_osd = bool(
                     getattr(self.controller, "back_dismisses_osd", False)
@@ -178,7 +184,7 @@ class InputRouter(object):
                 if dismiss_osd:
                     self.presenter.close_osd()
                 else:
-                    self.pending_focus = "transport"
+                    self._defer_transition("transport")
             elif self.presenter.osd_active():
                 self.presenter.close_osd()
             else:
@@ -192,21 +198,24 @@ class InputRouter(object):
         return False
 
     def tick(self):
-        if self.pending_timeline_up and not self.controller.active:
-            self.pending_timeline_up = False
-            self._timeline_up()
-        if self.pending_focus and not self.controller.active:
-            destination = self.pending_focus
-            self.pending_focus = None
-            if destination == "timeline":
-                self.focus_zone = "timeline"
+        if self.pending_transition and not self.controller.active:
+            transition = self.pending_transition
+            self.pending_transition = None
+            if transition == "timeline-up":
+                self._timeline_up()
+            elif transition == "timeline":
                 self.presenter.focus_timeline()
-            elif destination == "top":
-                self.focus_zone = "top"
+            elif transition == "top":
                 self.presenter.focus_top_bar()
             else:
-                self.focus_zone = "transport"
                 self.presenter.focus_transport()
+
+    def _defer_transition(self, transition):
+        if transition not in self.PENDING_TRANSITIONS:
+            raise ValueError(
+                "unsupported pending transition: %s" % transition
+            )
+        self.pending_transition = transition
 
     def _timeline_up(self):
         # Scrub is intentionally modal. It must be confirmed or cancelled
@@ -216,23 +225,20 @@ class InputRouter(object):
 
         if self.controller.active:
             self.controller.end_optimistic_skip()
-            self.pending_timeline_up = True
+            self._defer_transition("timeline-up")
             return True
         snapshot = self.player.snapshot()
         current = float(snapshot.get("current", 0.0))
         if self.chapters.available():
-            if (
+            opened = (
                 self.controller.begin_chapter_browse()
                 and self.chapters.open(current)
-            ):
-                self.focus_zone = "chapters"
-            else:
+            )
+            if not opened:
                 if self.controller.manual:
                     self.controller.cancel()
-                self.focus_zone = "top"
                 self.presenter.focus_top_bar()
         else:
-            self.focus_zone = "top"
             self.presenter.focus_top_bar()
         return True
 
@@ -260,7 +266,7 @@ class InputRouter(object):
                 self.controller.set_target(requested_start)
                 and self.controller.confirm()
             ):
-                self.pending_focus = "transport"
+                self._defer_transition("transport")
                 return True
         self._reject_chapter_selection()
         return True
@@ -268,7 +274,7 @@ class InputRouter(object):
     def _reject_chapter_selection(self):
         if self.controller.manual and self.controller.source == "chapter":
             self.controller.cancel()
-        self.pending_focus = "timeline"
+        self._defer_transition("timeline")
 
     def _focus_chapter(self, chapter):
         if not self.controller.manual or self.controller.source != "chapter":
