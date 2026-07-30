@@ -43,13 +43,22 @@ TARGET_MARKER_DESCRIPTION = "HTPC target position marker"
 CUT_MARKERS_DESCRIPTION = "HTPC cut markers"
 CHAPTER_MARKERS_DESCRIPTION = "HTPC chapter markers"
 PREVIEW_DESCRIPTION = anchors.PREVIEW_DESCRIPTION
-SERVICE_READY = "Window(Home).Property(htpc.service.ready)"
-VIEW_ACTIVE = "Window(Home).Property(htpc.seek.viewactive)"
-VIEW_SLOT = "Window(Home).Property(htpc.seek.viewslot)"
+LAYOUT_READY = "$PARAM[ready_condition]"
+LAYOUT_VIEW_ACTIVE = (
+    "Window($PARAM[property_window])."
+    "Property($PARAM[property_prefix].viewactive)"
+)
+LAYOUT_VIEW_SLOT = (
+    "Window($PARAM[property_window])."
+    "Property($PARAM[property_prefix].viewslot)"
+)
 
 
 def _slot_info(slot: str, field: str) -> str:
-    return f"Window(Home).Property(htpc.seek.{slot}.{field})"
+    return (
+        "Window($PARAM[property_window]).Property("
+        f"$PARAM[property_prefix].{slot}.{field})"
+    )
 
 
 def _description(control: ET.Element) -> str:
@@ -203,6 +212,18 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             parameters["chapter_available"],
             "!String.IsEmpty(Window(Home).Property(htpc.chapter.available))",
         )
+        self.assertEqual(
+            parameters["view_inactive_condition"],
+            "String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))",
+        )
+        self.assertEqual(
+            parameters["presentation_ready"],
+            "!String.IsEmpty(Window(Home).Property(htpc.service.ready))",
+        )
+        self.assertEqual(parameters["property_window"], "Home")
+        self.assertEqual(parameters["property_prefix"], "htpc.seek")
+        self.assertEqual(parameters["production_actions"], "true")
+        self.assertEqual(parameters["inert_actions"], "false")
 
     def test_private_interactive_ids_are_unique_and_exclude_legacy_proxies(self):
         controls = [
@@ -369,6 +390,18 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 )
         self.assertEqual(passed_parameters["target_fill_color"], "80ffffff")
         self.assertEqual(passed_parameters["stable_preview_card"], "true")
+        self.assertEqual(
+            passed_parameters["ready_condition"],
+            "$PARAM[presentation_ready]",
+        )
+        self.assertEqual(
+            passed_parameters["property_window"],
+            "$PARAM[property_window]",
+        )
+        self.assertEqual(
+            passed_parameters["property_prefix"],
+            "$PARAM[property_prefix]",
+        )
 
         for description in (
             TARGET_FILL_DESCRIPTION,
@@ -410,6 +443,58 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertNotIn("stop_fo.png", serialized)
         self.assertNotIn("dvd_fo.png", serialized)
 
+    def test_review_mode_can_disable_every_playback_side_effect(self):
+        side_effects = (
+            "ActivateWindow(",
+            "NotifyAll(",
+            "PlayerControl(",
+            "SetFocus(",
+            "StepBack",
+            "StepForward",
+        )
+        ungated = []
+        for control in self.surface.iter("control"):
+            for action_name in (
+                "onclick",
+                "onfocus",
+                "onunfocus",
+                "onleft",
+                "onright",
+                "onup",
+                "ondown",
+            ):
+                for action in control.findall(action_name):
+                    value = (action.text or "").strip()
+                    if not value.startswith(side_effects):
+                        continue
+                    if "$PARAM[production_actions]" not in action.get(
+                        "condition",
+                        "",
+                    ):
+                        ungated.append(
+                            (control.get("id"), action_name, value)
+                        )
+        self.assertEqual(ungated, [])
+
+        for control_id in (
+            "9101",
+            "9102",
+            "9103",
+            "9104",
+            "9105",
+            "9201",
+            "9300",
+        ):
+            with self.subTest(control_id=control_id):
+                control = self._control(control_id)
+                inert_actions = [
+                    (node.text or "").strip()
+                    for node in control.findall("onclick")
+                    if "$PARAM[inert_actions]"
+                    in node.get("condition", "")
+                ]
+                self.assertEqual(inert_actions, ["noop"])
+
     def test_seek_preview_does_not_compete_with_metadata(self):
         for description in (
             "HTPC video OSD title",
@@ -417,9 +502,9 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         ):
             controls = _controls_by_description(self.surface, description)
             self.assertEqual(len(controls), 1)
-            self.assertIn(
-                "String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))",
+            self.assertEqual(
                 _visible_text(controls[0]),
+                "$PARAM[view_inactive_condition]",
             )
         parameters = {
             node.get("name"): node.get("default")
@@ -515,6 +600,12 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(layout_defaults["stable_preview_card"], "false")
         self.assertEqual(layout_defaults["preview_top"], "650")
+        self.assertEqual(
+            layout_defaults["ready_condition"],
+            "!String.IsEmpty(Window(Home).Property(htpc.service.ready))",
+        )
+        self.assertEqual(layout_defaults["property_window"], "Home")
+        self.assertEqual(layout_defaults["property_prefix"], "htpc.seek")
         consumers = [
             node
             for node in self.osd_root.iter("include")
@@ -539,17 +630,36 @@ class PlaybackXmlContractTest(unittest.TestCase):
         for slot in anchors.SLOTS:
             with self.subTest(slot=slot):
                 visible = _visible_text(self._slot_group(slot))
+                self.assertIn(LAYOUT_READY, visible)
                 self.assertIn(
-                    f"!String.IsEmpty({SERVICE_READY})", visible
+                    f"!String.IsEmpty({LAYOUT_VIEW_ACTIVE})",
+                    visible,
                 )
-                self.assertIn(f"!String.IsEmpty({VIEW_ACTIVE})", visible)
                 self.assertIn(
-                    f"String.IsEqual({VIEW_SLOT},{slot})", visible
+                    f"String.IsEqual({LAYOUT_VIEW_SLOT},{slot})",
+                    visible,
                 )
                 other = "b" if slot == "a" else "a"
                 self.assertNotIn(
-                    f"String.IsEqual({VIEW_SLOT},{other})", visible
+                    f"String.IsEqual({LAYOUT_VIEW_SLOT},{other})",
+                    visible,
                 )
+
+    def test_layout_has_no_literal_binding_to_the_production_seek_namespace(self):
+        layout = next(
+            node
+            for node in self.playback_root.findall("include")
+            if node.get("name") == "HTPCPlaybackPresentationLayout"
+        )
+        definition = layout.find("definition")
+        self.assertIsNotNone(definition)
+        serialized = ET.tostring(definition, encoding="unicode")
+        self.assertNotIn(
+            "Window(Home).Property(htpc.seek.",
+            serialized,
+        )
+        self.assertIn("$PARAM[property_window]", serialized)
+        self.assertIn("$PARAM[property_prefix]", serialized)
 
     def test_target_fill_and_marker_are_ranges_controls(self):
         contracts = {

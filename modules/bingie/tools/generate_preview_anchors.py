@@ -32,7 +32,10 @@ _SLIDE_END = re.compile(r"^([0-9]+),0$")
 def anchor_property(slot: str) -> str:
     if slot not in SLOTS:
         raise ValueError(f"slot must be one of {SLOTS!r}")
-    return f"Window(Home).Property(htpc.seek.{slot}.previewanchor)"
+    return (
+        "Window($PARAM[property_window]).Property("
+        f"$PARAM[property_prefix].{slot}.previewanchor)"
+    )
 
 
 def _anchor_condition(slot: str) -> re.Pattern[str]:

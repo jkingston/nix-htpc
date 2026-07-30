@@ -43,8 +43,8 @@ class PreviewAnchorGeneratorTest(unittest.TestCase):
 
     def test_generation_is_byte_deterministic(self):
         expected_hashes = {
-            "a": "e2723bd4a2d2098e842ecb0ae411017fd1a55029f6f8eaabbb6aba9d1042cecb",
-            "b": "428f19741a0802d73f72c3b151ae2f9f1d6cd8e1ea7d85a14f73a8f739436c42",
+            "a": "8a1fe6b56ebf8569e5c73a3720bb459beba76bfdde11f70b68bf03f785bd3729",
+            "b": "f0dc6b020e9fa0871dafd55b8d9f2e3c9dc7348b43feb339b7480ec34f3c7726",
         }
         for slot in anchors.SLOTS:
             with self.subTest(slot=slot):

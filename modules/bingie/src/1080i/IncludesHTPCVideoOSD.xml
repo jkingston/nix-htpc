@@ -60,6 +60,12 @@
 		<param name="actual_progress" default="Player.Progress" />
 		<param name="paused_condition" default="Player.Paused | Player.Forwarding | Player.Rewinding" />
 		<param name="chapter_available" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
+		<param name="view_inactive_condition" default="String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))" />
+		<param name="presentation_ready" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
+		<param name="property_window" default="Home" />
+		<param name="property_prefix" default="htpc.seek" />
+		<param name="production_actions" default="true" />
+		<param name="inert_actions" default="false" />
 		<definition>
 			<control type="group">
 				<description>HTPC fork-owned video OSD</description>
@@ -112,7 +118,8 @@
 						<font />
 						<texturefocus>osd/bingie/subtitles_fo.png</texturefocus>
 						<texturenofocus colordiffuse="ccffffff">osd/bingie/subtitles.png</texturenofocus>
-						<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
+						<onclick condition="$PARAM[production_actions]">ActivateWindow(osdsubtitlesettings)</onclick>
+						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
 					<control type="button" id="9103">
 						<description>HTPC audio settings</description>
@@ -122,7 +129,8 @@
 						<font />
 						<texturefocus>osd/bingie/audio_fo.png</texturefocus>
 						<texturenofocus colordiffuse="ccffffff">osd/bingie/audio.png</texturenofocus>
-						<onclick>ActivateWindow(osdaudiosettings)</onclick>
+						<onclick condition="$PARAM[production_actions]">ActivateWindow(osdaudiosettings)</onclick>
+						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
 					<control type="button" id="9104">
 						<description>HTPC video settings</description>
@@ -132,7 +140,8 @@
 						<font />
 						<texturefocus>osd/bingie/video_fo.png</texturefocus>
 						<texturenofocus colordiffuse="ccffffff">osd/bingie/video.png</texturenofocus>
-						<onclick>ActivateWindow(osdvideosettings)</onclick>
+						<onclick condition="$PARAM[production_actions]">ActivateWindow(osdvideosettings)</onclick>
+						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
 					<control type="button" id="9105">
 						<description>HTPC disc menu</description>
@@ -142,7 +151,8 @@
 						<font />
 						<texturefocus colordiffuse="ffffffff">osd/bingie/dvd.png</texturefocus>
 						<texturenofocus colordiffuse="ccffffff">osd/bingie/dvd.png</texturenofocus>
-						<onclick>PlayerControl(ShowVideoMenu)</onclick>
+						<onclick condition="$PARAM[production_actions]">PlayerControl(ShowVideoMenu)</onclick>
+						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 						<visible>VideoPlayer.HasMenu</visible>
 					</control>
 					<control type="button" id="9101">
@@ -153,7 +163,8 @@
 						<font />
 						<texturefocus colordiffuse="ffffffff">osd/bingie/stop.png</texturefocus>
 						<texturenofocus colordiffuse="ccffffff">osd/bingie/stop.png</texturenofocus>
-						<onclick>PlayerControl(Stop)</onclick>
+						<onclick condition="$PARAM[production_actions]">PlayerControl(Stop)</onclick>
+						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
 				</control>
 				<control type="label">
@@ -177,7 +188,7 @@
 					<font>Bold30</font>
 					<textcolor>ffffffff</textcolor>
 					<label>$PARAM[title]</label>
-					<visible>String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+					<visible>$PARAM[view_inactive_condition]</visible>
 				</control>
 				<control type="label">
 					<description>HTPC video OSD subtitle</description>
@@ -188,7 +199,7 @@
 					<font>Reg24</font>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[subtitle]</label>
-					<visible>String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+					<visible>$PARAM[view_inactive_condition]</visible>
 				</control>
 
 				<!-- Transport is a real visible control, not a blank focus proxy. -->
@@ -205,7 +216,8 @@
 					<usealttexture>$PARAM[paused_condition]</usealttexture>
 					<alttexturefocus>osd/bingie/play_fo.png</alttexturefocus>
 					<alttexturenofocus colordiffuse="ccffffff">osd/bingie/play.png</alttexturenofocus>
-					<onclick>PlayerControl(Play)</onclick>
+					<onclick condition="$PARAM[production_actions]">PlayerControl(Play)</onclick>
+					<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					<onleft>noop</onleft>
 					<onright>9300</onright>
 					<onup>9102</onup>
@@ -226,19 +238,24 @@
 					<font />
 					<texturefocus>colors/color_transparent.png</texturefocus>
 					<texturenofocus>colors/color_transparent.png</texturenofocus>
-					<onfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
-					<onunfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
-					<onleft condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
-					<onleft condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepBack</onleft>
-					<onright condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-right)</onright>
-					<onright condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepForward</onright>
-					<onup condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</onup>
-					<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
-					<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9102</onup>
-					<ondown condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
-					<ondown condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal))">9201</ondown>
-					<onclick condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
-					<onclick condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">SetFocus(9201)</onclick>
+					<onfocus condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
+					<onunfocus condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
+					<onleft condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
+					<onleft condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepBack</onleft>
+					<onleft condition="$PARAM[inert_actions]">noop</onleft>
+					<onright condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-right)</onright>
+					<onright condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepForward</onright>
+					<onright condition="$PARAM[inert_actions]">noop</onright>
+					<onup condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</onup>
+					<onup condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
+					<onup condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9102</onup>
+					<onup condition="$PARAM[inert_actions]">9102</onup>
+					<ondown condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
+					<ondown condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal))">9201</ondown>
+					<ondown condition="$PARAM[inert_actions]">9201</ondown>
+					<onclick condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
+					<onclick condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">SetFocus(9201)</onclick>
+					<onclick condition="$PARAM[inert_actions]">noop</onclick>
 				</control>
 
 				<control type="image">
@@ -292,6 +309,9 @@
 					<param name="preview_height" value="$PARAM[preview_height]" />
 					<param name="target_fill_color" value="80ffffff" />
 					<param name="stable_preview_card" value="true" />
+					<param name="ready_condition" value="$PARAM[presentation_ready]" />
+					<param name="property_window" value="$PARAM[property_window]" />
+					<param name="property_prefix" value="$PARAM[property_prefix]" />
 				</include>
 
 				<control type="label">
@@ -326,7 +346,7 @@
 					<align>center</align>
 					<textcolor>ccffffff</textcolor>
 					<label>↑  $LOCALIZE[21396]</label>
-					<visible>Control.HasFocus(9300) + $PARAM[chapter_available] + String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+					<visible>Control.HasFocus(9300) + $PARAM[chapter_available] + $PARAM[view_inactive_condition]</visible>
 				</control>
 			</control>
 		</definition>
