@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import json
 import sys
+import threading
 import types
 import unittest
 from unittest import mock
@@ -1615,6 +1616,231 @@ class ServiceMonitorTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0][1], "timeline-left")
         self.assertEqual(events[0][2], {"source": "skin"})
+        self.assertEqual(events[0][4], 0)
+
+    def test_boundary_purges_old_physical_and_chapter_inputs_only(self):
+        monitor = ServiceMonitor()
+        monitor.post_input("right", {"source": "physical"})
+        monitor.post_input("chapter-focus", {"source": "chapter"})
+        monitor.post_player("paused", {"operation": "pause-one"})
+        monitor.post_player("started", {"identity": "new-media"})
+        monitor.post_input("left", {"source": "current"})
+
+        events = monitor.drain()
+
+        self.assertEqual(
+            [
+                (event_type, name, generation)
+                for event_type, name, _payload, _timestamp, generation in events
+            ],
+            [
+                ("player", "paused", 0),
+                ("player", "started", 1),
+                ("input", "left", 1),
+            ],
+        )
+
+    def test_non_boundary_player_event_does_not_advance_or_purge(self):
+        monitor = ServiceMonitor()
+        monitor.post_input("right")
+        monitor.post_player("paused")
+
+        events = monitor.drain()
+
+        self.assertEqual(
+            [(event[0], event[1], event[4]) for event in events],
+            [("input", "right", 0), ("player", "paused", 0)],
+        )
+        self.assertEqual(monitor.current_input_generation(), 0)
+
+    def test_repeated_boundaries_advance_monotonically_without_reordering(self):
+        monitor = ServiceMonitor()
+        for name in ("started", "stopped", "ended"):
+            monitor.post_player(name)
+
+        events = monitor.drain()
+
+        self.assertEqual(
+            [(event[1], event[4]) for event in events],
+            [("started", 1), ("stopped", 2), ("ended", 3)],
+        )
+        self.assertEqual(monitor.current_input_generation(), 3)
+
+
+class SeekServiceGenerationFenceTest(unittest.TestCase):
+    def setUp(self):
+        self.monitor = ServiceMonitor()
+        self.service = SeekService.__new__(SeekService)
+        self.service.monitor = self.monitor
+        self.service.router = mock.Mock()
+
+    def test_boundary_after_drain_drops_old_input_before_routing(self):
+        self.monitor.post_input("right", {"source": "physical"})
+        old_input = self.monitor.drain()[0]
+        self.monitor.post_player("ended")
+
+        self.assertFalse(self.service._dispatch_event(old_input))
+        self.service.router.handle.assert_not_called()
+
+    def test_current_physical_and_chapter_inputs_are_delivered(self):
+        self.monitor.post_player("started")
+        self.monitor.drain()
+        self.monitor.post_input("left", {"source": "physical"})
+        self.monitor.post_input(
+            "chapter-focus",
+            {"source": "chapter", "index": 2},
+        )
+        events = self.monitor.drain()
+
+        for event in events:
+            self.assertTrue(self.service._dispatch_event(event))
+
+        self.assertEqual(
+            self.service.router.handle.call_args_list,
+            [
+                mock.call("left", events[0][3], {"source": "physical"}),
+                mock.call(
+                    "chapter-focus",
+                    events[1][3],
+                    {"source": "chapter", "index": 2},
+                ),
+            ],
+        )
+
+    def test_boundary_lock_winner_rejects_waiting_old_input(self):
+        self.monitor.post_input("right")
+        old_input = self.monitor.drain()[0]
+        boundary_has_lock = threading.Event()
+        post_boundary = threading.Event()
+        dispatch_results = []
+        errors = []
+
+        def boundary_worker():
+            try:
+                with self.monitor.dispatch_lock:
+                    boundary_has_lock.set()
+                    if not post_boundary.wait(1.0):
+                        raise RuntimeError("boundary release timed out")
+                    self.monitor.post_player("ended")
+            except Exception as error:
+                errors.append(error)
+
+        def input_worker():
+            try:
+                dispatch_results.append(
+                    self.service._dispatch_event(old_input)
+                )
+            except Exception as error:
+                errors.append(error)
+
+        boundary_thread = threading.Thread(target=boundary_worker)
+        boundary_thread.start()
+        self.assertTrue(boundary_has_lock.wait(1.0))
+        input_thread = threading.Thread(target=input_worker)
+        input_thread.start()
+        post_boundary.set()
+        boundary_thread.join(1.0)
+        input_thread.join(1.0)
+
+        self.assertFalse(boundary_thread.is_alive())
+        self.assertFalse(input_thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(dispatch_results, [False])
+        self.service.router.handle.assert_not_called()
+
+    def test_input_lock_winner_completes_before_boundary_posts(self):
+        self.monitor.post_input("right")
+        current_input = self.monitor.drain()[0]
+        route_started = threading.Event()
+        finish_route = threading.Event()
+        boundary_posted = threading.Event()
+        dispatch_results = []
+        trace = []
+        errors = []
+
+        def route(*_args):
+            trace.append("route-start")
+            route_started.set()
+            if not finish_route.wait(1.0):
+                raise RuntimeError("route release timed out")
+            trace.append("route-end")
+
+        self.service.router.handle.side_effect = route
+
+        def input_worker():
+            try:
+                dispatch_results.append(
+                    self.service._dispatch_event(current_input)
+                )
+            except Exception as error:
+                errors.append(error)
+
+        def boundary_worker():
+            try:
+                self.monitor.post_player("ended")
+                trace.append("boundary-posted")
+                boundary_posted.set()
+            except Exception as error:
+                errors.append(error)
+
+        input_thread = threading.Thread(target=input_worker)
+        input_thread.start()
+        self.assertTrue(route_started.wait(1.0))
+        boundary_thread = threading.Thread(target=boundary_worker)
+        boundary_thread.start()
+        self.assertFalse(boundary_posted.is_set())
+        finish_route.set()
+        input_thread.join(1.0)
+        boundary_thread.join(1.0)
+
+        self.assertFalse(input_thread.is_alive())
+        self.assertFalse(boundary_thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(dispatch_results, [True])
+        self.assertEqual(
+            trace,
+            ["route-start", "route-end", "boundary-posted"],
+        )
+        self.assertEqual(self.monitor.current_input_generation(), 1)
+
+    def test_same_thread_boundary_callback_is_reentrant(self):
+        self.monitor.post_input("right")
+        current_input = self.monitor.drain()[0]
+        dispatch_results = []
+        errors = []
+
+        def route(*_args):
+            self.monitor.post_player("ended", {"source": "router-callback"})
+
+        self.service.router.handle.side_effect = route
+
+        def input_worker():
+            try:
+                dispatch_results.append(
+                    self.service._dispatch_event(current_input)
+                )
+            except Exception as error:
+                errors.append(error)
+
+        input_thread = threading.Thread(target=input_worker)
+        input_thread.start()
+        input_thread.join(1.0)
+
+        self.assertFalse(input_thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(dispatch_results, [True])
+        events = self.monitor.drain()
+        self.assertEqual(
+            [(event[0], event[1], event[2], event[4]) for event in events],
+            [
+                (
+                    "player",
+                    "ended",
+                    {"source": "router-callback"},
+                    1,
+                )
+            ],
+        )
 
 
 class SeekServiceCleanupTest(unittest.TestCase):

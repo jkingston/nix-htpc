@@ -29,6 +29,7 @@ CORE_RETRY_INITIAL = 1.0
 CORE_RETRY_MAX = 30.0
 SCREENSHOT_RETRY_INITIAL = 1.0
 SCREENSHOT_RETRY_MAX = 30.0
+PLAYER_BOUNDARY_EVENTS = frozenset(("started", "stopped", "ended"))
 
 
 def log(message, level=xbmc.LOGINFO):
@@ -262,16 +263,64 @@ class ServiceMonitor(xbmc.Monitor):
         super(ServiceMonitor, self).__init__()
         self.events = deque()
         self.event_lock = threading.Lock()
-
-    def _append(self, event):
-        with self.event_lock:
-            self.events.append(event)
+        self.dispatch_lock = threading.RLock()
+        self.input_generation = 0
 
     def post_input(self, action, payload=None):
-        self._append(("input", action, payload or {}, time.monotonic()))
+        with self.event_lock:
+            self.events.append(
+                (
+                    "input",
+                    action,
+                    payload or {},
+                    time.monotonic(),
+                    self.input_generation,
+                )
+            )
 
     def post_player(self, kind, payload=None):
-        self._append(("player", kind, payload or {}, time.monotonic()))
+        if kind not in PLAYER_BOUNDARY_EVENTS:
+            with self.event_lock:
+                self._append_player_locked(kind, payload)
+            return
+
+        with self.dispatch_lock:
+            with self.event_lock:
+                self.input_generation += 1
+                current_generation = self.input_generation
+                self.events = deque(
+                    event
+                    for event in self.events
+                    if (
+                        event[0] != "input"
+                        or event[4] >= current_generation
+                    )
+                )
+                self._append_player_locked(kind, payload)
+
+    def _append_player_locked(self, kind, payload):
+        self.events.append(
+            (
+                "player",
+                kind,
+                payload or {},
+                time.monotonic(),
+                self.input_generation,
+            )
+        )
+
+    def dispatch_input_if_current(self, generation, route):
+        """Linearize generation validation and one input routing call."""
+        with self.dispatch_lock:
+            with self.event_lock:
+                if generation != self.input_generation:
+                    return False
+            route()
+            return True
+
+    def current_input_generation(self):
+        with self.event_lock:
+            return self.input_generation
 
     def onNotification(self, sender, method, data):
         if sender not in ("htpc.seek", "htpc.chapter"):
@@ -323,12 +372,10 @@ class SeekService(object):
         log("input router ready; managed settings scheduled")
         while not self.monitor.waitForAbort(0.05):
             self.lease.refresh()
-            for event_type, name, payload, timestamp in self.monitor.drain():
+            for event in self.monitor.drain():
+                event_type, name, payload, timestamp, _generation = event
                 try:
-                    if event_type == "player":
-                        self._handle_player_event(name, payload, timestamp)
-                    else:
-                        self.router.handle(name, timestamp, payload)
+                    self._dispatch_event(event)
                 except Exception as error:
                     self._recover(
                         "%s event %s failed: %s"
@@ -359,8 +406,18 @@ class SeekService(object):
             except Exception as error:
                 log("managed settings retry failed: %s" % error, xbmc.LOGERROR)
 
+    def _dispatch_event(self, event):
+        event_type, name, payload, timestamp, generation = event
+        if event_type == "player":
+            self._handle_player_event(name, payload, timestamp)
+            return True
+        return self.monitor.dispatch_input_if_current(
+            generation,
+            lambda: self.router.handle(name, timestamp, payload),
+        )
+
     def _handle_player_event(self, name, payload, timestamp):
-        if name not in ("started", "stopped", "ended"):
+        if name not in PLAYER_BOUNDARY_EVENTS:
             # Register the controller's current operation watermark before its
             # callback can reset/advance the transaction.
             self.view.update(
