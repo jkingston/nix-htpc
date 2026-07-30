@@ -25,12 +25,18 @@ PLAYBACK_MODES = [
 ]
 SCREENSHOT_PATH = "@HTPC_SCREENSHOT_PATH@"
 SCREENSHOT_SETTING = "debug.screenshotpath"
+CORE_RETRY_INITIAL = 1.0
+CORE_RETRY_MAX = 30.0
 SCREENSHOT_RETRY_INITIAL = 1.0
 SCREENSHOT_RETRY_MAX = 30.0
 
 
 def log(message, level=xbmc.LOGINFO):
     xbmc.log("HTPC settings: %s" % message, level)
+
+
+def next_retry(now, delay, maximum):
+    return now + delay, min(delay * 2.0, maximum)
 
 
 def json_rpc_response(method, params, request_id):
@@ -111,6 +117,9 @@ class ManagedSettings(object):
     def __init__(self, clock=None, screenshot_path=None):
         self.clock = time.monotonic if clock is None else clock
         self.core_applied = False
+        self.next_core_check = 0.0
+        self.core_retry_delay = CORE_RETRY_INITIAL
+        self.core_warning_shown = False
         self.skin_applied = False
         self.next_skin_check = 0.0
         self.screenshot_path = (
@@ -122,12 +131,29 @@ class ManagedSettings(object):
         self.screenshot_warnings = set()
 
     def tick(self):
-        if not self.core_applied:
-            self.core_applied = self._apply_core()
-
         now = self.clock()
+        self._tick_core(now)
         self._tick_screenshot(now)
         self._tick_skin(now)
+
+    def _tick_core(self, now):
+        if self.core_applied or now < self.next_core_check:
+            return
+        if self._apply_core():
+            self.core_applied = True
+            log("managed core settings ready")
+            return
+        if not self.core_warning_shown:
+            self.core_warning_shown = True
+            log(
+                "managed core settings incomplete; retrying",
+                xbmc.LOGWARNING,
+            )
+        self.next_core_check, self.core_retry_delay = next_retry(
+            now,
+            self.core_retry_delay,
+            CORE_RETRY_MAX,
+        )
 
     def _tick_screenshot(self, now):
         if self.screenshot_ready or now < self.next_screenshot_check:
@@ -173,9 +199,12 @@ class ManagedSettings(object):
         log(message, xbmc.LOGWARNING)
 
     def _schedule_screenshot_retry(self, now):
-        self.next_screenshot_check = now + self.screenshot_retry_delay
-        self.screenshot_retry_delay = min(
-            self.screenshot_retry_delay * 2.0,
+        (
+            self.next_screenshot_check,
+            self.screenshot_retry_delay,
+        ) = next_retry(
+            now,
+            self.screenshot_retry_delay,
             SCREENSHOT_RETRY_MAX,
         )
 

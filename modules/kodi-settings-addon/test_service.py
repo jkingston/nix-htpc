@@ -365,22 +365,95 @@ class ManagedCoreSettingsTest(unittest.TestCase):
             mock.call("debug.showloginfo", False),
         )
 
-    def test_tick_retries_until_full_success_then_stops(self):
-        settings = ManagedSettings(clock=lambda: 0.0)
+    def test_retry_deadlines_and_backoff_cap(self):
+        now = [0.0]
+        settings = ManagedSettings(clock=lambda: now[0])
+        settings.skin_applied = True
+        settings.screenshot_ready = True
+        with mock.patch.object(
+            ManagedSettings,
+            "_apply_core",
+            return_value=False,
+        ) as apply_core, mock.patch("service.log") as log:
+            for attempt, delay in enumerate(
+                [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0],
+                1,
+            ):
+                settings.tick()
+                self.assertEqual(apply_core.call_count, attempt)
+
+                deadline = now[0] + delay
+                self.assertEqual(settings.next_core_check, deadline)
+
+                now[0] = deadline - 0.001
+                settings.tick()
+                self.assertEqual(apply_core.call_count, attempt)
+                now[0] = deadline
+
+        self.assertFalse(settings.core_applied)
+        self.assertEqual(settings.core_retry_delay, 30.0)
+        log.assert_called_once_with(
+            "managed core settings incomplete; retrying",
+            fake_xbmc.LOGWARNING,
+        )
+
+    def test_eventual_success_stops_attempts(self):
+        now = [0.0]
+        settings = ManagedSettings(clock=lambda: now[0])
         settings.skin_applied = True
         settings.screenshot_ready = True
         with mock.patch.object(
             ManagedSettings,
             "_apply_core",
             side_effect=[False, True],
-        ) as apply_core:
+        ) as apply_core, mock.patch("service.log") as log:
             settings.tick()
-            self.assertFalse(settings.core_applied)
+            now[0] = settings.next_core_check - 0.001
+            settings.tick()
+            now[0] = settings.next_core_check
             settings.tick()
             self.assertTrue(settings.core_applied)
+            now[0] += 100.0
             settings.tick()
 
         self.assertEqual(apply_core.call_count, 2)
+        self.assertEqual(
+            log.call_args_list,
+            [
+                mock.call(
+                    "managed core settings incomplete; retrying",
+                    fake_xbmc.LOGWARNING,
+                ),
+                mock.call("managed core settings ready"),
+            ],
+        )
+
+    def test_core_failure_does_not_suppress_screenshot_or_skin(self):
+        screenshot_path = "/fixture/core-independent"
+        settings = ManagedSettings(
+            clock=lambda: 0.0,
+            screenshot_path=screenshot_path,
+        )
+        with mock.patch.object(
+            ManagedSettings,
+            "_apply_core",
+            return_value=False,
+        ) as apply_core, mock.patch.object(
+            ManagedSettings,
+            "_apply_bingie",
+        ) as apply_skin, mock.patch(
+            "service.get_setting",
+            return_value=(True, screenshot_path),
+        ) as get_screenshot:
+            settings.tick()
+            settings.tick()
+
+        self.assertFalse(settings.core_applied)
+        self.assertTrue(settings.screenshot_ready)
+        self.assertTrue(settings.skin_applied)
+        apply_core.assert_called_once_with()
+        get_screenshot.assert_called_once_with("debug.screenshotpath")
+        apply_skin.assert_called_once_with()
 
 
 class ManagedScreenshotSettingsTest(unittest.TestCase):
@@ -612,7 +685,8 @@ class ManagedScreenshotSettingsTest(unittest.TestCase):
         self.assertEqual(rpc.call_count, 2)
         self.assertFalse(
             any(
-                call.args[1] == fake_xbmc.LOGWARNING
+                len(call.args) > 1
+                and call.args[1] == fake_xbmc.LOGWARNING
                 for call in log.call_args_list
             )
         )

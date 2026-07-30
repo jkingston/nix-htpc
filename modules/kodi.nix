@@ -1,7 +1,7 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
-  kodiSettingsAddonVersion = "2.1.5";
+  kodiSettingsAddonVersion = "2.1.6";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   bingieMod = import ./bingie {
     inherit pkgs;
