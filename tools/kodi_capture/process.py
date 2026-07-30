@@ -98,14 +98,18 @@ class BoundedProcess:
             os.set_blocking(self._stdin.fileno(), False)
             os.set_blocking(self._stdout.fileno(), False)
             os.set_blocking(self._stderr.fileno(), False)
-        except Exception as error:
+        except BaseException as error:
             try:
                 self.close()
             except ProcessCleanupError as cleanup_error:
+                if not isinstance(error, Exception):
+                    raise error from cleanup_error
                 raise ProcessTransportError(
                     "%s setup failed: %s; cleanup failed: %s"
                     % (self.description, error, cleanup_error)
                 ) from error
+            if not isinstance(error, Exception):
+                raise
             if isinstance(error, ProcessTransportError):
                 raise
             raise ProcessTransportError(
@@ -203,6 +207,37 @@ class BoundedProcess:
                     "%s closed its output" % self.description
                 )
 
+    def read_all(self, max_bytes: int, deadline: float) -> bytes:
+        """Read bounded output through a clean status-zero process exit."""
+
+        if self._closed:
+            raise ProcessTransportError(
+                "%s stream is closed" % self.description
+            )
+        if (
+            isinstance(max_bytes, bool)
+            or not isinstance(max_bytes, int)
+            or max_bytes <= 0
+        ):
+            raise ValueError("max_bytes must be a positive integer")
+
+        output = bytearray()
+        while True:
+            remaining_capacity = (max_bytes + 1) - len(output)
+            chunk = self._read_for_completion(
+                remaining_capacity,
+                deadline,
+            )
+            if not chunk:
+                self._remaining(deadline)
+                return bytes(output)
+            output.extend(chunk)
+            if len(output) > max_bytes:
+                raise ProcessTransportError(
+                    "%s output exceeded %d bytes"
+                    % (self.description, max_bytes)
+                )
+
     def close(self) -> None:
         if self._closed:
             if self._cleanup_error is not None:
@@ -283,6 +318,72 @@ class BoundedProcess:
             self._stderr_eof = True
             return
         self._append_stderr(chunk)
+
+    def _read_for_completion(
+        self,
+        max_bytes: int,
+        deadline: float,
+    ) -> bytes:
+        while True:
+            with selectors.DefaultSelector() as selector:
+                selector.register(self._stdout, selectors.EVENT_READ, "stdout")
+                if not self._stderr_eof:
+                    selector.register(
+                        self._stderr,
+                        selectors.EVENT_READ,
+                        "stderr",
+                    )
+                events = selector.select(self._remaining(deadline))
+            if not events:
+                raise ProcessTimeout(
+                    "%s read deadline expired" % self.description
+                )
+            for key, _ in events:
+                if key.data == "stderr":
+                    self._read_stderr()
+                    continue
+                try:
+                    chunk = os.read(self._stdout.fileno(), max_bytes)
+                except OSError as error:
+                    self._raise_transport(
+                        "%s read failed" % self.description,
+                        error,
+                    )
+                if chunk:
+                    return chunk
+                self._require_clean_exit(deadline)
+                return b""
+
+    def _require_clean_exit(self, deadline: float) -> None:
+        while self.process.poll() is None:
+            if self._stderr_eof:
+                try:
+                    self.process.wait(timeout=self._remaining(deadline))
+                except subprocess.TimeoutExpired as error:
+                    raise ProcessTimeout(
+                        "%s read deadline expired" % self.description
+                    ) from error
+                break
+            with selectors.DefaultSelector() as selector:
+                selector.register(
+                    self._stderr,
+                    selectors.EVENT_READ,
+                    "stderr",
+                )
+                events = selector.select(self._remaining(deadline))
+            if not events:
+                raise ProcessTimeout(
+                    "%s read deadline expired" % self.description
+                )
+            self._read_stderr()
+
+        self._drain_stderr()
+        returncode = self.process.poll()
+        if returncode != 0:
+            self._raise_transport(
+                "%s exited without a clean status-zero EOF"
+                % self.description
+            )
 
     def _raise_if_exited(self) -> None:
         returncode = self.process.poll()

@@ -93,6 +93,22 @@ class BoundedProcessTest(unittest.TestCase):
         self.assertIn("cannot configure pipe", str(raised.exception))
         self.assertIsNotNone(factory.processes[0].poll())
 
+    def test_base_exception_during_setup_is_primary_and_reaps_child(self):
+        factory = RecordingPopenFactory("import time; time.sleep(60)")
+        interrupt = KeyboardInterrupt("stop setup")
+        with mock.patch(
+            "tools.kodi_capture.process.os.set_blocking",
+            side_effect=interrupt,
+        ):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                BoundedProcess(
+                    ["program"],
+                    popen_factory=factory,
+                    terminate_timeout=0.1,
+                )
+        self.assertIs(raised.exception, interrupt)
+        self.assertIsNotNone(factory.processes[0].poll())
+
     def test_missing_pipe_closes_and_reaps_started_process(self):
         factory = RecordingPopenFactory("import time; time.sleep(60)")
 
@@ -130,6 +146,134 @@ class BoundedProcessTest(unittest.TestCase):
                 process.read(4, time.monotonic() + 2.0),
                 b"gnip",
             )
+        finally:
+            process.close()
+
+    def test_read_all_accepts_only_clean_status_zero_eof(self):
+        factory = RecordingPopenFactory(
+            "import sys; "
+            "sys.stdout.buffer.write(b'complete-output'); "
+            "sys.stdout.buffer.flush()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            self.assertEqual(
+                process.read_all(15, time.monotonic() + 2.0),
+                b"complete-output",
+            )
+            self.assertEqual(process.returncode, 0)
+        finally:
+            process.close()
+
+        empty_factory = RecordingPopenFactory("")
+        empty_process = BoundedProcess(
+            ["program"],
+            popen_factory=empty_factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            self.assertEqual(
+                empty_process.read_all(1, time.monotonic() + 2.0),
+                b"",
+            )
+            self.assertEqual(empty_process.returncode, 0)
+        finally:
+            empty_process.close()
+
+    def test_read_all_rejects_nonzero_exit_and_retains_stderr(self):
+        factory = RecordingPopenFactory(
+            "import sys; "
+            "sys.stdout.buffer.write(b'partial'); "
+            "sys.stdout.buffer.flush(); "
+            "sys.stderr.write('probe failed\\n'); "
+            "sys.stderr.flush(); "
+            "raise SystemExit(19)"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with self.assertRaises(ProcessTransportError) as raised:
+                process.read_all(1024, time.monotonic() + 2.0)
+            self.assertIn("19", str(raised.exception))
+            self.assertIn("probe failed", str(raised.exception))
+        finally:
+            process.close()
+
+    def test_read_all_rejects_timeout_and_output_overflow(self):
+        timeout_factory = RecordingPopenFactory(
+            "import time; time.sleep(60)"
+        )
+        timeout_process = BoundedProcess(
+            ["program"],
+            clock=lambda: 2.0,
+            popen_factory=timeout_factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with self.assertRaises(ProcessTimeout):
+                timeout_process.read_all(deadline=1.0, max_bytes=10)
+        finally:
+            timeout_process.close()
+
+        overflow_factory = RecordingPopenFactory(
+            "import sys; "
+            "sys.stdout.buffer.write(b'12345'); "
+            "sys.stdout.buffer.flush()"
+        )
+        overflow_process = BoundedProcess(
+            ["program"],
+            popen_factory=overflow_factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with self.assertRaises(ProcessTransportError) as raised:
+                overflow_process.read_all(
+                    max_bytes=4,
+                    deadline=time.monotonic() + 2.0,
+                )
+            self.assertIn("exceeded 4 bytes", str(raised.exception))
+        finally:
+            overflow_process.close()
+
+    def test_read_all_validates_bound_and_read_stays_strict_at_clean_eof(self):
+        factory = RecordingPopenFactory("")
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            for invalid in (True, 0, -1, 1.5):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaises(ValueError):
+                        process.read_all(
+                            max_bytes=invalid,
+                            deadline=time.monotonic() + 2.0,
+                        )
+            with self.assertRaises(ProcessTransportError):
+                process.read(1, time.monotonic() + 2.0)
+        finally:
+            process.close()
+
+    def test_read_all_rechecks_deadline_after_clean_eof(self):
+        factory = RecordingPopenFactory("")
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            process._read_for_completion = mock.Mock(return_value=b"")
+            process.clock = lambda: 10.0
+            with self.assertRaises(ProcessTimeout):
+                process.read_all(deadline=10.0, max_bytes=1)
         finally:
             process.close()
 
