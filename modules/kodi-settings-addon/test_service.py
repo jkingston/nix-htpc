@@ -226,6 +226,10 @@ class FakePresenter(object):
         self.osd = True
         self.calls.append("show")
 
+    def show_transport(self):
+        self.osd = True
+        self.calls.append("show-transport")
+
     def close_osd(self):
         self.osd = False
         self.calls.append("close")
@@ -279,8 +283,31 @@ class FakeChapters(object):
 
 
 class FakePlayer(object):
+    def __init__(self):
+        self.state = {"current": 123.0}
+        self.snapshot_calls = 0
+        self.pause_for_osd_calls = 0
+        self.pause_for_osd_result = True
+        self.pause_for_osd_error = None
+        self.video_active_calls = 0
+        self.video_active_result = True
+        self.video_active_error = None
+
     def snapshot(self):
-        return {"current": 123.0}
+        self.snapshot_calls += 1
+        return self.state
+
+    def pause_for_osd(self):
+        self.pause_for_osd_calls += 1
+        if self.pause_for_osd_error is not None:
+            raise self.pause_for_osd_error
+        return self.pause_for_osd_result
+
+    def video_active(self):
+        self.video_active_calls += 1
+        if self.video_active_error is not None:
+            raise self.video_active_error
+        return self.video_active_result
 
 
 class JsonRpcResponseTest(unittest.TestCase):
@@ -699,9 +726,10 @@ class InputRouterTest(unittest.TestCase):
         self.presenter = FakePresenter()
         self.chapters = FakeChapters()
         self.builtins = []
+        self.player = FakePlayer()
         self.router = InputRouter(
             self.controller,
-            FakePlayer(),
+            self.player,
             self.presenter,
             self.chapters,
             KodiCommands(self.builtins.append),
@@ -712,14 +740,100 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.controller.hidden, [(1, 1.0)])
         self.assertIn("emphasize", self.presenter.calls)
 
-    def test_primary_during_any_modal_phase_commits_not_play_pause(self):
-        for state in ("pause-pending", "scrub-active"):
+    def test_hidden_primary_orders_skip_pause_then_transport_osd(self):
+        trace = []
+        end_skip = self.controller.end_optimistic_skip
+
+        def traced_end(timestamp):
+            trace.append("end-skip")
+            return end_skip(timestamp)
+
+        self.controller.end_optimistic_skip = traced_end
+        self.player.pause_for_osd = lambda: trace.append("pause") or True
+        self.presenter.show_transport = lambda: trace.append("show-transport")
+
+        self.router.handle("primary", 1.0)
+
+        self.assertEqual(trace, ["end-skip", "pause", "show-transport"])
+        self.assertEqual(self.builtins, [])
+
+    def test_primary_during_every_manual_phase_commits_only(self):
+        manual_states = (
+            "pause-pending",
+            "scrub-active",
+            "cancel-wait-pause",
+            "committing",
+            "resume-pending",
+        )
+        for index, state in enumerate(manual_states):
             self.controller.state = state
             self.controller.source = "hold"
-            self.router.handle("primary", 1.0 if state == "pause-pending" else 2.0)
+            self.router.handle("primary", float(index + 1))
             self.assertEqual(self.builtins, [])
             self.router.repeat_guard.reset()
-        self.assertEqual(self.controller.confirms, [1.0, 2.0])
+        self.assertEqual(
+            self.controller.confirms,
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+        )
+        self.assertEqual(self.controller.ends, 0)
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.player.pause_for_osd_calls, 0)
+        self.assertEqual(self.player.snapshot_calls, 0)
+
+    def test_hidden_primary_settles_optimistic_skip_and_requests_pause(self):
+        self.controller.state = "skip-active"
+        self.controller.source = "fullscreen"
+
+        self.router.handle("primary", 1.0)
+
+        self.assertEqual(self.controller.ends, 1)
+        self.assertEqual(self.controller.state, "skip-settling")
+        self.assertEqual(self.player.pause_for_osd_calls, 1)
+        self.assertEqual(self.player.video_active_calls, 0)
+        self.assertEqual(self.presenter.calls, ["show-transport"])
+        self.assertEqual(self.builtins, [])
+
+    def test_hidden_primary_pause_failure_with_active_video_still_shows(self):
+        self.player.pause_for_osd_result = False
+
+        self.router.handle("primary", 1.0)
+
+        self.assertEqual(self.player.pause_for_osd_calls, 1)
+        self.assertEqual(self.player.video_active_calls, 1)
+        self.assertEqual(self.presenter.calls, ["show-transport"])
+        self.assertEqual(self.builtins, [])
+
+    def test_hidden_primary_pause_failure_after_video_end_suppresses_osd(self):
+        self.player.pause_for_osd_result = False
+        self.player.video_active_result = False
+
+        self.router.handle("primary", 1.0)
+
+        self.assertEqual(self.player.pause_for_osd_calls, 1)
+        self.assertEqual(self.player.video_active_calls, 1)
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.builtins, [])
+
+    def test_hidden_primary_video_probe_exception_suppresses_osd(self):
+        self.player.pause_for_osd_error = RuntimeError("pause failed")
+        self.player.video_active_error = RuntimeError("probe failed")
+
+        self.router.handle("primary", 1.0)
+
+        self.assertEqual(self.player.pause_for_osd_calls, 1)
+        self.assertEqual(self.player.video_active_calls, 1)
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.builtins, [])
+
+    def test_hidden_primary_repeat_train_is_suppressed_before_side_effects(self):
+        self.router.repeat_guard.arm("select", 1.0)
+
+        self.router.handle("primary", 1.1)
+
+        self.assertEqual(self.controller.ends, 0)
+        self.assertEqual(self.player.pause_for_osd_calls, 0)
+        self.assertEqual(self.player.video_active_calls, 0)
+        self.assertEqual(self.presenter.calls, [])
 
     def test_finished_commit_focuses_transport_not_timeline(self):
         self.controller.state = "scrub-active"
@@ -1365,13 +1479,45 @@ class PresenterAndLeaseTest(unittest.TestCase):
         presenter = BingiePresenter()
         presenter.last_generation = 7
         presenter.last_active = True
-        presenter.pending_timeline_focus = True
+        presenter.pending_focus_target = "timeline"
 
         presenter.reset()
 
         self.assertIsNone(presenter.last_generation)
         self.assertFalse(presenter.last_active)
-        self.assertFalse(presenter.pending_timeline_focus)
+        self.assertIsNone(presenter.pending_focus_target)
+
+    def test_presenter_delivers_latest_focus_after_async_osd_activation(self):
+        presenter = BingiePresenter()
+
+        presenter.emphasize_timeline()
+        presenter.show_transport()
+
+        self.assertEqual(presenter.pending_focus_target, "transport")
+        self.assertNotIn("SetFocus(187)", BUILTINS)
+        self.assertNotIn("SetFocus(203)", BUILTINS)
+
+        CONDITIONS["Window.IsActive(videoosd)"] = True
+        presenter.update({"active": False})
+
+        self.assertIsNone(presenter.pending_focus_target)
+        self.assertNotIn("SetFocus(187)", BUILTINS)
+        self.assertEqual(BUILTINS[-1], "SetFocus(203)")
+
+    def test_presenter_delivers_focus_immediately_when_osd_is_active(self):
+        CONDITIONS["Window.IsActive(videoosd)"] = True
+        presenter = BingiePresenter()
+
+        presenter.emphasize_timeline()
+
+        self.assertIsNone(presenter.pending_focus_target)
+        self.assertEqual(BUILTINS, ["SetFocus(187)"])
+
+    def test_presenter_rejects_unknown_pending_focus_target(self):
+        presenter = BingiePresenter()
+
+        with self.assertRaises(ValueError):
+            presenter._request_focus("unknown")
 
     def test_bingie_settings_enable_information_bypass(self):
         calls = []
@@ -1690,6 +1836,130 @@ class SeekServiceCleanupTest(unittest.TestCase):
                 "lease",
             ],
         )
+
+
+class PlayerAdapterOsdPauseTest(unittest.TestCase):
+    REQUEST_ID = "htpc.pause-for-osd"
+
+    def _adapter(self, response=None, error=None):
+        rpc = mock.Mock()
+        if error is not None:
+            rpc.side_effect = error
+        else:
+            rpc.return_value = response
+        logger = mock.Mock()
+        adapter = KodiPlayerAdapter(rpc=rpc, logger=logger)
+        adapter.pause = mock.Mock()
+        return adapter, rpc, logger
+
+    def test_pause_for_osd_sends_one_exact_idempotent_rpc(self):
+        adapter, rpc, logger = self._adapter(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": self.REQUEST_ID,
+                    "result": {"speed": 0},
+                }
+            )
+        )
+
+        self.assertTrue(adapter.pause_for_osd())
+
+        rpc.assert_called_once_with(mock.ANY)
+        self.assertEqual(
+            json.loads(rpc.call_args.args[0]),
+            {
+                "jsonrpc": "2.0",
+                "method": "Player.PlayPause",
+                "params": {"playerid": 1, "play": False},
+                "id": self.REQUEST_ID,
+            },
+        )
+        self.assertIsNone(adapter.pending_pause)
+        self.assertIsNone(adapter.pending_resume)
+        adapter.pause.assert_not_called()
+        logger.assert_not_called()
+
+    def test_pause_for_osd_rejects_malformed_and_error_responses(self):
+        responses = (
+            ("malformed-json", "{"),
+            (
+                "rpc-error",
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": self.REQUEST_ID,
+                        "error": {"code": -1, "message": "failed"},
+                    }
+                ),
+            ),
+            (
+                "wrong-id",
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": "other",
+                        "result": {"speed": 0},
+                    }
+                ),
+            ),
+            (
+                "missing-jsonrpc-version",
+                json.dumps(
+                    {
+                        "id": self.REQUEST_ID,
+                        "result": {"speed": 0},
+                    }
+                ),
+            ),
+            (
+                "invalid-speed",
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": self.REQUEST_ID,
+                        "result": {"speed": 1},
+                    }
+                ),
+            ),
+        )
+        for name, response in responses:
+            with self.subTest(name=name):
+                adapter, rpc, logger = self._adapter(response)
+                self.assertFalse(adapter.pause_for_osd())
+                rpc.assert_called_once_with(mock.ANY)
+                self.assertIsNone(adapter.pending_pause)
+                self.assertIsNone(adapter.pending_resume)
+                adapter.pause.assert_not_called()
+                logger.assert_called_once()
+
+    def test_pause_for_osd_catches_rpc_exception_without_fallback(self):
+        adapter, rpc, logger = self._adapter(
+            error=RuntimeError("unavailable")
+        )
+
+        self.assertFalse(adapter.pause_for_osd())
+
+        rpc.assert_called_once_with(mock.ANY)
+        self.assertIsNone(adapter.pending_pause)
+        self.assertIsNone(adapter.pending_resume)
+        adapter.pause.assert_not_called()
+        logger.assert_called_once()
+
+    def test_video_active_reports_live_video_and_fails_closed(self):
+        adapter, _rpc, logger = self._adapter()
+        adapter.isPlayingVideo = mock.Mock(return_value=True)
+
+        self.assertTrue(adapter.video_active())
+        adapter.isPlayingVideo.assert_called_once_with()
+        logger.assert_not_called()
+
+        adapter.isPlayingVideo = mock.Mock(
+            side_effect=RuntimeError("probe unavailable")
+        )
+        self.assertFalse(adapter.video_active())
+        adapter.isPlayingVideo.assert_called_once_with()
+        logger.assert_called_once()
 
 
 class AdapterDouble(KodiPlayerAdapter):

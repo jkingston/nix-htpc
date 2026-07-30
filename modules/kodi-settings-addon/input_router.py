@@ -132,8 +132,18 @@ class InputRouter(object):
                 self._defer_transition("transport")
                 return True
             self.controller.end_optimistic_skip(timestamp)
-            self.commands.toggle_play()
-            self.presenter.show_osd()
+            try:
+                pause_confirmed = bool(self.player.pause_for_osd())
+            except Exception:
+                pause_confirmed = False
+            video_active = False
+            if not pause_confirmed:
+                try:
+                    video_active = bool(self.player.video_active())
+                except Exception:
+                    pass
+            if pause_confirmed or video_active:
+                self.presenter.show_transport()
             return True
 
         if action == "osd-primary":

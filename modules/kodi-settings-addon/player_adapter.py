@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import json
 import math
 import threading
 from collections import deque
@@ -8,6 +9,7 @@ import xbmc
 
 
 SEEK_CALLBACK_TOLERANCE_SECONDS = 2.0
+OSD_PAUSE_REQUEST_ID = "htpc.pause-for-osd"
 
 
 class KodiPlayerAdapter(xbmc.Player):
@@ -19,10 +21,11 @@ class KodiPlayerAdapter(xbmc.Player):
     by their reported target rather than blindly consuming a FIFO entry.
     """
 
-    def __init__(self, event_sink=None, logger=None):
+    def __init__(self, event_sink=None, logger=None, rpc=None):
         super(KodiPlayerAdapter, self).__init__()
         self.event_sink = event_sink
         self.logger = logger
+        self.rpc = xbmc.executeJSONRPC if rpc is None else rpc
         self.epoch = 0
         self.pending_pause = None
         self.pending_resume = None
@@ -75,6 +78,58 @@ class KodiPlayerAdapter(xbmc.Player):
     def snapshot(self):
         with self._lock:
             return self._snapshot_locked()
+
+    def video_active(self):
+        """Report live video presence without exposing broader player state."""
+        with self._lock:
+            try:
+                return bool(self.isPlayingVideo())
+            except Exception as error:
+                self._log_error("video activity probe failed: %s" % error)
+                return False
+
+    def pause_for_osd(self):
+        """Idempotently request pause without joining a seek transaction."""
+        request = {
+            "jsonrpc": "2.0",
+            "method": "Player.PlayPause",
+            "params": {"playerid": 1, "play": False},
+            "id": OSD_PAUSE_REQUEST_ID,
+        }
+        try:
+            response = json.loads(self.rpc(json.dumps(request)))
+        except Exception as error:
+            self._log_error("OSD pause request failed: %s" % error)
+            return False
+
+        if (
+            not isinstance(response, dict)
+            or response.get("jsonrpc") != "2.0"
+            or response.get("id") != OSD_PAUSE_REQUEST_ID
+            or "error" in response
+            or not isinstance(response.get("result"), dict)
+        ):
+            self._log_error("OSD pause request returned an invalid response")
+            return False
+
+        speed = response["result"].get("speed")
+        valid_speed = (
+            isinstance(speed, (int, float))
+            and not isinstance(speed, bool)
+            and speed == 0
+        )
+        if not valid_speed:
+            self._log_error("OSD pause request did not confirm speed zero")
+            return False
+        return True
+
+    def _log_error(self, message):
+        if self.logger is None:
+            return
+        try:
+            self.logger(message, xbmc.LOGERROR)
+        except Exception:
+            pass
 
     @staticmethod
     def _expected_matches(snapshot, identity, epoch):

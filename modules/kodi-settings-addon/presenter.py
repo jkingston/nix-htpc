@@ -225,6 +225,8 @@ class ServiceLease(object):
 
 
 class BingiePresenter(object):
+    PENDING_FOCUS_TARGETS = frozenset(("timeline", "transport"))
+
     def __init__(self, logger=None, clock=None):
         self.logger = logger
         self.clock = clock or time.monotonic
@@ -234,7 +236,7 @@ class BingiePresenter(object):
         """Discard focus delivery and generation state at service boundaries."""
         self.last_generation = None
         self.last_active = False
-        self.pending_timeline_focus = False
+        self.pending_focus_target = None
 
     @staticmethod
     def osd_active():
@@ -245,11 +247,27 @@ class BingiePresenter(object):
             xbmc.executebuiltin("ActivateWindow(videoosd)")
 
     def emphasize_timeline(self):
-        self.pending_timeline_focus = True
+        self._request_focus("timeline")
+
+    def show_transport(self):
+        self._request_focus("transport")
+
+    def _request_focus(self, target):
+        if target not in self.PENDING_FOCUS_TARGETS:
+            raise ValueError("unsupported pending focus target: %s" % target)
+        self.pending_focus_target = target
         self.show_osd()
-        if self.osd_active():
+        self._deliver_pending_focus()
+
+    def _deliver_pending_focus(self):
+        if not self.pending_focus_target or not self.osd_active():
+            return
+        target = self.pending_focus_target
+        self.pending_focus_target = None
+        if target == "timeline":
             self.focus_timeline()
-            self.pending_timeline_focus = False
+        else:
+            self.focus_transport()
 
     def close_osd(self):
         if self.osd_active():
@@ -275,6 +293,9 @@ class BingiePresenter(object):
         active = bool(snapshot["active"])
         osd_active = self.osd_active()
 
+        if osd_active:
+            self._deliver_pending_focus()
+
         if not active:
             self.last_generation = None
             self.last_active = False
@@ -284,9 +305,3 @@ class BingiePresenter(object):
             xbmc.executebuiltin("CancelAlarm(CloseVideoOSD,silent)")
             self.last_generation = snapshot["generation"]
         self.last_active = True
-
-        if not osd_active:
-            return
-        if self.pending_timeline_focus:
-            self.focus_timeline()
-            self.pending_timeline_focus = False
