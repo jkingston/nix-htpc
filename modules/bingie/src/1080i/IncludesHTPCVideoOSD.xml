@@ -280,6 +280,7 @@
 					<righttexture />
 					<overlaytexture />
 					<info>$PARAM[buffer_progress]</info>
+					<reveal>true</reveal>
 				</control>
 				<control type="progress">
 					<description>HTPC video OSD actual progress</description>
@@ -293,6 +294,7 @@
 					<righttexture />
 					<overlaytexture />
 					<info>$PARAM[actual_progress]</info>
+					<reveal>true</reveal>
 				</control>
 				<include content="HTPCPlaybackPresentationLayout">
 					<param name="visible" value="$PARAM[visible]" />

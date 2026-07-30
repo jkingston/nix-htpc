@@ -11,8 +11,6 @@ PROPERTY_NAMES = (
     "ready",
     "scenario",
     "revision",
-    "actualprogress",
-    "bufferprogress",
     "paused",
     "title",
     "subtitle",
@@ -51,8 +49,6 @@ EXPECTED_FOCUS = {
 
 _COMMON = {
     "revision": "1",
-    "actualprogress": "40.0000",
-    "bufferprogress": "70.0000",
     "paused": "true",
     "title": "Headless OSD Review",
     "subtitle": "Deterministic fixture",

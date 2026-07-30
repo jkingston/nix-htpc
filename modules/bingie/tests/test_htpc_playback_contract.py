@@ -360,7 +360,21 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     control.findtext("height"),
                     "$PARAM[rail_height]",
                 )
-        actual = progress_controls[1]
+                self.assertEqual(
+                    control.findtext("reveal"),
+                    "true",
+                    "progress textures must reveal their numeric percentage "
+                    "instead of retaining the source texture width",
+                )
+        buffer, actual = progress_controls
+        self.assertEqual(
+            buffer.findtext("info"),
+            "$PARAM[buffer_progress]",
+        )
+        self.assertEqual(
+            actual.findtext("info"),
+            "$PARAM[actual_progress]",
+        )
         self.assertEqual(_visible_text(actual), "")
 
         playback_consumers = [

@@ -84,10 +84,10 @@ class ReviewContractTest(unittest.TestCase):
             with self.subTest(field=field):
                 key = "htpc.review.seek.a." + field
                 self.assertNotEqual(backward[key], forward[key])
-        self.assertEqual(
-            backward["htpc.review.actualprogress"],
-            forward["htpc.review.actualprogress"],
-        )
+        self.assertNotIn("htpc.review.actualprogress", backward)
+        self.assertNotIn("htpc.review.actualprogress", forward)
+        self.assertNotIn("htpc.review.bufferprogress", backward)
+        self.assertNotIn("htpc.review.bufferprogress", forward)
 
     def test_non_seek_scenarios_publish_no_seek_view(self):
         for scenario in ("transport-paused", "timeline-idle", "top-stop"):

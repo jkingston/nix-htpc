@@ -28,8 +28,6 @@ EXPECTED_CLEANUP = {
     "htpc.review.ready",
     "htpc.review.scenario",
     "htpc.review.revision",
-    "htpc.review.actualprogress",
-    "htpc.review.bufferprogress",
     "htpc.review.paused",
     "htpc.review.title",
     "htpc.review.subtitle",
@@ -161,12 +159,26 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
             "subtitle",
             "elapsed",
             "remaining",
-            "buffer_progress",
-            "actual_progress",
             "paused_condition",
         ):
             with self.subTest(parameter=parameter):
                 self.assertIn("htpc.review.", parameters[parameter])
+        progress = {
+            "buffer_progress": ("70", "Integer.ValueOf(70)"),
+            "actual_progress": ("40", "Integer.ValueOf(40)"),
+        }
+        for parameter, (percentage, expression) in progress.items():
+            with self.subTest(parameter=parameter):
+                self.assertEqual(parameters[parameter], expression)
+                match = re.fullmatch(
+                    r"Integer\.ValueOf\(([0-9]{1,3})\)",
+                    expression,
+                )
+                self.assertIsNotNone(match)
+                self.assertEqual(match.group(1), percentage)
+                self.assertIn(int(percentage), range(101))
+                self.assertNotIn("Window(", expression)
+                self.assertNotIn("$INFO", expression)
 
     def test_window_has_no_media_or_device_side_effect(self):
         serialized = ET.tostring(self.root, encoding="unicode")

@@ -16,8 +16,6 @@
 	<onunload>ClearProperty(htpc.review.ready,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.scenario,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.revision,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.actualprogress,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.bufferprogress,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.paused,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.title,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.subtitle,Home)</onunload>
@@ -53,8 +51,8 @@
 			<param name="subtitle" value="$INFO[Window(Home).Property(htpc.review.subtitle)]" />
 			<param name="elapsed" value="$INFO[Window(Home).Property(htpc.review.elapsed)]" />
 			<param name="remaining" value="$INFO[Window(Home).Property(htpc.review.remaining)]" />
-			<param name="buffer_progress" value="Window(Home).Property(htpc.review.bufferprogress)" />
-			<param name="actual_progress" value="Window(Home).Property(htpc.review.actualprogress)" />
+			<param name="buffer_progress" value="Integer.ValueOf(70)" />
+			<param name="actual_progress" value="Integer.ValueOf(40)" />
 			<param name="paused_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.paused))" />
 			<param name="chapter_available" value="false" />
 			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />
