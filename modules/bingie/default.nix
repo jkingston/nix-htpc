@@ -75,6 +75,7 @@ kodiPackages.buildKodiAddon {
     BINGIE_SKIN_ROOT="$PWD" \
       BINGIE_TOOLS_ROOT=${./tools} \
       HTPC_SETTINGS_ROOT=${../kodi-settings-addon} \
+      HTPC_HOME_MODULE=${../htpc-home.nix} \
       PYTHONDONTWRITEBYTECODE=1 \
       python3 -B -m unittest discover -s ${./tests} -p 'test_*.py'
     python3 ${./tools}/generate_preview_anchors.py \
