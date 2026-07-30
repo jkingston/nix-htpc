@@ -3,6 +3,9 @@ from __future__ import annotations
 import base64
 import inspect
 import json
+import subprocess
+import sys
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -1020,6 +1023,246 @@ class RemotePassiveEvidenceSessionTest(unittest.TestCase):
 
 def fragment_size_process(size):
     return ScriptedProcess(fragment_size=size)
+
+
+LOCAL_PRODUCER_SCRIPT = r"""
+import base64
+import sys
+
+mode = sys.argv[1]
+expected_start = base64.b64decode(sys.argv[2], validate=True)
+ready = base64.b64decode(sys.argv[3], validate=True)
+expected_finish = base64.b64decode(sys.argv[4], validate=True)
+header = base64.b64decode(sys.argv[5], validate=True)
+body = base64.b64decode(sys.argv[6], validate=True)
+
+if mode == "small-writes":
+    start = bytearray()
+    while not start.endswith(b"\n"):
+        chunk = sys.stdin.buffer.read(1)
+        if not chunk:
+            sys.stderr.write("START ended early\n")
+            raise SystemExit(21)
+        start.extend(chunk)
+else:
+    start = bytearray(sys.stdin.buffer.readline())
+if bytes(start) != expected_start:
+    sys.stderr.write("START mismatch\n")
+    raise SystemExit(22)
+
+if mode == "small-writes":
+    for offset in range(0, len(ready), 3):
+        sys.stdout.buffer.write(ready[offset:offset + 3])
+        sys.stdout.buffer.flush()
+else:
+    sys.stdout.buffer.write(ready)
+    sys.stdout.buffer.flush()
+
+finish = bytearray()
+read_size = 2 if mode == "small-writes" else 65536
+while True:
+    chunk = sys.stdin.buffer.read(read_size)
+    if not chunk:
+        break
+    finish.extend(chunk)
+if bytes(finish) != expected_finish:
+    sys.stderr.write("FINISH or EOF mismatch\n")
+    raise SystemExit(23)
+
+result = header + body
+if mode == "truncated-clean":
+    sys.stdout.buffer.write(header + body[:7])
+    sys.stdout.buffer.flush()
+    raise SystemExit(0)
+if mode == "stderr-zero":
+    sys.stdout.buffer.write(result)
+    sys.stdout.buffer.flush()
+    sys.stderr.write("local producer stderr\n")
+    sys.stderr.flush()
+    raise SystemExit(0)
+if mode == "nonzero-clean":
+    sys.stdout.buffer.write(result)
+    sys.stdout.buffer.flush()
+    raise SystemExit(19)
+
+if mode == "small-writes":
+    for offset in range(0, len(result), 17):
+        sys.stdout.buffer.write(result[offset:offset + 17])
+        sys.stdout.buffer.flush()
+else:
+    sys.stdout.buffer.write(result)
+    sys.stdout.buffer.flush()
+"""
+
+
+class LocalProducerPopenFactory:
+    def __init__(self, mode):
+        self.mode = mode
+        self.calls = []
+        self.processes = []
+        self.body = evidence_body()
+        self.header = result_header(self.body)
+        self.start = (
+            "KODI-PASSIVE-EVIDENCE/1 START %s\n" % NONCE
+        ).encode("ascii")
+        self.finish = (
+            "KODI-PASSIVE-EVIDENCE/1 FINISH %s\n" % NONCE
+        ).encode("ascii")
+
+    def __call__(self, argv, **keywords):
+        self.calls.append((list(argv), keywords))
+
+        def encoded(value):
+            return base64.b64encode(value).decode("ascii")
+
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                LOCAL_PRODUCER_SCRIPT,
+                self.mode,
+                encoded(self.start),
+                encoded(ready_line()),
+                encoded(self.finish),
+                encoded(self.header),
+                encoded(self.body),
+            ],
+            **keywords,
+        )
+        self.processes.append(process)
+        return process
+
+
+class RealPipePassiveSessionTest(unittest.TestCase):
+    def test_real_pipes_round_trip_small_and_single_write_output(self):
+        # Small producer writes exercise the real selector/pipe path, but the
+        # OS may coalesce them. Scripted unit tests own exact byte-boundary
+        # permutations; this test owns real subprocess lifecycle integration.
+        for mode in ("small-writes", "single-write"):
+            factory = LocalProducerPopenFactory(mode)
+            open_deadline = time.monotonic() + 5.0
+            session = None
+            action_calls = []
+            try:
+                session = RemotePassiveEvidenceSession(
+                    "local-test-host",
+                    open_deadline,
+                    popen_factory=factory,
+                    nonce_factory=lambda: NONCE,
+                    terminate_timeout=0.2,
+                )
+                session.perform_action(
+                    lambda ready, deadline: action_calls.append(
+                        (ready, deadline)
+                    ),
+                    time.monotonic() + 5.0,
+                )
+                session.seal_action_window(time.monotonic() + 5.0)
+                evidence = session.collect(time.monotonic() + 5.0)
+            finally:
+                if session is not None:
+                    session.close()
+
+            with self.subTest(mode=mode):
+                self.assertEqual(session.state, COLLECTED)
+                self.assertEqual(len(action_calls), 1)
+                self.assertIs(action_calls[0][0], session.ready)
+                self.assertEqual(evidence.ready, session.ready)
+                self.assertEqual(evidence.cec_trace.raw, CEC_TRACE)
+                self.assertEqual(
+                    evidence.live_journal.raw,
+                    LIVE_JOURNAL,
+                )
+                self.assertEqual(
+                    evidence.final_journal.raw,
+                    FINAL_JOURNAL,
+                )
+                self.assertEqual(len(factory.calls), 1)
+                fixed_argv, keywords = factory.calls[0]
+                self.assertEqual(
+                    fixed_argv[-1],
+                    REMOTE_PASSIVE_EVIDENCE_PROGRAM,
+                )
+                self.assertIs(keywords["shell"], False)
+                self.assertEqual(evidence.raw, factory.body)
+                self._assert_reaped_process(
+                    factory,
+                    expected_status=0,
+                )
+
+    def test_real_pipe_clean_exit_with_truncated_body_is_transport_failure(self):
+        self._assert_real_transport_failure(
+            "truncated-clean",
+            expected_status=0,
+            expected=("closed its output", "status 0"),
+            absent=("local producer stderr",),
+        )
+
+    def test_real_pipe_status_zero_stderr_is_transport_failure(self):
+        self._assert_real_transport_failure(
+            "stderr-zero",
+            expected_status=0,
+            expected=("wrote to stderr", "local producer stderr"),
+            absent=("status 19",),
+        )
+
+    def test_real_pipe_stderr_free_nonzero_exit_is_transport_failure(self):
+        self._assert_real_transport_failure(
+            "nonzero-clean",
+            expected_status=19,
+            expected=("clean status-zero EOF", "status 19"),
+            absent=("local producer stderr",),
+        )
+
+    def _assert_real_transport_failure(
+        self,
+        mode,
+        *,
+        expected_status,
+        expected,
+        absent,
+    ):
+        factory = LocalProducerPopenFactory(mode)
+        session = None
+        try:
+            session = RemotePassiveEvidenceSession(
+                "local-test-host",
+                time.monotonic() + 5.0,
+                popen_factory=factory,
+                nonce_factory=lambda: NONCE,
+                terminate_timeout=0.2,
+            )
+            session.perform_action(
+                lambda _ready, _deadline: None,
+                time.monotonic() + 5.0,
+            )
+            session.seal_action_window(time.monotonic() + 5.0)
+
+            with self.assertRaises(PassiveSessionTransportError) as raised:
+                session.collect(time.monotonic() + 5.0)
+            message = str(raised.exception)
+            for piece in expected:
+                self.assertIn(piece, message)
+            for piece in absent:
+                self.assertNotIn(piece, message)
+            self.assertEqual(session.state, POISONED)
+        finally:
+            if session is not None:
+                session.close()
+        self._assert_reaped_process(factory, expected_status)
+
+    def _assert_reaped_process(self, factory, expected_status):
+        self.assertEqual(len(factory.calls), 1)
+        self.assertEqual(len(factory.processes), 1)
+        process = factory.processes[0]
+        self.assertEqual(process.returncode, expected_status)
+        self.assertEqual(process.poll(), expected_status)
+        self.assertIsNotNone(process.stdin)
+        self.assertIsNotNone(process.stdout)
+        self.assertIsNotNone(process.stderr)
+        self.assertTrue(process.stdin.closed)
+        self.assertTrue(process.stdout.closed)
+        self.assertTrue(process.stderr.closed)
 
 
 if __name__ == "__main__":
