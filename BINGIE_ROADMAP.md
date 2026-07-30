@@ -127,9 +127,12 @@ Checks:
 - service tests cover an unavailable JSON-RPC endpoint, a rejected write, a
   read-back mismatch, eventual success, and no further writes after success;
 - the deployed Pi reports the exact managed `debug.screenshotpath`;
-- a direct local JSON-RPC screenshot lands in that directory;
-- passive CEC/journal evidence contains no Pi-originated wake, routing, power,
-  or active-source action; no active topology/power probe is used.
+- with `System.ScreenSaverActive=false`, a direct local JSON-RPC screenshot
+  lands in that directory;
+- passive CEC/journal evidence contains no Pi-originated view-on, routing,
+  standby, inactive-source, or active-source action. The existing
+  `cec-tv-wake` service's Give Power Status poll and its response are
+  baseline-allowed; no new topology or power probe is used.
 
 ### M0.3b — Add the capture client and evidence format
 
@@ -140,39 +143,95 @@ Add a small local client that:
 - uses unique request IDs, socket deadlines, incremental decoding across
   fragmented or concatenated JSON values, response-ID matching, and rejection
   of malformed or trailing responses;
+- holds an exclusive remote capture lock across the transaction, requires two
+  quiescent directory snapshots before sending an action, and fails on detected
+  external mutation. It serializes cooperating helper instances but does not
+  claim request ownership against a non-cooperating screenshot actor;
+- applies one monotonic overall deadline plus explicit per-phase poll limits to
+  initial readiness, optional screensaver recovery, restabilization, capture,
+  file stability, and the post-capture grace period;
 - verifies expected window, focus/readiness evidence, and screensaver/busy
-  state across two consecutive polls after animations settle; it fails rather
-  than dismissing a screensaver or navigating;
+  state across two consecutive polls after animations settle;
+- initially permits off-input screensaver recovery only for declared Home
+  scenarios. It first verifies the built-in dim screensaver, display-off timeout
+  zero, `System.DPMSActive=false`, and deployed CEC settings
+  `activate_source=0`, `wake_devices=231`, and `send_inactive_source=0`; any
+  drift selects strict passive failure;
+- when Home's screensaver is active immediately before recovery, snapshots the
+  directory, reconfirms `System.DPMSActive=false`, sends one `screenshot`
+  action with a unique request ID, requires a matching acknowledged response,
+  a screensaver active-to-inactive transition, and zero directory candidates,
+  then requires Home and its focus evidence to stabilize twice before
+  rebaselining. Permit only one recovery per capture; strict passive mode always
+  fails on an active screensaver;
 - snapshots the managed screenshot directory, sends only
   `Input.ExecuteAction` with the `screenshot` action, and polls for exactly one
   new or changed `(filename, size, mtime)` candidate whose size and mtime match
   in consecutive polls before a timeout;
 - copies, fully decodes, validates, and hashes a complete 1920x1080 PNG before
   accepting it;
-- copies the image and an atomic metadata file to
-  `.artifacts/visual/<revision>/`;
-- records resolution, active window, focus label, NixOS revision, closure,
-  add-on versions, byte count, and image hash;
+- requires the post-capture window, control ID where available, selected item
+  identity, screensaver, modal/busy state, and readiness hash to match the
+  accepted pre-capture state;
+- confirms a passive CEC monitor is running and records the `cec-tv-wake`
+  journal start cursor before the first screenshot action (recovery or capture),
+  keeps both evidence windows through a post-capture grace period, and fails
+  closed on monitor exit, dropped data, parse failure, forbidden opcode, or a
+  journaled wake/source activation;
+- holds an exclusive local publication lock while creating and fsyncing the
+  destination parent chain, collision checking, publishing, and parent fsync;
+  requires the final capture directory not to exist; and stages the image,
+  canonical metadata, raw and normalized CEC trace, and `cec-tv-wake` journal
+  slice as
+  `.artifacts/visual/<revision>/<scenario>/.partial-<capture-id>-<nonce>`.
+  After fsyncing every staged file and that directory, it uses a tested atomic
+  no-replace directory rename to
+  `.artifacts/visual/<revision>/<scenario>/<capture-id>/` and fsyncs their
+  common parent. It never overwrites evidence;
+- records resolution, active window, focus evidence, selected item identity,
+  NixOS revision, closure, add-on versions, byte count, image hash,
+  screensaver transaction, request IDs, timing bounds, remote file tuple,
+  capture mode, managed CEC settings, hashes for the image, raw CEC trace,
+  normalized CEC trace, and journal slice, plus the journal cursor;
 - fails rather than capturing a first-use file picker, unexpected window,
-  unready scenario, concurrent screenshot, or partial image.
+  unready scenario, lock conflict, detected concurrent screenshot, partial
+  image, or incomplete evidence bundle.
 
 Focus labels are localized and may be duplicated. Treat them as evidence, not
 an invariant; require a control ID only where Kodi exposes a stable one.
 
-The client must not send CEC, wake, power, volume, or active-source actions.
-Do not add FFmpeg/KMS capture unless a real OSD layer is missing from Kodi's
-fresh screenshot. Real decoded video is not a stable golden; deterministic
-review fixtures may use an opaque background.
+The client sends no CEC, TV power, volume, navigation, active-source, or
+explicit DPMS action. Kodi's screenshot input path also clears Kodi-local DPMS
+when it consumes the recovery action, so recovery is permitted only with the
+declared display-off timeout of zero. It must not activate Home or change
+focus. Do not add FFmpeg/KMS capture unless a real OSD layer is missing from
+Kodi's fresh screenshot. Real decoded video is not a stable golden;
+deterministic review fixtures may use an opaque background.
 
 Checks:
 
 - fragmented and coalesced JSON, response matching, timeout, directory-diff,
-  stable-file, PNG, window, readiness, metadata, and failure paths pass without
-  a Pi by using a fake transport;
-- passive CEC capture plus a `cec-tv-wake` journal cursor shows no Pi-originated
-  active-source, routing, view-on, standby, or wake-activation event;
-- no active CEC topology/power probe is used; exact TV input identity is manual
-  or TV-side evidence when required;
+  locking, quiescence, stable-file, PNG, window, readiness, post-state,
+  metadata, CEC, journal, bundle collision, and failure paths pass without a Pi
+  by using a fake transport;
+- with the TV off the Pi input and Home's screensaver active, the acknowledged
+  recovery action creates no candidate, transitions the screensaver off, keeps
+  the selected item stable, and the following action produces one accepted
+  screenshot within the transaction deadline;
+- drift in the dim-screen, display-off, DPMS, or CEC preflight fails before
+  recovery;
+- a passive CEC monitor is confirmed running and the journal cursor is recorded
+  before the first screenshot action, then both complete successfully after the
+  grace period. Apart from the service's existing Give Power Status exchange,
+  the trace contains no Pi-originated active-source, routing, view-on, standby,
+  inactive-source, or wake-activation event;
+- the same passive CEC and journal coverage applies when the screensaver is
+  already inactive and the transaction goes directly to capture;
+- the helper issues no active CEC topology or power probe; exact TV input
+  identity is manual or TV-side evidence when required;
+- a failed/empty CEC monitor, journaled source activation, post-state mismatch,
+  existing final bundle, or publication failure rejects the capture and leaves
+  no visible partial or overwritten evidence;
 - Home screenshot is 1920x1080 and visually valid;
 - an intentionally wrong expected window or readiness condition fails;
 - `.artifacts/` is ignored, `git check-ignore` confirms the destination, and no
