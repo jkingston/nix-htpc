@@ -13,6 +13,13 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
             ("timeline-left", {}, "left"),
             ("right", {}, "right"),
             ("timeline-right", {}, "right"),
+            ("fullscreen-up", {}, "up"),
+            ("fullscreen-down", {}, "down"),
+            ("transport-up", {}, "up"),
+            ("transport-right", {}, "right"),
+            ("transport-down", {}, "down"),
+            ("timeline-up", {}, "up"),
+            ("timeline-down", {}, "down"),
             (
                 "chapter-focus",
                 {"physical_direction": "left"},
@@ -22,6 +29,16 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
                 "chapter-focus",
                 {"physical_direction": "right"},
                 "right",
+            ),
+            (
+                "chapter-exit",
+                {"destination": "top", "physical_direction": "up"},
+                "up",
+            ),
+            (
+                "chapter-exit",
+                {"destination": "timeline", "physical_direction": "down"},
+                "down",
             ),
             ("primary", {}, "select"),
             ("osd-primary", {}, "select"),
@@ -45,6 +62,7 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
             ("chapter-focus", {"physical_direction": "invalid"}),
             ("chapter-open", {}),
             ("chapter-exit", {"arm_back": False}),
+            ("chapter-exit", {"physical_direction": "invalid"}),
             ("chapter-exit", {}),
         )
         for action, payload in cases:
@@ -135,16 +153,59 @@ class InputQuarantineTest(unittest.TestCase):
         self.assertIn("left", self.quarantine.deadlines)
         self.assertEqual(self.quarantine.last_seen["right"], 1.2)
 
+    def test_transition_arm_covers_onset_and_release_quiet(self):
+        self.assertTrue(self.quarantine.arm_transition("up", 1.0))
+        onset_deadline = 1.0 + HOLD_ONSET_MAX
+
+        self.assertTrue(
+            self.quarantine.should_suppress("up", onset_deadline)
+        )
+        first_release = onset_deadline + HOLD_RELEASE_IDLE
+        self.assertAlmostEqual(
+            self.quarantine.deadlines["up"],
+            first_release,
+        )
+
+        continuation = first_release - 0.01
+        self.assertTrue(
+            self.quarantine.should_suppress("up", continuation)
+        )
+        extended_release = continuation + HOLD_RELEASE_IDLE
+        self.assertAlmostEqual(
+            self.quarantine.deadlines["up"],
+            extended_release,
+        )
+
+        fresh = extended_release + 0.001
+        self.assertFalse(self.quarantine.should_suppress("up", fresh))
+        self.assertNotIn("up", self.quarantine.deadlines)
+
+    def test_transition_arm_is_direction_specific(self):
+        self.assertTrue(self.quarantine.arm_transition("down", 1.0))
+
+        self.assertFalse(self.quarantine.should_suppress("up", 1.1))
+        self.assertTrue(self.quarantine.should_suppress("down", 1.1))
+
+    def test_transition_arm_rejects_non_direction_keys_without_state(self):
+        for key in (None, "select", "back", "invalid"):
+            with self.subTest(key=key):
+                self.assertFalse(
+                    self.quarantine.arm_transition(key, 1.0)
+                )
+
+        self.assertEqual(self.quarantine.last_seen, {})
+        self.assertEqual(self.quarantine.deadlines, {})
+
     def test_only_latest_direction_arms_at_a_boundary(self):
-        self.quarantine.should_suppress("left", 1.0)
-        self.quarantine.should_suppress("right", 1.1)
+        self.quarantine.should_suppress("up", 1.0)
+        self.quarantine.should_suppress("down", 1.1)
 
         self.quarantine.on_playback_boundary(1.2)
 
-        self.assertNotIn("left", self.quarantine.deadlines)
-        self.assertIn("right", self.quarantine.deadlines)
-        self.assertFalse(self.quarantine.should_suppress("left", 1.21))
-        self.assertTrue(self.quarantine.should_suppress("right", 1.21))
+        self.assertNotIn("up", self.quarantine.deadlines)
+        self.assertIn("down", self.quarantine.deadlines)
+        self.assertFalse(self.quarantine.should_suppress("up", 1.21))
+        self.assertTrue(self.quarantine.should_suppress("down", 1.21))
 
     def test_select_and_back_arm_independently_of_latest_direction(self):
         self.quarantine.should_suppress("left", 1.0)

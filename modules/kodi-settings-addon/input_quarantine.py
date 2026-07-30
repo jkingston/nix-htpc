@@ -4,13 +4,20 @@ from seek_controller import HOLD_ONSET_MAX, HOLD_RELEASE_IDLE
 
 
 INPUT_WATERMARK_PAYLOAD_KEY = "_htpc_physical_input_watermark"
-DIRECTION_KEYS = frozenset(("left", "right"))
-CANONICAL_KEYS = frozenset(("left", "right", "select", "back"))
+DIRECTION_KEYS = frozenset(("left", "right", "up", "down"))
+CANONICAL_KEYS = DIRECTION_KEYS | frozenset(("select", "back"))
 PHYSICAL_KEYS = {
     "left": "left",
     "timeline-left": "left",
     "right": "right",
     "timeline-right": "right",
+    "fullscreen-up": "up",
+    "fullscreen-down": "down",
+    "transport-up": "up",
+    "transport-right": "right",
+    "transport-down": "down",
+    "timeline-up": "up",
+    "timeline-down": "down",
     "primary": "select",
     "osd-primary": "select",
     "chapter-select": "select",
@@ -24,6 +31,9 @@ def canonical_physical_key(action, payload=None):
         direction = (payload or {}).get("physical_direction")
         return direction if direction in DIRECTION_KEYS else None
     if action == "chapter-exit":
+        direction = (payload or {}).get("physical_direction")
+        if direction in DIRECTION_KEYS:
+            return direction
         if (payload or {}).get("arm_back"):
             return "back"
         return None
@@ -53,6 +63,18 @@ class InputQuarantine(object):
         self.deadlines[key] = max(
             deadline,
             timestamp + HOLD_RELEASE_IDLE,
+        )
+        return True
+
+    def arm_transition(self, key, timestamp):
+        """Block the rest of one direction train after a focus boundary."""
+        if key not in DIRECTION_KEYS:
+            return False
+        timestamp = float(timestamp)
+        self._record(key, timestamp)
+        self.deadlines[key] = max(
+            self.deadlines.get(key, float("-inf")),
+            timestamp + HOLD_ONSET_MAX,
         )
         return True
 
