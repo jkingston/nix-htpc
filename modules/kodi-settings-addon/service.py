@@ -23,6 +23,10 @@ PLAYBACK_MODES = [
     "0384002160029.97003pstd",
     "0384002160030.00000pstd",
 ]
+SCREENSHOT_PATH = "@HTPC_SCREENSHOT_PATH@"
+SCREENSHOT_SETTING = "debug.screenshotpath"
+SCREENSHOT_RETRY_INITIAL = 1.0
+SCREENSHOT_RETRY_MAX = 30.0
 
 
 def log(message, level=xbmc.LOGINFO):
@@ -62,12 +66,38 @@ def json_rpc_response(method, params, request_id):
 
 
 def set_setting(setting, value):
+    status = set_setting_status(setting, value)
+    return status is True
+
+
+def set_setting_status(setting, value):
     response = json_rpc_response(
         "Settings.SetSettingValue",
         {"setting": setting, "value": value},
         setting,
     )
-    return response is not None and response["result"] is True
+    if response is None:
+        return None
+    return response["result"] is True
+
+
+def get_setting(setting):
+    response = json_rpc_response(
+        "Settings.GetSettingValue",
+        {"setting": setting},
+        "get:%s" % setting,
+    )
+    if response is None:
+        return False, None
+
+    result = response["result"]
+    if not isinstance(result, dict) or "value" not in result:
+        log(
+            "Settings.GetSettingValue returned no value for %s" % setting,
+            xbmc.LOGERROR,
+        )
+        return False, None
+    return True, result["value"]
 
 
 def set_skin_setting(setting, enabled):
@@ -76,19 +106,80 @@ def set_skin_setting(setting, enabled):
 
 
 class ManagedSettings(object):
-    """Apply core settings promptly and retry optional skin settings lazily."""
+    """Converge core, screenshot, and BINGIE settings independently."""
 
-    def __init__(self, clock=None):
-        self.clock = clock or time.monotonic
+    def __init__(self, clock=None, screenshot_path=None):
+        self.clock = time.monotonic if clock is None else clock
         self.core_applied = False
         self.skin_applied = False
         self.next_skin_check = 0.0
+        self.screenshot_path = (
+            SCREENSHOT_PATH if screenshot_path is None else screenshot_path
+        )
+        self.screenshot_ready = False
+        self.next_screenshot_check = 0.0
+        self.screenshot_retry_delay = SCREENSHOT_RETRY_INITIAL
+        self.screenshot_warnings = set()
 
     def tick(self):
         if not self.core_applied:
             self.core_applied = self._apply_core()
 
         now = self.clock()
+        self._tick_screenshot(now)
+        self._tick_skin(now)
+
+    def _tick_screenshot(self, now):
+        if self.screenshot_ready or now < self.next_screenshot_check:
+            return
+
+        available, current_path = get_setting(SCREENSHOT_SETTING)
+        if not available:
+            self._schedule_screenshot_retry(now)
+            return
+
+        if current_path != self.screenshot_path:
+            write_status = set_setting_status(
+                SCREENSHOT_SETTING,
+                self.screenshot_path,
+            )
+            if write_status is not True:
+                if write_status is False:
+                    self._warn_screenshot_once(
+                        "write-rejected",
+                        "managed screenshot path write was rejected",
+                    )
+                self._schedule_screenshot_retry(now)
+                return
+            available, current_path = get_setting(SCREENSHOT_SETTING)
+            if not available:
+                self._schedule_screenshot_retry(now)
+                return
+            if current_path != self.screenshot_path:
+                self._warn_screenshot_once(
+                    "readback-mismatch",
+                    "managed screenshot path read-back did not match",
+                )
+                self._schedule_screenshot_retry(now)
+                return
+
+        self.screenshot_ready = True
+        log("managed screenshot path ready")
+
+    def _warn_screenshot_once(self, failure, message):
+        if failure in self.screenshot_warnings:
+            return
+        self.screenshot_warnings.add(failure)
+        log(message, xbmc.LOGWARNING)
+
+    def _schedule_screenshot_retry(self, now):
+        self.next_screenshot_check = now + self.screenshot_retry_delay
+        self.screenshot_retry_delay = min(
+            self.screenshot_retry_delay * 2.0,
+            SCREENSHOT_RETRY_MAX,
+        )
+
+    def _tick_skin(self, now):
         if self.skin_applied or now < self.next_skin_check:
             return
         self.next_skin_check = now + 1.0

@@ -1,6 +1,8 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
+  kodiSettingsAddonVersion = "2.1.5";
+  kodiScreenshotPath = "/tmp/kodi-screenshots";
   bingieMod = import ./bingie {
     inherit pkgs;
     kodiPackages = rpiPackages.kodi-gbm.packages;
@@ -8,12 +10,18 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "2.1.4";
+    version = kodiSettingsAddonVersion;
     src = ./kodi-settings-addon;
     nativeCheckInputs = [
       pkgs.buildPackages.libxml2
       pkgs.buildPackages.python3
     ];
+    postPatch = ''
+      substituteInPlace service.py \
+        --replace-fail \
+          ${lib.escapeShellArg "@HTPC_SCREENSHOT_PATH@"} \
+          ${lib.escapeShellArg kodiScreenshotPath}
+    '';
     doCheck = true;
     checkPhase = ''
       runHook preCheck
@@ -40,6 +48,17 @@ let
         test -f "$addon_dir/$runtime_file"
       done
 
+      grep -Fq \
+        'version="${kodiSettingsAddonVersion}"' \
+        "$addon_dir/addon.xml"
+      grep -Fq \
+        'SCREENSHOT_PATH = "${kodiScreenshotPath}"' \
+        "$addon_dir/service.py"
+      if grep -Fq '@HTPC_SCREENSHOT_PATH@' "$addon_dir/service.py"; then
+        echo "Managed screenshot path was not substituted" >&2
+        exit 1
+      fi
+
       if grep -R -n '\.setPosition(' --include='*.py' "$addon_dir" \
         || grep -n '\.getControl(' "$addon_dir/presenter.py"
       then
@@ -57,6 +76,10 @@ let
   ]);
 in
 {
+  systemd.tmpfiles.rules = [
+    "d ${kodiScreenshotPath} 0700 htpc users - -"
+  ];
+
   # BINGIE must be writable because Skin Shortcuts generates an include inside
   # the skin directory. Install it from greetd's pre-start so Kodi is always
   # stopped while the staged, validated copy replaces managed skin files.

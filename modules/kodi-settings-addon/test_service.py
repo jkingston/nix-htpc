@@ -129,6 +129,7 @@ from seek_controller import SCRUB_ACTIVE, RESUME_PENDING, SeekController
 from service import (
     ManagedSettings,
     ServiceMonitor,
+    get_setting,
     json_rpc_response,
     set_setting,
 )
@@ -367,6 +368,7 @@ class ManagedCoreSettingsTest(unittest.TestCase):
     def test_tick_retries_until_full_success_then_stops(self):
         settings = ManagedSettings(clock=lambda: 0.0)
         settings.skin_applied = True
+        settings.screenshot_ready = True
         with mock.patch.object(
             ManagedSettings,
             "_apply_core",
@@ -379,6 +381,241 @@ class ManagedCoreSettingsTest(unittest.TestCase):
             settings.tick()
 
         self.assertEqual(apply_core.call_count, 2)
+
+
+class ManagedScreenshotSettingsTest(unittest.TestCase):
+    SCREENSHOT_PATH = "/fixture/managed-screenshots"
+
+    def setUp(self):
+        self.now = [0.0]
+        self.settings = ManagedSettings(
+            clock=lambda: self.now[0],
+            screenshot_path=self.SCREENSHOT_PATH,
+        )
+        self.settings.core_applied = True
+        self.settings.skin_applied = True
+
+    @staticmethod
+    def _response(request_id, result=None, error=None):
+        response = {"jsonrpc": "2.0", "id": request_id}
+        if error is None:
+            response["result"] = result
+        else:
+            response["error"] = error
+        return json.dumps(response)
+
+    @classmethod
+    def _get_response(cls, value):
+        return cls._response(
+            "get:debug.screenshotpath",
+            {"value": value},
+        )
+
+    @classmethod
+    def _set_response(cls, accepted):
+        return cls._response("debug.screenshotpath", accepted)
+
+    @staticmethod
+    def _methods(rpc):
+        return [
+            json.loads(call.args[0])["method"]
+            for call in rpc.call_args_list
+        ]
+
+    @staticmethod
+    def _requests(rpc):
+        return [
+            json.loads(call.args[0])
+            for call in rpc.call_args_list
+        ]
+
+    def test_invalid_get_result_shapes_are_unavailable(self):
+        invalid_results = [None, True, [], {}, {"unexpected": "value"}]
+        for result in invalid_results:
+            with self.subTest(result=result), mock.patch(
+                "service.xbmc.executeJSONRPC",
+                return_value=self._response(
+                    "get:debug.screenshotpath",
+                    result,
+                ),
+            ):
+                self.assertEqual(
+                    get_setting("debug.screenshotpath"),
+                    (False, None),
+                )
+
+    def test_retry_deadlines_and_backoff_cap(self):
+        expected_delays = [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0]
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            side_effect=RuntimeError("unavailable"),
+        ) as rpc:
+            for attempt, delay in enumerate(expected_delays, 1):
+                self.settings.tick()
+                self.assertEqual(rpc.call_count, attempt)
+
+                deadline = self.now[0] + delay
+                self.assertEqual(
+                    self.settings.next_screenshot_check,
+                    deadline,
+                )
+
+                self.now[0] = deadline - 0.001
+                self.settings.tick()
+                self.assertEqual(rpc.call_count, attempt)
+                self.now[0] = deadline
+
+        self.assertFalse(self.settings.screenshot_ready)
+        self.assertEqual(self.settings.screenshot_retry_delay, 30.0)
+
+    def test_rejected_write_warns_once_across_retries(self):
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            side_effect=[
+                self._get_response(""),
+                self._set_response(False),
+                self._get_response(""),
+                self._set_response(False),
+            ],
+        ) as rpc, mock.patch("service.log") as log:
+            self.settings.tick()
+            self.now[0] = self.settings.next_screenshot_check
+            self.settings.tick()
+
+        self.assertFalse(self.settings.screenshot_ready)
+        self.assertEqual(
+            self._methods(rpc),
+            [
+                "Settings.GetSettingValue",
+                "Settings.SetSettingValue",
+            ] * 2,
+        )
+        log.assert_called_once_with(
+            "managed screenshot path write was rejected",
+            fake_xbmc.LOGWARNING,
+        )
+
+    def test_readback_mismatch_warns_once_and_uses_exact_requests(self):
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            side_effect=[
+                self._get_response(""),
+                self._set_response(True),
+                self._get_response("/fixture/not-managed"),
+                self._get_response(""),
+                self._set_response(True),
+                self._get_response("/fixture/not-managed"),
+            ],
+        ) as rpc, mock.patch("service.log") as log:
+            self.settings.tick()
+            self.now[0] = self.settings.next_screenshot_check
+            self.settings.tick()
+
+        self.assertFalse(self.settings.screenshot_ready)
+        expected_cycle = [
+            {
+                "jsonrpc": "2.0",
+                "method": "Settings.GetSettingValue",
+                "params": {"setting": "debug.screenshotpath"},
+                "id": "get:debug.screenshotpath",
+            },
+            {
+                "jsonrpc": "2.0",
+                "method": "Settings.SetSettingValue",
+                "params": {
+                    "setting": "debug.screenshotpath",
+                    "value": self.SCREENSHOT_PATH,
+                },
+                "id": "debug.screenshotpath",
+            },
+            {
+                "jsonrpc": "2.0",
+                "method": "Settings.GetSettingValue",
+                "params": {"setting": "debug.screenshotpath"},
+                "id": "get:debug.screenshotpath",
+            },
+        ]
+        self.assertEqual(self._requests(rpc), expected_cycle * 2)
+        log.assert_called_once_with(
+            "managed screenshot path read-back did not match",
+            fake_xbmc.LOGWARNING,
+        )
+
+    def test_eventual_success_stops_queries_and_writes(self):
+        responses = [
+            self._response(
+                "get:debug.screenshotpath",
+                error={"code": -1, "message": "not ready"},
+            ),
+            self._get_response(""),
+            self._set_response(True),
+            self._get_response(self.SCREENSHOT_PATH),
+        ]
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            side_effect=responses,
+        ) as rpc:
+            self.settings.tick()
+            self.now[0] = self.settings.next_screenshot_check
+            self.settings.tick()
+            self.now[0] += 100.0
+            self.settings.tick()
+
+        self.assertTrue(self.settings.screenshot_ready)
+        self.assertEqual(
+            self._methods(rpc).count("Settings.SetSettingValue"),
+            1,
+        )
+        self.assertEqual(rpc.call_count, 4)
+
+    def test_matching_path_converges_without_a_write(self):
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            return_value=self._get_response(self.SCREENSHOT_PATH),
+        ) as rpc:
+            self.settings.tick()
+            self.now[0] = 100.0
+            self.settings.tick()
+
+        self.assertTrue(self.settings.screenshot_ready)
+        self.assertEqual(
+            self._methods(rpc),
+            ["Settings.GetSettingValue"],
+        )
+
+    def test_screenshot_failure_does_not_rerun_core_or_suppress_skin(self):
+        settings = ManagedSettings(
+            clock=lambda: self.now[0],
+            screenshot_path=self.SCREENSHOT_PATH,
+        )
+        with mock.patch.object(
+            ManagedSettings,
+            "_apply_core",
+            return_value=True,
+        ) as apply_core, mock.patch.object(
+            ManagedSettings,
+            "_apply_bingie",
+        ) as apply_skin, mock.patch(
+            "service.xbmc.executeJSONRPC",
+            side_effect=RuntimeError("unavailable"),
+        ) as rpc, mock.patch("service.log") as log:
+            settings.tick()
+            self.assertTrue(settings.core_applied)
+            self.assertTrue(settings.skin_applied)
+            self.assertFalse(settings.screenshot_ready)
+
+            self.now[0] = settings.next_screenshot_check
+            settings.tick()
+
+        apply_core.assert_called_once_with()
+        apply_skin.assert_called_once_with()
+        self.assertEqual(rpc.call_count, 2)
+        self.assertFalse(
+            any(
+                call.args[1] == fake_xbmc.LOGWARNING
+                for call in log.call_args_list
+            )
+        )
 
 
 class InputRouterTest(unittest.TestCase):
