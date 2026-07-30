@@ -387,17 +387,11 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
     def test_static_focus_graph_matches_the_owned_video_contract(self):
         transport = self._control("9201")
         self.assertEqual(self._actions(transport, "onleft"), ("noop",))
-        self.assertEqual(
-            self._actions(transport, "onright"),
-            ("9300", "noop"),
-        )
-        self.assertEqual(self._actions(transport, "onup"), ("9102",))
+        self.assertIn("9300", self._actions(transport, "onright"))
+        self.assertIn("9102", self._actions(transport, "onup"))
 
         timeline = self._control("9300")
-        self.assertEqual(
-            self._actions(timeline, "ondown")[-1],
-            "9201",
-        )
+        self.assertIn("9201", self._actions(timeline, "ondown"))
         self.assertIn(
             "NotifyAll(htpc.seek,timeline-left)",
             self._actions(timeline, "onleft"),
@@ -420,23 +414,90 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(self._actions(top, "onleft"), ("9100",))
         self.assertEqual(self._actions(top, "onright"), ("9100",))
 
-    def test_non_seekable_media_keeps_an_informational_unfocused_rail(self):
-        transport = self._control("9201")
-        transport_right = [
-            (
-                action.get("condition"),
-                (action.text or "").strip(),
+    def test_transition_barrier_has_exact_ready_dead_and_review_branches(self):
+        ready = (
+            "!String.IsEmpty(Window(Home).Property(htpc.service.ready))"
+        )
+        dead = "String.IsEmpty(Window(Home).Property(htpc.service.ready))"
+        production = "$PARAM[production_actions]"
+        inert = "$PARAM[inert_actions]"
+        seekable = "$PARAM[seekable_condition]"
+        not_seekable = "![$PARAM[seekable_condition]]"
+        modal = (
+            "!String.IsEmpty(Window(Home).Property(htpc.seek.modal))"
+        )
+        not_modal = "String.IsEmpty(Window(Home).Property(htpc.seek.modal))"
+
+        def branches(control_id, action_name):
+            return tuple(
+                (
+                    action.get("condition"),
+                    (action.text or "").strip(),
+                )
+                for action in self._control(control_id).findall(action_name)
             )
-            for action in transport.findall("onright")
-        ]
+
         self.assertEqual(
-            transport_right,
-            [
-                ("$PARAM[seekable_condition]", "9300"),
-                ("![$PARAM[seekable_condition]]", "noop"),
-            ],
+            branches("9201", "onup"),
+            (
+                (
+                    f"{production} + {ready}",
+                    "NotifyAll(htpc.seek,transport-up)",
+                ),
+                (f"{production} + {dead}", "9102"),
+                (inert, "9102"),
+            ),
+        )
+        self.assertEqual(
+            branches("9201", "onright"),
+            (
+                (
+                    f"{production} + {seekable} + {ready}",
+                    "NotifyAll(htpc.seek,transport-right)",
+                ),
+                (
+                    f"{production} + {seekable} + {dead}",
+                    "9300",
+                ),
+                (f"{production} + {not_seekable}", "noop"),
+                (f"{inert} + {seekable}", "9300"),
+                (f"{inert} + {not_seekable}", "noop"),
+            ),
+        )
+        self.assertEqual(
+            branches("9201", "ondown"),
+            (
+                (
+                    f"{production} + {ready}",
+                    "NotifyAll(htpc.seek,transport-down)",
+                ),
+                (f"{production} + {dead}", "noop"),
+                (inert, "noop"),
+            ),
+        )
+        self.assertEqual(
+            branches("9300", "ondown"),
+            (
+                (
+                    f"{production} + {ready}",
+                    "NotifyAll(htpc.seek,timeline-down)",
+                ),
+                (
+                    f"{production} + {dead} + {modal}",
+                    "noop",
+                ),
+                (
+                    f"{production} + {dead} + {not_modal}",
+                    "9201",
+                ),
+                (inert, "9201"),
+            ),
         )
 
+        serialized = ET.tostring(self.surface, encoding="unicode")
+        self.assertNotIn("Action(Down", serialized)
+
+    def test_non_seekable_media_keeps_an_informational_unfocused_rail(self):
         timeline = self._control("9300")
         self.assertEqual(
             tuple(

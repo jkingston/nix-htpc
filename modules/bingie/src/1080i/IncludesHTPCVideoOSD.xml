@@ -228,10 +228,17 @@
 					<onclick condition="$PARAM[production_actions]">PlayerControl(Play)</onclick>
 					<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					<onleft>noop</onleft>
-					<onright condition="$PARAM[seekable_condition]">9300</onright>
-					<onright condition="![$PARAM[seekable_condition]]">noop</onright>
-					<onup>9102</onup>
-					<ondown>noop</ondown>
+					<onright condition="$PARAM[production_actions] + $PARAM[seekable_condition] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,transport-right)</onright>
+					<onright condition="$PARAM[production_actions] + $PARAM[seekable_condition] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9300</onright>
+					<onright condition="$PARAM[production_actions] + ![$PARAM[seekable_condition]]">noop</onright>
+					<onright condition="$PARAM[inert_actions] + $PARAM[seekable_condition]">9300</onright>
+					<onright condition="$PARAM[inert_actions] + ![$PARAM[seekable_condition]]">noop</onright>
+					<onup condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,transport-up)</onup>
+					<onup condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9102</onup>
+					<onup condition="$PARAM[inert_actions]">9102</onup>
+					<ondown condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,transport-down)</ondown>
+					<ondown condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">noop</ondown>
+					<ondown condition="$PARAM[inert_actions]">noop</ondown>
 				</control>
 
 				<!--
@@ -261,8 +268,9 @@
 					<onup condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
 					<onup condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9102</onup>
 					<onup condition="$PARAM[inert_actions]">9102</onup>
-					<ondown condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
-					<ondown condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.seek.modal))">9201</ondown>
+					<ondown condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-down)</ondown>
+					<ondown condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
+					<ondown condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready)) + String.IsEmpty(Window(Home).Property(htpc.seek.modal))">9201</ondown>
 					<ondown condition="$PARAM[inert_actions]">9201</ondown>
 					<onclick condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
 					<onclick condition="$PARAM[production_actions] + String.IsEmpty(Window(Home).Property(htpc.service.ready))">SetFocus(9201)</onclick>
