@@ -1,7 +1,7 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
-  kodiSettingsAddonVersion = "2.1.6";
+  kodiSettingsAddonVersion = "2.1.7";
   kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   kodiScreenshotEvidence = import ./kodi-screenshot-evidence/package.nix {
@@ -73,6 +73,10 @@ let
       fi
     '';
   };
+  kodiSettingsWatchdog = import ./kodi-settings-watchdog {
+    inherit lib pkgs;
+    addonVersion = kodiSettingsAddonVersion;
+  };
   kodiOsdReviewAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-osd-review";
     namespace = "script.htpc.osd-review";
@@ -121,9 +125,11 @@ in
 {
   environment.systemPackages = [
     kodiScreenshotEvidence
+    kodiSettingsWatchdog
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
   system.build.kodiOsdReviewAddon = kodiOsdReviewAddon;
+  system.build.kodiSettingsWatchdog = kodiSettingsWatchdog;
 
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
@@ -259,6 +265,48 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+    };
+  };
+
+  systemd.services.kodi-settings-watchdog = {
+    description = "Recover the managed Kodi settings add-on";
+    wantedBy = [ "multi-user.target" ];
+    requires = [ "greetd.service" ];
+    after = [
+      "greetd.service"
+      "kodi-settings.service"
+    ];
+    partOf = [ "greetd.service" ];
+
+    serviceConfig = {
+      Type = "simple";
+      User = "htpc";
+      Group = "users";
+      ExecStart = "${kodiSettingsWatchdog}/bin/kodi-settings-watchdog";
+      Restart = "always";
+      RestartSec = 1;
+
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      PrivateTmp = true;
+      ProtectClock = true;
+      ProtectControlGroups = true;
+      ProtectHome = true;
+      ProtectHostname = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      ProtectSystem = "strict";
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+      ];
+      RestrictRealtime = true;
+      RestrictSUIDSGID = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      CapabilityBoundingSet = "";
+      UMask = "0077";
     };
   };
 

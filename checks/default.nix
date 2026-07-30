@@ -23,6 +23,8 @@ let
     };
   cecWakeUnit =
     htpcConfiguration.systemd.units."cec-tv-wake.service";
+  settingsWatchdog =
+    htpcConfiguration.systemd.services.kodi-settings-watchdog;
   evidenceProducer =
     repositoryRoot
     + "/modules/kodi-screenshot-evidence/kodi_screenshot_evidence.py";
@@ -71,6 +73,23 @@ let
   };
 in
 {
+  kodi-settings-watchdog-contract =
+    assert settingsWatchdog.requires == [ "greetd.service" ];
+    assert builtins.elem "greetd.service" settingsWatchdog.after;
+    assert builtins.elem "kodi-settings.service" settingsWatchdog.after;
+    assert settingsWatchdog.partOf == [ "greetd.service" ];
+    assert settingsWatchdog.serviceConfig.User == "htpc";
+    assert settingsWatchdog.serviceConfig.Group == "users";
+    assert settingsWatchdog.serviceConfig.Restart == "always";
+    assert settingsWatchdog.serviceConfig.NoNewPrivileges == true;
+    assert settingsWatchdog.serviceConfig.ProtectSystem == "strict";
+    assert !(settingsWatchdog.serviceConfig ? PrivateNetwork);
+    assert settingsWatchdog.serviceConfig.RestrictAddressFamilies
+      == [ "AF_INET" "AF_INET6" ];
+    pkgs.runCommand "kodi-settings-watchdog-contract" { } ''
+      touch "$out"
+    '';
+
   kodi-cec-policy =
     assert integratedCecPeripheralData.homeRelativePath
       == cecPeripheralData.homeRelativePath;
