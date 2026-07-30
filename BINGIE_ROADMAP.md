@@ -100,7 +100,9 @@ Checks:
 - `nix flake check --no-build --all-systems`;
 - a native or remote `nix build .#checks.aarch64-linux.htpc-pi`;
 - deployed `nixos-version --configuration-revision` matches the tested commit;
-- `/run/current-system` is the exact toplevel path that was accepted.
+- `/run/current-system` is the exact toplevel path that was accepted;
+- after persistence, `/nix/var/nix/profiles/system` resolves to that same
+  toplevel and the newest current generation records the tested revision.
 
 ### M0.3a — Make the Pi ready for managed screenshots
 
@@ -212,8 +214,11 @@ Document and, where it remains simple, automate:
 3. build the exact Pi toplevel;
 4. activate with `nixos-rebuild test`;
 5. run health, log, remote, performance, and screenshot checks;
-6. persist with `switch` only after acceptance;
-7. record revision, closure, generation, add-on versions, and QA result.
+6. persist with `nixos-rebuild switch --flake` from the exact clean checkout
+   only after acceptance;
+7. require `/run/current-system`, `/nix/var/nix/profiles/system`, and the newest
+   current generation to identify the accepted closure and revision;
+8. record revision, closure, generation, add-on versions, and QA result.
 
 Rollback after a failed `test` must use the recorded old closure. Persistent
 generation rollback remains a separate operation.
