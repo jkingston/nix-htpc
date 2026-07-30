@@ -66,6 +66,7 @@
 		<param name="property_prefix" default="htpc.seek" />
 		<param name="production_actions" default="true" />
 		<param name="inert_actions" default="false" />
+		<param name="preview_background_load" default="true" />
 		<definition>
 			<control type="group">
 				<description>HTPC fork-owned video OSD</description>
@@ -309,6 +310,7 @@
 					<param name="preview_height" value="$PARAM[preview_height]" />
 					<param name="target_fill_color" value="80ffffff" />
 					<param name="stable_preview_card" value="true" />
+					<param name="preview_background_load" value="$PARAM[preview_background_load]" />
 					<param name="ready_condition" value="$PARAM[presentation_ready]" />
 					<param name="property_window" value="$PARAM[property_window]" />
 					<param name="property_prefix" value="$PARAM[property_prefix]" />

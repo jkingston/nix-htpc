@@ -20,6 +20,7 @@ SKIN_ROOT = Path(
 XML_ROOT = SKIN_ROOT / "1080i"
 PLAYBACK_XML = XML_ROOT / "IncludesHTPCPlayback.xml"
 VIDEO_OSD_XML = XML_ROOT / "IncludesHTPCVideoOSD.xml"
+VIDEO_OSD_REVIEW_XML = XML_ROOT / "Custom_1192_HTPCVideoOSDReview.xml"
 INCLUDES_XML = XML_ROOT / "Includes.xml"
 OSD_XML = XML_ROOT / "IncludesOSD.xml"
 VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
@@ -113,6 +114,7 @@ class ExpectedForkLayoutTest(unittest.TestCase):
                 SKIN_ROOT,
                 PLAYBACK_XML,
                 VIDEO_OSD_XML,
+                VIDEO_OSD_REVIEW_XML,
                 INCLUDES_XML,
                 OSD_XML,
                 VIDEO_OSD_WINDOW_XML,
@@ -172,7 +174,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             for node in control.findall(name)
         )
 
-    def test_surface_file_is_registered_once_but_not_live_yet(self):
+    def test_surface_is_reviewable_but_not_consumed_by_production(self):
         registrations = [
             node
             for node in self.includes_root.iter("include")
@@ -196,8 +198,9 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 live_consumers.append(source.name)
         self.assertEqual(
             live_consumers,
-            [],
-            "the structural OSD commit must not cut production over",
+            [VIDEO_OSD_REVIEW_XML.name],
+            "only the deterministic review window may consume the OSD "
+            "before production cutover",
         )
 
     def test_fixture_sensitive_inputs_have_safe_production_defaults(self):
@@ -224,6 +227,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(parameters["property_prefix"], "htpc.seek")
         self.assertEqual(parameters["production_actions"], "true")
         self.assertEqual(parameters["inert_actions"], "false")
+        self.assertEqual(parameters["preview_background_load"], "true")
 
     def test_private_interactive_ids_are_unique_and_exclude_legacy_proxies(self):
         controls = [
@@ -390,6 +394,10 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 )
         self.assertEqual(passed_parameters["target_fill_color"], "80ffffff")
         self.assertEqual(passed_parameters["stable_preview_card"], "true")
+        self.assertEqual(
+            passed_parameters["preview_background_load"],
+            "$PARAM[preview_background_load]",
+        )
         self.assertEqual(
             passed_parameters["ready_condition"],
             "$PARAM[presentation_ready]",
@@ -599,6 +607,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
             "$INFO[Skin.String(BingieOSDProgressBarColor)]",
         )
         self.assertEqual(layout_defaults["stable_preview_card"], "false")
+        self.assertEqual(layout_defaults["preview_background_load"], "true")
         self.assertEqual(layout_defaults["preview_top"], "650")
         self.assertEqual(
             layout_defaults["ready_condition"],

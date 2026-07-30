@@ -57,7 +57,8 @@ kodiPackages.buildKodiAddon {
       1080i/VideoFullScreen.xml \
       1080i/VideoOSD.xml \
       1080i/VideoOSDBookmarks.xml \
-      1080i/Custom_1158_AutoCloseOSD.xml
+      1080i/Custom_1158_AutoCloseOSD.xml \
+      1080i/Custom_1192_HTPCVideoOSDReview.xml
 
     test ! -e 1080i/script-skinshortcuts-includes.xml
     test "$(grep -c 'SetProperty(BingiePlaybackStarting' \
@@ -87,6 +88,9 @@ kodiPackages.buildKodiAddon {
     test -f "$addon_dir/addon.xml"
     test -f "$addon_dir/1080i/Home.xml"
     test -f "$addon_dir/1080i/IncludesHTPCVideoOSD.xml"
+    test -f "$addon_dir/1080i/Custom_1192_HTPCVideoOSDReview.xml"
+    test -f "$addon_dir/resources/review/seek-25.png"
+    test -f "$addon_dir/resources/review/seek-75.png"
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Deterministic, media-free review host for the fork-owned video OSD.
+
+  script.htpc.osd-review owns the finite fixture state in the isolated
+  htpc.review.* namespace. This window owns only layout, focus, and cleanup.
+-->
+<window type="dialog" id="1192">
+	<defaultcontrol always="true">9201</defaultcontrol>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),transport-paused)">SetFocus(9201)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-idle)">SetFocus(9300)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-backward)">SetFocus(9300)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward)">SetFocus(9300)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),top-stop)">SetFocus(9101)</onload>
+
+	<onunload>ClearProperty(htpc.review.ready,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.scenario,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.revision,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.actualprogress,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.bufferprogress,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.paused,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.title,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.subtitle,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.elapsed,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.remaining,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.viewactive,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.viewslot,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.revision,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.phase,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.targetvalid,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.targetfill,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.targetmarker,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.time,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.delta,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.prompt,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.previewstatus,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.previewpath,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.a.previewanchor,Home)</onunload>
+
+	<controls>
+		<control type="image">
+			<description>HTPC OSD review opaque backdrop</description>
+			<left>0</left>
+			<top>0</top>
+			<width>1920</width>
+			<height>1080</height>
+			<texture colordiffuse="ff34383e">colors/color_white.png</texture>
+		</control>
+
+		<include content="HTPCVideoOSD">
+			<param name="visible" value="true" />
+			<param name="title" value="$INFO[Window(Home).Property(htpc.review.title)]" />
+			<param name="subtitle" value="$INFO[Window(Home).Property(htpc.review.subtitle)]" />
+			<param name="elapsed" value="$INFO[Window(Home).Property(htpc.review.elapsed)]" />
+			<param name="remaining" value="$INFO[Window(Home).Property(htpc.review.remaining)]" />
+			<param name="buffer_progress" value="Window(Home).Property(htpc.review.bufferprogress)" />
+			<param name="actual_progress" value="Window(Home).Property(htpc.review.actualprogress)" />
+			<param name="paused_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.paused))" />
+			<param name="chapter_available" value="false" />
+			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />
+			<param name="presentation_ready" value="!String.IsEmpty(Window(Home).Property(htpc.review.ready))" />
+			<param name="property_window" value="Home" />
+			<param name="property_prefix" value="htpc.review.seek" />
+			<param name="production_actions" value="false" />
+			<param name="inert_actions" value="true" />
+			<param name="preview_background_load" value="false" />
+		</include>
+	</controls>
+</window>

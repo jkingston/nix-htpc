@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="214" viewBox="0 0 380 214">
+  <rect width="380" height="214" fill="#281d34"/>
+  <rect x="285" y="0" width="95" height="214" fill="#56345f"/>
+  <path d="M0 52L285 0v170L0 214z" fill="#3d2949"/>
+  <circle cx="66" cy="48" r="25" fill="#df806b"/>
+  <rect x="310" y="27" width="44" height="160" rx="8" fill="#a66699"/>
+  <g fill="#ffffff" transform="translate(86 54)">
+    <!-- Seven-segment 7 -->
+    <rect x="8" y="0" width="32" height="8"/>
+    <rect x="40" y="8" width="8" height="28"/>
+    <rect x="40" y="44" width="8" height="28"/>
+    <!-- Seven-segment 5 -->
+    <rect x="64" y="0" width="32" height="8"/>
+    <rect x="56" y="8" width="8" height="28"/>
+    <rect x="64" y="36" width="32" height="8"/>
+    <rect x="96" y="44" width="8" height="28"/>
+    <rect x="64" y="72" width="32" height="8"/>
+    <!-- Percent mark -->
+    <circle cx="126" cy="14" r="8"/>
+    <path d="M117 72L151 4h9l-34 68z"/>
+    <circle cx="151" cy="66" r="8"/>
+  </g>
+  <rect x="86" y="158" width="184" height="4" fill="#c4a8c7"/>
+  <rect x="86" y="158" width="138" height="4" fill="#ffffff"/>
+</svg>
