@@ -39,6 +39,7 @@ class BoundedProcess:
         *,
         clock: Callable[[], float] = time.monotonic,
         popen_factory: Callable[..., subprocess.Popen[bytes]] = subprocess.Popen,
+        graceful_timeout: float = 0.0,
         terminate_timeout: float = 1.0,
         max_stderr_bytes: int = 64 * 1024,
         description: str = "process",
@@ -49,6 +50,8 @@ class BoundedProcess:
             or any(not isinstance(argument, str) for argument in argv)
         ):
             raise ValueError("argv must contain strings")
+        if graceful_timeout < 0:
+            raise ValueError("graceful_timeout must not be negative")
         if terminate_timeout <= 0:
             raise ValueError("terminate_timeout must be positive")
         if max_stderr_bytes <= 0:
@@ -58,6 +61,7 @@ class BoundedProcess:
 
         self.argv = list(argv)
         self.clock = clock
+        self.graceful_timeout = graceful_timeout
         self.terminate_timeout = terminate_timeout
         self.max_stderr_bytes = max_stderr_bytes
         self.description = description
@@ -113,6 +117,14 @@ class BoundedProcess:
         """Return the bounded stderr tail observed so far."""
 
         return bytes(self._stderr_bytes)
+
+    @property
+    def returncode(self) -> Optional[int]:
+        """Return the current process status without waiting."""
+
+        if self.process is None:
+            return None
+        return self.process.poll()
 
     def write(self, data: bytes, deadline: float) -> None:
         if self._closed:
@@ -207,6 +219,11 @@ class BoundedProcess:
             try:
                 stdin.close()
             except OSError:
+                pass
+        if process.poll() is None and self.graceful_timeout > 0:
+            try:
+                process.wait(timeout=self.graceful_timeout)
+            except subprocess.TimeoutExpired:
                 pass
         if process.poll() is None:
             try:

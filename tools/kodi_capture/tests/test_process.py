@@ -37,6 +37,7 @@ class BoundedProcessTest(unittest.TestCase):
             {"argv": []},
             {"argv": "program"},
             {"argv": ["valid", 7]},
+            {"argv": ["valid"], "graceful_timeout": -1},
             {"argv": ["valid"], "terminate_timeout": 0},
             {"argv": ["valid"], "max_stderr_bytes": 0},
             {"argv": ["valid"], "description": ""},
@@ -201,6 +202,21 @@ class BoundedProcessTest(unittest.TestCase):
         process.close()
         self.assertIsNotNone(child.poll())
         process.close()
+
+    def test_close_allows_bounded_graceful_exit_after_stdin_eof(self):
+        factory = RecordingPopenFactory(
+            "import sys; sys.stdin.buffer.read()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            graceful_timeout=0.2,
+            terminate_timeout=0.1,
+        )
+        child = factory.processes[0]
+        process.close()
+        self.assertEqual(child.returncode, 0)
+        self.assertEqual(process.returncode, 0)
 
     @unittest.skipUnless(
         hasattr(signal, "SIGTERM"),
