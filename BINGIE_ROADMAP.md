@@ -102,33 +102,77 @@ Checks:
 - deployed `nixos-version --configuration-revision` matches the tested commit;
 - `/run/current-system` is the exact toplevel path that was accepted.
 
-### M0.3 — Add repeatable headless screenshot capture
+### M0.3a — Make the Pi ready for managed screenshots
 
-Configure Kodi's screenshot directory declaratively and add a small local
-helper that:
+Create `/tmp/kodi-screenshots` (without a trailing slash in the Kodi setting)
+with a declarative systemd-tmpfiles rule and make the managed Kodi settings
+service own `debug.screenshotpath`.
 
-- connects over SSH and Kodi's loopback JSON-RPC endpoint;
-- snapshots the screenshot directory, triggers the proven screenshot action,
-  and polls for one new, stable image with a timeout;
-- verifies an expected window before capture and records focus evidence;
-- copies the image and a metadata file to
+Setting the value is not sufficient evidence of readiness. Retry while Kodi is
+starting, then query `Settings.GetSettingValue` and mark screenshot readiness
+complete only when Kodi returns the exact managed path. Keep this retry and
+verification beside the existing managed-setting code rather than adding a
+second startup service.
+
+This commit contains no capture helper or artifact handling.
+It bumps the managed add-on version in both
+`modules/kodi-settings-addon/addon.xml` and `modules/kodi.nix`, so deployed
+screenshot-readiness behaviour is independently identifiable.
+
+Checks:
+
+- the tmpfiles directory has the intended path, owner, group, and mode;
+- service tests cover an unavailable JSON-RPC endpoint, a rejected write, a
+  read-back mismatch, eventual success, and no further writes after success;
+- the deployed Pi reports the exact managed `debug.screenshotpath`;
+- a direct local JSON-RPC screenshot lands in that directory;
+- passive CEC/journal evidence contains no Pi-originated wake, routing, power,
+  or active-source action; no active topology/power probe is used.
+
+### M0.3b — Add the capture client and evidence format
+
+Add a small local client that:
+
+- connects over SSH to Kodi's loopback JSON-RPC stream without exposing the
+  endpoint on the network;
+- uses unique request IDs, socket deadlines, incremental decoding across
+  fragmented or concatenated JSON values, response-ID matching, and rejection
+  of malformed or trailing responses;
+- verifies expected window, focus/readiness evidence, and screensaver/busy
+  state across two consecutive polls after animations settle; it fails rather
+  than dismissing a screensaver or navigating;
+- snapshots the managed screenshot directory, sends only
+  `Input.ExecuteAction` with the `screenshot` action, and polls for exactly one
+  new or changed `(filename, size, mtime)` candidate whose size and mtime match
+  in consecutive polls before a timeout;
+- copies, fully decodes, validates, and hashes a complete 1920x1080 PNG before
+  accepting it;
+- copies the image and an atomic metadata file to
   `.artifacts/visual/<revision>/`;
 - records resolution, active window, focus label, NixOS revision, closure,
-  add-on versions, and image hash;
-- fails rather than capturing a first-use file picker or unexpected window.
+  add-on versions, byte count, and image hash;
+- fails rather than capturing a first-use file picker, unexpected window,
+  unready scenario, concurrent screenshot, or partial image.
 
 Focus labels are localized and may be duplicated. Treat them as evidence, not
 an invariant; require a control ID only where Kodi exposes a stable one.
 
+The client must not send CEC, wake, power, volume, or active-source actions.
 Do not add FFmpeg/KMS capture unless a real OSD layer is missing from Kodi's
 fresh screenshot. Real decoded video is not a stable golden; deterministic
 review fixtures may use an opaque background.
 
 Checks:
 
-- TV remains on its current input and is not awakened;
+- fragmented and coalesced JSON, response matching, timeout, directory-diff,
+  stable-file, PNG, window, readiness, metadata, and failure paths pass without
+  a Pi by using a fake transport;
+- passive CEC capture plus a `cec-tv-wake` journal cursor shows no Pi-originated
+  active-source, routing, view-on, standby, or wake-activation event;
+- no active CEC topology/power probe is used; exact TV input identity is manual
+  or TV-side evidence when required;
 - Home screenshot is 1920x1080 and visually valid;
-- an intentionally wrong expected window fails;
+- an intentionally wrong expected window or readiness condition fails;
 - `.artifacts/` is ignored, `git check-ignore` confirms the destination, and no
   captured raster appears in `git status`.
 
