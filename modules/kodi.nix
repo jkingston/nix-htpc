@@ -3,6 +3,10 @@ let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
   kodiSettingsAddonVersion = "2.1.6";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
+  kodiScreenshotEvidence = import ./kodi-screenshot-evidence/package.nix {
+    inherit lib pkgs;
+    screenshotPath = kodiScreenshotPath;
+  };
   bingieMod = import ./bingie {
     inherit pkgs;
     kodiPackages = rpiPackages.kodi-gbm.packages;
@@ -76,6 +80,11 @@ let
   ]);
 in
 {
+  environment.systemPackages = [
+    kodiScreenshotEvidence
+  ];
+  system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
+
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
   ];
