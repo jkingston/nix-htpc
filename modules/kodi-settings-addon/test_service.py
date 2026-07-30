@@ -126,7 +126,12 @@ from presenter import (
 )
 from player_adapter import KodiPlayerAdapter
 from seek_controller import SCRUB_ACTIVE, RESUME_PENDING, SeekController
-from service import ManagedSettings, ServiceMonitor
+from service import (
+    ManagedSettings,
+    ServiceMonitor,
+    json_rpc_response,
+    set_setting,
+)
 
 
 class FakeController(object):
@@ -274,6 +279,106 @@ class FakeChapters(object):
 class FakePlayer(object):
     def snapshot(self):
         return {"current": 123.0}
+
+
+class JsonRpcResponseTest(unittest.TestCase):
+    def test_set_setting_returns_success_and_sends_expected_request(self):
+        response = json.dumps(
+            {"jsonrpc": "2.0", "id": "example.setting", "result": True}
+        )
+        with mock.patch(
+            "service.xbmc.executeJSONRPC",
+            return_value=response,
+        ) as rpc:
+            self.assertTrue(set_setting("example.setting", "value"))
+
+        request = json.loads(rpc.call_args.args[0])
+        self.assertEqual(request["method"], "Settings.SetSettingValue")
+        self.assertEqual(
+            request["params"],
+            {"setting": "example.setting", "value": "value"},
+        )
+        self.assertEqual(request["id"], "example.setting")
+
+    def test_invalid_responses_fail_safely(self):
+        failures = [
+            ("exception", RuntimeError("unavailable")),
+            ("malformed", "{"),
+            ("non-object", "[]"),
+            (
+                "wrong-id",
+                json.dumps(
+                    {"jsonrpc": "2.0", "id": "other", "result": True}
+                ),
+            ),
+            (
+                "error",
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": "request",
+                        "error": {"code": -1, "message": "failed"},
+                    }
+                ),
+            ),
+            (
+                "missing-result",
+                json.dumps({"jsonrpc": "2.0", "id": "request"}),
+            ),
+        ]
+        for name, response in failures:
+            with self.subTest(name=name), mock.patch(
+                "service.xbmc.executeJSONRPC",
+                side_effect=response
+                if isinstance(response, Exception)
+                else None,
+                return_value=None
+                if isinstance(response, Exception)
+                else response,
+            ):
+                self.assertIsNone(
+                    json_rpc_response("Test.Method", {}, "request")
+                )
+
+
+class ManagedCoreSettingsTest(unittest.TestCase):
+    def test_failed_write_returns_false_but_attempts_the_full_batch(self):
+        outcomes = [False] + [True] * 10
+        with mock.patch(
+            "service.set_setting",
+            side_effect=outcomes,
+        ) as set_core:
+            self.assertFalse(ManagedSettings._apply_core())
+
+        self.assertEqual(set_core.call_count, 11)
+        self.assertEqual(
+            set_core.call_args_list[0],
+            mock.call("videoplayer.useprimedecoder", True),
+        )
+        self.assertIn(
+            mock.call("filelists.showparentdiritems", False),
+            set_core.call_args_list,
+        )
+        self.assertEqual(
+            set_core.call_args_list[-1],
+            mock.call("debug.showloginfo", False),
+        )
+
+    def test_tick_retries_until_full_success_then_stops(self):
+        settings = ManagedSettings(clock=lambda: 0.0)
+        settings.skin_applied = True
+        with mock.patch.object(
+            ManagedSettings,
+            "_apply_core",
+            side_effect=[False, True],
+        ) as apply_core:
+            settings.tick()
+            self.assertFalse(settings.core_applied)
+            settings.tick()
+            self.assertTrue(settings.core_applied)
+            settings.tick()
+
+        self.assertEqual(apply_core.call_count, 2)
 
 
 class InputRouterTest(unittest.TestCase):

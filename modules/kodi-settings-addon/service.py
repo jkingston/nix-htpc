@@ -29,24 +29,45 @@ def log(message, level=xbmc.LOGINFO):
     xbmc.log("HTPC settings: %s" % message, level)
 
 
-def set_setting(setting, value):
-    response = json.loads(
-        xbmc.executeJSONRPC(
+def json_rpc_response(method, params, request_id):
+    try:
+        raw_response = xbmc.executeJSONRPC(
             json.dumps(
                 {
                     "jsonrpc": "2.0",
-                    "method": "Settings.SetSettingValue",
-                    "params": {"setting": setting, "value": value},
-                    "id": setting,
+                    "method": method,
+                    "params": params,
+                    "id": request_id,
                 }
             )
         )
-    )
+        response = json.loads(raw_response)
+    except Exception as error:
+        log("%s failed: %s" % (method, error), xbmc.LOGERROR)
+        return None
+
+    if not isinstance(response, dict):
+        log("%s returned a non-object response" % method, xbmc.LOGERROR)
+        return None
+    if response.get("id") != request_id:
+        log("%s returned the wrong response id" % method, xbmc.LOGERROR)
+        return None
     if "error" in response:
-        log(
-            "failed to set %s: %s" % (setting, response["error"]),
-            xbmc.LOGERROR,
-        )
+        log("%s failed: %s" % (method, response["error"]), xbmc.LOGERROR)
+        return None
+    if "result" not in response:
+        log("%s returned no result" % method, xbmc.LOGERROR)
+        return None
+    return response
+
+
+def set_setting(setting, value):
+    response = json_rpc_response(
+        "Settings.SetSettingValue",
+        {"setting": setting, "value": value},
+        setting,
+    )
+    return response is not None and response["result"] is True
 
 
 def set_skin_setting(setting, enabled):
@@ -65,8 +86,7 @@ class ManagedSettings(object):
 
     def tick(self):
         if not self.core_applied:
-            self._apply_core()
-            self.core_applied = True
+            self.core_applied = self._apply_core()
 
         now = self.clock()
         if self.skin_applied or now < self.next_skin_check:
@@ -79,17 +99,20 @@ class ManagedSettings(object):
 
     @staticmethod
     def _apply_core():
-        set_setting("videoplayer.useprimedecoder", True)
-        set_setting("videoplayer.useprimerenderer", 0)
-        set_setting("videoplayer.adjustrefreshrate", 2)
-        set_setting("videoscreen.whitelist", PLAYBACK_MODES)
-        set_setting("videoscreen.whitelistpulldown", False)
-        set_setting("videoscreen.whitelistdoublerefreshrate", False)
-        set_setting("videoplayer.seeksteps", [-10, 10])
-        set_setting("videoplayer.seekdelay", 0)
-        set_setting("filelists.showparentdiritems", False)
-        set_setting("input.enablemouse", False)
-        set_setting("debug.showloginfo", False)
+        results = [
+            set_setting("videoplayer.useprimedecoder", True),
+            set_setting("videoplayer.useprimerenderer", 0),
+            set_setting("videoplayer.adjustrefreshrate", 2),
+            set_setting("videoscreen.whitelist", PLAYBACK_MODES),
+            set_setting("videoscreen.whitelistpulldown", False),
+            set_setting("videoscreen.whitelistdoublerefreshrate", False),
+            set_setting("videoplayer.seeksteps", [-10, 10]),
+            set_setting("videoplayer.seekdelay", 0),
+            set_setting("filelists.showparentdiritems", False),
+            set_setting("input.enablemouse", False),
+            set_setting("debug.showloginfo", False),
+        ]
+        return all(results)
 
     @staticmethod
     def _apply_bingie():

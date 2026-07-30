@@ -8,7 +8,7 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "2.1.3";
+    version = "2.1.4";
     src = ./kodi-settings-addon;
     nativeCheckInputs = [
       pkgs.buildPackages.libxml2
