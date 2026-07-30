@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest import mock
 
-from tools.kodi_capture.jsonrpc import JsonRpcTransportError
+from tools.kodi_capture.jsonrpc import JsonRpcTimeout, JsonRpcTransportError
 from tools.kodi_capture.ssh_stream import OpenSshByteStream
 
 
@@ -53,7 +53,7 @@ class OpenSshByteStreamTest(unittest.TestCase):
     def test_setup_failure_closes_and_reaps_started_process(self):
         factory = RecordingPopenFactory("import time; time.sleep(60)")
         with mock.patch(
-            "tools.kodi_capture.ssh_stream.os.set_blocking",
+            "tools.kodi_capture.process.os.set_blocking",
             side_effect=OSError("cannot configure pipe"),
         ):
             with self.assertRaises(JsonRpcTransportError) as raised:
@@ -130,6 +130,22 @@ class OpenSshByteStreamTest(unittest.TestCase):
         finally:
             stream.close()
 
+    def test_process_timeout_maps_to_json_rpc_timeout(self):
+        factory = RecordingPopenFactory(
+            "import time; time.sleep(60)"
+        )
+        stream = OpenSshByteStream(
+            "htpc-pi.local",
+            clock=lambda: 2.0,
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with self.assertRaises(JsonRpcTimeout):
+                stream.read(1, deadline=1.0)
+        finally:
+            stream.close()
+
     def test_early_exit_reports_status_and_stderr(self):
         factory = RecordingPopenFactory(
             "import sys; "
@@ -168,7 +184,7 @@ class OpenSshByteStreamTest(unittest.TestCase):
             with self.assertRaises(JsonRpcTransportError) as raised:
                 stream.read(1024, time_deadline())
             self.assertTrue(str(raised.exception).endswith("efgh"))
-            self.assertEqual(bytes(stream._stderr_bytes), b"efgh")
+            self.assertEqual(stream.stderr_tail, b"efgh")
         finally:
             stream.close()
 
@@ -185,6 +201,31 @@ class OpenSshByteStreamTest(unittest.TestCase):
         stream.close()
         self.assertIsNotNone(process.poll())
         stream.close()
+
+    def test_cleanup_failure_maps_to_retained_transport_error(self):
+        factory = RecordingPopenFactory(
+            "import time; time.sleep(60)"
+        )
+        stream = OpenSshByteStream(
+            "htpc-pi.local",
+            popen_factory=factory,
+            terminate_timeout=0.01,
+        )
+        process = factory.processes[0]
+        real_wait = process.wait
+        try:
+            with mock.patch.object(
+                process,
+                "wait",
+                side_effect=subprocess.TimeoutExpired("ssh", 0.01),
+            ):
+                with self.assertRaises(JsonRpcTransportError) as first:
+                    stream.close()
+                with self.assertRaises(JsonRpcTransportError) as second:
+                    stream.close()
+                self.assertIs(first.exception, second.exception)
+        finally:
+            real_wait(timeout=2.0)
 
     @unittest.skipUnless(
         hasattr(signal, "SIGTERM"),
