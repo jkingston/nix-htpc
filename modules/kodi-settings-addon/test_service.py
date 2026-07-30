@@ -96,7 +96,13 @@ sys.modules.setdefault("xbmc", fake_xbmc)
 sys.modules.setdefault("xbmcgui", fake_xbmcgui)
 sys.modules.setdefault("xbmcaddon", fake_xbmcaddon)
 
-from chapter_dialog import ChapterDialogManager
+from chapter_dialog import (
+    ACTION_MOVE_LEFT,
+    ACTION_MOVE_RIGHT,
+    ChapterDialogManager,
+    ChapterRail,
+)
+from input_quarantine import INPUT_WATERMARK_PAYLOAD_KEY
 from input_router import InputRouter, KodiCommands
 from media_contract import (
     CHAPTERS_AVAILABLE,
@@ -126,7 +132,13 @@ from presenter import (
     ServiceLease,
 )
 from player_adapter import KodiPlayerAdapter
-from seek_controller import SCRUB_ACTIVE, RESUME_PENDING, SeekController
+from seek_controller import (
+    HOLD_ONSET_MAX,
+    HOLD_RELEASE_IDLE,
+    SCRUB_ACTIVE,
+    RESUME_PENDING,
+    SeekController,
+)
 from service import (
     ManagedSettings,
     SeekService,
@@ -741,6 +753,78 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.controller.hidden, [(1, 1.0)])
         self.assertIn("emphasize", self.presenter.calls)
 
+    def test_boundary_quarantines_cross_window_arrow_until_quiet(self):
+        self.router.handle("left", 1.0)
+        self.controller.state = "idle"
+        self.controller.hidden = []
+        self.presenter.calls = []
+        self.router._defer_transition("top")
+        self.router.on_playback_boundary(1.1)
+        self.assertIsNone(self.router.pending_transition)
+
+        suppressed_at = 1.3
+        self.router.handle("timeline-left", suppressed_at)
+
+        self.assertEqual(self.controller.hidden, [])
+        self.assertEqual(self.controller.timeline, [])
+        self.assertEqual(self.presenter.calls, [])
+
+        deadline = max(
+            1.0 + HOLD_ONSET_MAX,
+            suppressed_at + HOLD_RELEASE_IDLE,
+        )
+        fresh_at = deadline + 0.001
+        self.router.handle("timeline-left", fresh_at)
+        self.assertEqual(self.controller.timeline, [(-1, fresh_at)])
+        self.assertEqual(self.presenter.calls, ["emphasize"])
+
+    def test_physical_key_is_observed_before_router_side_effects(self):
+        self.controller.hidden_step = mock.Mock(
+            side_effect=RuntimeError("controller failed")
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.router.handle("left", 1.0)
+
+        self.router.on_playback_boundary(1.1)
+        self.controller.hidden_step = mock.Mock(return_value=True)
+        self.router.handle("timeline-left", 1.2)
+
+        self.controller.hidden_step.assert_not_called()
+        self.assertEqual(self.controller.timeline, [])
+        self.assertEqual(self.presenter.calls, [])
+
+    def test_quarantined_select_and_back_have_no_router_side_effects(self):
+        self.router.handle("primary", 1.0)
+        self.router.on_playback_boundary(1.1)
+        self.router.repeat_guard.reset()
+        self.controller.state = "idle"
+        self.controller.ends = 0
+        self.player.pause_for_osd_calls = 0
+        self.presenter.calls = []
+        self.builtins[:] = []
+
+        self.router.handle("osd-primary", 1.2)
+
+        self.assertEqual(self.controller.ends, 0)
+        self.assertEqual(self.player.pause_for_osd_calls, 0)
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.builtins, [])
+
+        self.setUp()
+        self.router.handle("fullscreen-back", 2.0)
+        self.router.on_playback_boundary(2.1)
+        self.router.repeat_guard.reset()
+        self.presenter.osd = True
+        self.presenter.calls = []
+        self.builtins[:] = []
+
+        self.router.handle("osd-back", 2.2)
+
+        self.assertTrue(self.presenter.osd)
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.builtins, [])
+
     def test_hidden_primary_orders_skip_pause_then_transport_osd(self):
         trace = []
         end_skip = self.controller.end_optimistic_skip
@@ -875,6 +959,45 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.controller.targets, [600.0, 600.0])
         self.assertEqual(self.controller.confirms, [None])
         self.assertEqual(self.router.pending_transition, "transport")
+
+    def test_physical_chapter_focus_is_quarantined_before_target_update(self):
+        self.controller.state = "pause-pending"
+        self.controller.source = "chapter"
+        chapter = {
+            "index": 1,
+            "start_seconds": 600.0,
+            "playback_token": "playback-one",
+            "physical_direction": "right",
+        }
+        self.router.handle("chapter-focus", 1.0, chapter)
+        self.assertEqual(self.controller.targets, [600.0])
+
+        self.router.on_playback_boundary(1.1)
+        self.controller.state = "pause-pending"
+        self.controller.source = "chapter"
+        self.controller.targets = []
+        self.router.handle("chapter-focus", 1.2, chapter)
+
+        self.assertEqual(self.controller.targets, [])
+
+    def test_synthetic_chapter_focus_remains_nonphysical(self):
+        self.router.handle("right", 1.0)
+        self.router.on_playback_boundary(1.1)
+        self.controller.state = "pause-pending"
+        self.controller.source = "chapter"
+        self.controller.targets = []
+
+        self.router.handle(
+            "chapter-focus",
+            1.2,
+            {
+                "index": 1,
+                "start_seconds": 600.0,
+                "playback_token": "playback-one",
+            },
+        )
+
+        self.assertEqual(self.controller.targets, [600.0])
 
     def test_chapter_selection_from_another_transaction_is_ignored(self):
         self.controller.state = "scrub-active"
@@ -1069,23 +1192,41 @@ class InputRouterTest(unittest.TestCase):
         self.router._defer_transition("timeline")
         self.router.repeat_guard.arm("select", 1.0)
         self.router.repeat_guard.arm("back", 1.0)
+        self.router.handle("left", 1.0)
+        self.controller.state = "idle"
+        self.router.on_playback_boundary(1.1)
 
         self.router.reset()
 
         self.assertIsNone(self.router.pending_transition)
         self.assertFalse(self.router.repeat_guard.accept("select", 1.1))
         self.assertFalse(self.router.repeat_guard.accept("back", 1.1))
+        self.controller.hidden = []
+        self.presenter.calls = []
+        self.router.handle("left", 1.2)
+        self.assertEqual(self.controller.hidden, [])
+        self.assertEqual(self.presenter.calls, [])
 
     def test_clear_discards_transition_and_repeat_guards(self):
         self.router._defer_transition("timeline")
         self.router.repeat_guard.arm("select", 1.0)
         self.router.repeat_guard.arm("back", 1.0)
+        self.router.handle("left", 1.0)
+        self.controller.state = "idle"
+        self.router.on_playback_boundary(1.1)
 
         self.router.clear()
 
         self.assertIsNone(self.router.pending_transition)
         self.assertTrue(self.router.repeat_guard.accept("select", 1.1))
         self.assertTrue(self.router.repeat_guard.accept("back", 1.1))
+        self.assertEqual(self.router.input_quarantine.last_seen, {})
+        self.assertEqual(self.router.input_quarantine.deadlines, {})
+        self.controller.hidden = []
+        self.presenter.calls = []
+        self.router.handle("left", 1.2)
+        self.assertEqual(self.controller.hidden, [(-1, 1.2)])
+        self.assertEqual(self.presenter.calls, ["emphasize"])
 
 
 def chapter_properties():
@@ -1543,6 +1684,80 @@ class FakeDialog(object):
         self.closed = True
 
 
+class FakeChapterControl(object):
+    def __init__(self, selected):
+        self.selected = selected
+        self.selections = []
+
+    def getSelectedPosition(self):
+        return self.selected
+
+    def selectItem(self, selected):
+        self.selected = selected
+        self.selections.append(selected)
+
+
+class FakeAction(object):
+    def __init__(self, action_id):
+        self.action_id = action_id
+
+    def getId(self):
+        return self.action_id
+
+
+class ChapterRailTest(unittest.TestCase):
+    def _rail(self, selected):
+        events = []
+        control = FakeChapterControl(selected)
+        rail = ChapterRail(
+            "ChapterRail.xml",
+            "/addon",
+            "Default",
+            "1080i",
+            chapters=[
+                {"index": 0, "start_seconds": 0.0},
+                {"index": 1, "start_seconds": 600.0},
+            ],
+            focus_callback=events.append,
+        )
+        rail.getControl = lambda _control_id: control
+        return rail, control, events
+
+    def test_direction_emits_one_physical_focus_event(self):
+        rail, control, events = self._rail(0)
+
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(
+            events,
+            [
+                {
+                    "index": 1,
+                    "start_seconds": 600.0,
+                    "physical_direction": "right",
+                }
+            ],
+        )
+
+    def test_clamped_direction_is_still_one_physical_event(self):
+        rail, control, events = self._rail(0)
+
+        rail.onAction(FakeAction(ACTION_MOVE_LEFT))
+
+        self.assertEqual(control.selections, [0])
+        self.assertEqual(
+            events,
+            [
+                {
+                    "index": 0,
+                    "start_seconds": 0.0,
+                    "physical_direction": "left",
+                }
+            ],
+        )
+
+
 class ChapterDialogManagerTest(unittest.TestCase):
     def setUp(self):
         FakeDialog.instances[:] = []
@@ -1585,6 +1800,29 @@ class ChapterDialogManagerTest(unittest.TestCase):
                 "chapter-exit",
                 {"destination": "back", "arm_back": False},
             ),
+        )
+
+    def test_physical_direction_survives_manager_routing(self):
+        self.manager.open()
+        dialog = FakeDialog.instances[-1]
+        chapter = dict(self.provider.chapters[1])
+        chapter["physical_direction"] = "right"
+
+        dialog.kwargs["focus_callback"](chapter)
+
+        self.assertEqual(
+            self.events,
+            [
+                (
+                    "chapter-focus",
+                    {
+                        "index": 1,
+                        "start_seconds": 600.0,
+                        "playback_token": "playback-one",
+                        "physical_direction": "right",
+                    },
+                )
+            ],
         )
 
     def test_revision_change_notifies_controller_cancel_path(self):
@@ -1665,6 +1903,73 @@ class ServiceMonitorTest(unittest.TestCase):
             [("started", 1), ("stopped", 2), ("ended", 3)],
         )
         self.assertEqual(monitor.current_input_generation(), 3)
+
+    def test_boundary_snapshots_input_evidence_before_purging_old_events(self):
+        timestamps = iter((0.0, 0.4, 0.510, 0.616))
+        monitor = ServiceMonitor(clock=lambda: next(timestamps))
+        monitor.post_input("right", {"sequence": 1})
+        monitor.post_input("timeline-right", {"sequence": 2})
+        monitor.post_player("started", {"identity": "new-media"})
+        monitor.post_input("right", {"sequence": 3})
+
+        events = monitor.drain()
+
+        self.assertEqual(
+            [(event[0], event[1], event[4]) for event in events],
+            [
+                ("player", "started", 1),
+                ("input", "right", 1),
+            ],
+        )
+        boundary_payload = events[0][2]
+        self.assertEqual(boundary_payload["identity"], "new-media")
+        self.assertEqual(
+            boundary_payload[INPUT_WATERMARK_PAYLOAD_KEY],
+            {
+                "last_seen": {"right": 0.4},
+                "latest_direction": {
+                    "key": "right",
+                    "timestamp": 0.4,
+                },
+            },
+        )
+
+        route_controller = FakeController()
+        route_presenter = FakePresenter()
+        router = InputRouter(
+            route_controller,
+            FakePlayer(),
+            route_presenter,
+            FakeChapters(),
+            KodiCommands(lambda _command: None),
+        )
+        service = SeekService.__new__(SeekService)
+        service.monitor = monitor
+        service.router = router
+        service.view = mock.Mock()
+        service.controller = mock.Mock()
+        service.controller.snapshot.return_value = {"state": "idle"}
+        service.player = mock.Mock()
+        service.player.snapshot.return_value = {"playing": True}
+        service.presenter = mock.Mock()
+        service.chapters = mock.Mock()
+        service.publisher = mock.Mock()
+
+        for event in events:
+            self.assertTrue(service._dispatch_event(event))
+
+        self.assertEqual(route_controller.hidden, [])
+        self.assertEqual(route_presenter.calls, [])
+        service.view.on_player_event.assert_called_once_with(
+            "started",
+            {"identity": "new-media"},
+            0.510,
+        )
+        service.controller.on_player_event.assert_called_once_with(
+            "started",
+            {"identity": "new-media"},
+            0.510,
+        )
 
 
 class SeekServiceGenerationFenceTest(unittest.TestCase):
@@ -1830,16 +2135,13 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(dispatch_results, [True])
         events = self.monitor.drain()
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual((event[0], event[1], event[4]), ("player", "ended", 1))
+        self.assertEqual(event[2]["source"], "router-callback")
         self.assertEqual(
-            [(event[0], event[1], event[2], event[4]) for event in events],
-            [
-                (
-                    "player",
-                    "ended",
-                    {"source": "router-callback"},
-                    1,
-                )
-            ],
+            event[2][INPUT_WATERMARK_PAYLOAD_KEY]["last_seen"],
+            {"right": current_input[3]},
         )
 
 
@@ -1888,18 +2190,21 @@ class SeekServiceCleanupTest(unittest.TestCase):
             ["watermark", "view-event", "controller-event"],
         )
         self.service.router.reset.assert_not_called()
+        self.service.router.on_playback_boundary.assert_not_called()
         self.service.presenter.reset.assert_not_called()
         self.service.chapters.close.assert_not_called()
 
     def test_every_player_boundary_runs_navigation_and_visual_cleanup(self):
         for name in ("started", "stopped", "ended"):
             with self.subTest(name=name):
-                self.service.router.reset.reset_mock()
+                self.service.router.on_playback_boundary.reset_mock()
                 self.service.presenter.reset.reset_mock()
                 self.service.chapters.reset_mock()
                 self.service.publisher.reset_mock()
                 self.service._handle_player_event(name, {}, 2.0)
-                self.service.router.reset.assert_called_once_with()
+                boundary = self.service.router.on_playback_boundary
+                boundary.assert_called_once_with(2.0, None)
+                self.service.router.reset.assert_not_called()
                 self.service.presenter.reset.assert_called_once_with()
                 self.service.chapters.close.assert_called_once_with()
                 self.service.chapters.clear_properties.assert_called_once_with()
@@ -1930,7 +2235,7 @@ class SeekServiceCleanupTest(unittest.TestCase):
             trace,
             "controller-fallback",
         )
-        self.service.router.reset.side_effect = self._record(
+        self.service.router.on_playback_boundary.side_effect = self._record(
             trace,
             "router",
             fail=True,

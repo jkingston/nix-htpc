@@ -9,6 +9,11 @@ import xbmc
 import xbmcaddon
 
 from chapter_dialog import ChapterDialogManager
+from input_quarantine import (
+    DIRECTION_KEYS,
+    INPUT_WATERMARK_PAYLOAD_KEY,
+    canonical_physical_key,
+)
 from input_router import InputRouter, KodiCommands
 from playback_view_model import PlaybackViewModel
 from player_adapter import KodiPlayerAdapter
@@ -259,21 +264,41 @@ class ManagedSettings(object):
 
 
 class ServiceMonitor(xbmc.Monitor):
-    def __init__(self):
+    def __init__(self, clock=None):
         super(ServiceMonitor, self).__init__()
+        self.clock = time.monotonic if clock is None else clock
         self.events = deque()
         self.event_lock = threading.Lock()
         self.dispatch_lock = threading.RLock()
         self.input_generation = 0
+        self.input_last_seen = {}
+        self.latest_direction = None
+        self.latest_direction_seen = None
 
     def post_input(self, action, payload=None):
         with self.event_lock:
+            timestamp = self.clock()
+            physical_key = canonical_physical_key(action, payload)
+            if physical_key is not None:
+                self.input_last_seen[physical_key] = max(
+                    timestamp,
+                    self.input_last_seen.get(physical_key, timestamp),
+                )
+                if (
+                    physical_key in DIRECTION_KEYS
+                    and (
+                        self.latest_direction_seen is None
+                        or timestamp >= self.latest_direction_seen
+                    )
+                ):
+                    self.latest_direction = physical_key
+                    self.latest_direction_seen = timestamp
             self.events.append(
                 (
                     "input",
                     action,
                     payload or {},
-                    time.monotonic(),
+                    timestamp,
                     self.input_generation,
                 )
             )
@@ -288,6 +313,10 @@ class ServiceMonitor(xbmc.Monitor):
             with self.event_lock:
                 self.input_generation += 1
                 current_generation = self.input_generation
+                boundary_payload = dict(payload or {})
+                boundary_payload[INPUT_WATERMARK_PAYLOAD_KEY] = (
+                    self._input_watermark_locked()
+                )
                 self.events = deque(
                     event
                     for event in self.events
@@ -296,7 +325,19 @@ class ServiceMonitor(xbmc.Monitor):
                         or event[4] >= current_generation
                     )
                 )
-                self._append_player_locked(kind, payload)
+                self._append_player_locked(kind, boundary_payload)
+
+    def _input_watermark_locked(self):
+        latest_direction = None
+        if self.latest_direction is not None:
+            latest_direction = {
+                "key": self.latest_direction,
+                "timestamp": self.latest_direction_seen,
+            }
+        return {
+            "last_seen": dict(self.input_last_seen),
+            "latest_direction": latest_direction,
+        }
 
     def _append_player_locked(self, kind, payload):
         self.events.append(
@@ -304,7 +345,7 @@ class ServiceMonitor(xbmc.Monitor):
                 "player",
                 kind,
                 payload or {},
-                time.monotonic(),
+                self.clock(),
                 self.input_generation,
             )
         )
@@ -429,6 +470,11 @@ class SeekService(object):
             self.controller.on_player_event(name, payload, timestamp)
             return
 
+        payload = dict(payload or {})
+        input_watermark = payload.pop(
+            INPUT_WATERMARK_PAYLOAD_KEY,
+            None,
+        )
         # Preserve callback ordering at a media boundary, while ensuring one
         # failing observer cannot prevent the remaining state from clearing.
         self._attempt(
@@ -458,7 +504,13 @@ class SeekService(object):
                 "controller boundary fallback reset",
                 lambda: self.controller.reset(clear_handoff=True),
             )
-        self._attempt("input router boundary reset", self.router.reset)
+        self._attempt(
+            "input router playback boundary",
+            lambda: self.router.on_playback_boundary(
+                timestamp,
+                input_watermark,
+            ),
+        )
         self._attempt("presenter boundary reset", self.presenter.reset)
         self._attempt("chapter boundary close", self.chapters.close)
         self._attempt(

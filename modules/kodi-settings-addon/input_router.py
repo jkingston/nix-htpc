@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from input_quarantine import InputQuarantine, canonical_physical_key
 from seek_controller import RepeatGuard
 
 
@@ -32,6 +33,7 @@ class InputRouter(object):
         chapters,
         commands,
         repeat_guard=None,
+        input_quarantine=None,
     ):
         self.controller = controller
         self.player = player
@@ -39,19 +41,32 @@ class InputRouter(object):
         self.chapters = chapters
         self.commands = commands
         self.repeat_guard = repeat_guard or RepeatGuard()
+        self.input_quarantine = (
+            InputQuarantine()
+            if input_quarantine is None
+            else input_quarantine
+        )
         self.pending_transition = None
 
     def reset(self):
-        """Discard deferred navigation while preserving physical input trains."""
+        """Discard navigation while preserving physical train state."""
         self.pending_transition = None
+
+    def on_playback_boundary(self, timestamp, watermark=None):
+        self.pending_transition = None
+        self.input_quarantine.on_playback_boundary(timestamp, watermark)
 
     def clear(self):
         """Discard all transient input state during full shutdown or tests."""
         self.reset()
         self.repeat_guard.reset()
+        self.input_quarantine.clear()
 
     def handle(self, action, timestamp, payload=None):
         payload = payload or {}
+        physical_key = canonical_physical_key(action, payload)
+        if self.input_quarantine.should_suppress(physical_key, timestamp):
+            return True
 
         if action in ("left", "right"):
             direction = -1 if action == "left" else 1

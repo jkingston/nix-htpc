@@ -44,6 +44,7 @@ let
         seek_controller.py \
         player_adapter.py \
         input_router.py \
+        input_quarantine.py \
         presenter.py \
         playback_view_model.py \
         media_contract.py \
