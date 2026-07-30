@@ -71,6 +71,7 @@ class BoundedProcess:
         self._stderr = None
         self._stderr_bytes = bytearray()
         self._stderr_eof = False
+        self._input_closed = False
         self._closed = False
         self._cleanup_error: Optional[ProcessCleanupError] = None
 
@@ -130,10 +131,38 @@ class BoundedProcess:
             return None
         return self.process.poll()
 
+    def require_running_with_empty_stderr(self) -> None:
+        """Require a live child and no stderr observed through this instant.
+
+        The stderr drain is nonblocking.  This is intended for interactive
+        protocol readiness gates that must not authorize their next action
+        based on stdout while a simultaneous diagnostic is already pending.
+        """
+
+        if self._closed:
+            raise ProcessTransportError(
+                "%s stream is closed" % self.description
+            )
+        self._read_stderr_once_checked()
+        if self._stderr_bytes:
+            raise ProcessTransportError(
+                "%s wrote to stderr: %s"
+                % (self.description, self._stderr_text())
+            )
+        returncode = self.process.poll()
+        if returncode is not None:
+            raise ProcessTransportError(
+                self._exit_message(returncode)
+            )
+
     def write(self, data: bytes, deadline: float) -> None:
         if self._closed:
             raise ProcessTransportError(
                 "%s stream is closed" % self.description
+            )
+        if self._input_closed:
+            raise ProcessTransportError(
+                "%s input is closed" % self.description
             )
         view = memoryview(data)
         while view:
@@ -167,6 +196,30 @@ class BoundedProcess:
                         "%s write made no progress" % self.description
                     )
                 view = view[written:]
+
+    def close_input(self) -> None:
+        """Send EOF to the child while retaining its output streams.
+
+        Interactive finite protocols commonly require the child to observe
+        stdin EOF before it emits its final response.  This half-close is
+        idempotent; process completion and stderr validation remain the
+        caller's responsibility through :meth:`read_all`.
+        """
+
+        if self._closed:
+            raise ProcessTransportError(
+                "%s stream is closed" % self.description
+            )
+        if self._input_closed:
+            return
+        try:
+            self._stdin.close()
+        except OSError as error:
+            self._raise_transport(
+                "%s input close failed" % self.description,
+                error,
+            )
+        self._input_closed = True
 
     def read(self, max_bytes: int, deadline: float) -> bytes:
         if self._closed:
@@ -250,11 +303,12 @@ class BoundedProcess:
 
         cleanup_error = None
         stdin = self._stdin
-        if stdin is not None:
+        if stdin is not None and not self._input_closed:
             try:
                 stdin.close()
             except OSError:
                 pass
+            self._input_closed = True
         if process.poll() is None and self.graceful_timeout > 0:
             try:
                 process.wait(timeout=self.graceful_timeout)
@@ -410,6 +464,23 @@ class BoundedProcess:
             if not chunk:
                 return
             self._append_stderr(chunk)
+
+    def _read_stderr_once_checked(self) -> None:
+        if self._stderr_eof:
+            return
+        try:
+            chunk = os.read(self._stderr.fileno(), 4096)
+        except BlockingIOError:
+            return
+        except OSError as error:
+            self._raise_transport(
+                "failed to read %s stderr" % self.description,
+                error,
+            )
+        if not chunk:
+            self._stderr_eof = True
+            return
+        self._append_stderr(chunk)
 
     def _append_stderr(self, chunk: bytes) -> None:
         self._stderr_bytes.extend(chunk)

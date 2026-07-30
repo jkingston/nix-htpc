@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import sys
@@ -146,6 +147,184 @@ class BoundedProcessTest(unittest.TestCase):
                 process.read(4, time.monotonic() + 2.0),
                 b"gnip",
             )
+        finally:
+            process.close()
+
+    def test_input_half_close_allows_output_and_clean_completion(self):
+        factory = RecordingPopenFactory(
+            "import sys; "
+            "data = sys.stdin.buffer.read(); "
+            "sys.stdout.buffer.write(b'eof:' + data); "
+            "sys.stdout.buffer.flush()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            deadline = time.monotonic() + 2.0
+            process.write(b"request", deadline)
+            process.close_input()
+            process.close_input()
+            self.assertEqual(
+                process.read_all(32, deadline),
+                b"eof:request",
+            )
+            self.assertEqual(process.returncode, 0)
+        finally:
+            process.close()
+
+    def test_write_after_input_half_close_is_rejected(self):
+        factory = RecordingPopenFactory(
+            "import sys; sys.stdin.buffer.read()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            process.close_input()
+            with self.assertRaisesRegex(ProcessTransportError, "input"):
+                process.write(
+                    b"too late",
+                    time.monotonic() + 2.0,
+                )
+        finally:
+            process.close()
+
+    def test_full_close_after_half_close_does_not_close_input_twice(self):
+        factory = RecordingPopenFactory(
+            "import sys; sys.stdin.buffer.read()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        stdin = process._stdin
+        with mock.patch.object(
+            stdin,
+            "close",
+            wraps=stdin.close,
+        ) as close_input:
+            process.close_input()
+            process.close()
+        self.assertEqual(close_input.call_count, 1)
+
+    def test_input_half_close_failure_is_a_transport_error(self):
+        factory = RecordingPopenFactory(
+            "import sys; sys.stdin.buffer.read()"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with mock.patch.object(
+                process._stdin,
+                "close",
+                side_effect=OSError("close failed"),
+            ):
+                with self.assertRaisesRegex(
+                    ProcessTransportError,
+                    "close failed",
+                ):
+                    process.close_input()
+        finally:
+            process.close()
+
+    def test_input_half_close_after_full_close_is_typed(self):
+        factory = RecordingPopenFactory("")
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        process.close()
+        with self.assertRaisesRegex(ProcessTransportError, "closed"):
+            process.close_input()
+
+    def test_readiness_check_drains_stderr_and_requires_live_process(self):
+        factory = RecordingPopenFactory(
+            "import sys, time; "
+            "sys.stderr.write('warning\\n'); "
+            "sys.stderr.flush(); "
+            "time.sleep(60)"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            deadline = time.monotonic() + 2.0
+            while not process.stderr_tail:
+                try:
+                    process.require_running_with_empty_stderr()
+                except ProcessTransportError:
+                    break
+                if time.monotonic() >= deadline:
+                    self.fail("stderr did not become observable")
+                time.sleep(0.001)
+            with self.assertRaisesRegex(ProcessTransportError, "warning"):
+                process.require_running_with_empty_stderr()
+        finally:
+            process.close()
+
+        exited = BoundedProcess(
+            ["program"],
+            popen_factory=RecordingPopenFactory(""),
+            terminate_timeout=0.1,
+        )
+        try:
+            deadline = time.monotonic() + 2.0
+            while exited.returncode is None and time.monotonic() < deadline:
+                time.sleep(0.001)
+            with self.assertRaisesRegex(ProcessTransportError, "status 0"):
+                exited.require_running_with_empty_stderr()
+        finally:
+            exited.close()
+
+    def test_readiness_check_does_at_most_one_productive_stderr_read(self):
+        factory = RecordingPopenFactory(
+            "import time; time.sleep(60)"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            with mock.patch.object(
+                os,
+                "read",
+                return_value=b"continuous diagnostic",
+            ) as read:
+                with self.assertRaisesRegex(
+                    ProcessTransportError,
+                    "continuous diagnostic",
+                ):
+                    process.require_running_with_empty_stderr()
+            self.assertEqual(read.call_count, 1)
+        finally:
+            process.close()
+
+    def test_readiness_check_accepts_live_process_with_empty_stderr(self):
+        factory = RecordingPopenFactory(
+            "import time; time.sleep(60)"
+        )
+        process = BoundedProcess(
+            ["program"],
+            popen_factory=factory,
+            terminate_timeout=0.1,
+        )
+        try:
+            process.require_running_with_empty_stderr()
+            self.assertIsNone(process.returncode)
+            self.assertEqual(process.stderr_tail, b"")
         finally:
             process.close()
 
