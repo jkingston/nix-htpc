@@ -404,6 +404,7 @@ class SeekService(object):
             self.presenter,
             self.chapters,
             KodiCommands(xbmc.executebuiltin),
+            clock=monitor.clock,
         )
         self.settings = ManagedSettings()
 
@@ -436,7 +437,7 @@ class SeekService(object):
                 )
                 self.publisher.publish_view(self.view.snapshot())
                 self.presenter.update(snapshot)
-                self.router.tick()
+                self._tick_router()
                 self.chapters.validate()
                 self.chapters.sync_properties()
             except Exception as error:
@@ -454,7 +455,23 @@ class SeekService(object):
             return True
         return self.monitor.dispatch_input_if_current(
             generation,
-            lambda: self.router.handle(name, timestamp, payload),
+            lambda: self.router.handle(
+                name,
+                timestamp,
+                payload,
+                input_generation=generation,
+            ),
+        )
+
+    def _tick_router(self):
+        """Deliver deferred focus only inside its originating media fence."""
+        generation = self.router.pending_transition_generation
+        if generation is None:
+            self.router.tick()
+            return True
+        return self.monitor.dispatch_input_if_current(
+            generation,
+            self.router.tick,
         )
 
     def _handle_player_event(self, name, payload, timestamp):

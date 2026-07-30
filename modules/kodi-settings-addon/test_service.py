@@ -97,8 +97,12 @@ sys.modules.setdefault("xbmcgui", fake_xbmcgui)
 sys.modules.setdefault("xbmcaddon", fake_xbmcaddon)
 
 from chapter_dialog import (
+    ACTION_MOVE_DOWN,
     ACTION_MOVE_LEFT,
     ACTION_MOVE_RIGHT,
+    ACTION_MOVE_UP,
+    ACTION_NAV_BACK,
+    ACTION_PREVIOUS_MENU,
     ChapterDialogManager,
     ChapterRail,
 )
@@ -281,6 +285,7 @@ class FakeChapters(object):
         self.open_calls = []
         self.close_calls = 0
         self.provider = FakeProvider()
+        self.accept_events = True
 
     def available(self):
         return self.is_available
@@ -294,10 +299,13 @@ class FakeChapters(object):
         self.close_calls += 1
         self.is_open = False
 
+    def accepts_event(self, _payload):
+        return self.accept_events
+
 
 class FakePlayer(object):
     def __init__(self):
-        self.state = {"current": 123.0}
+        self.state = {"current": 123.0, "seekable": True}
         self.snapshot_calls = 0
         self.pause_for_osd_calls = 0
         self.pause_for_osd_result = True
@@ -735,6 +743,7 @@ class ManagedScreenshotSettingsTest(unittest.TestCase):
 
 class InputRouterTest(unittest.TestCase):
     def setUp(self):
+        self.now = [10.0]
         self.controller = FakeController()
         self.presenter = FakePresenter()
         self.chapters = FakeChapters()
@@ -746,12 +755,93 @@ class InputRouterTest(unittest.TestCase):
             self.presenter,
             self.chapters,
             KodiCommands(self.builtins.append),
+            clock=lambda: self.now[0],
         )
 
     def test_hidden_arrows_start_optimistic_seek_and_open_timeline(self):
         self.assertTrue(self.router.handle("right", 1.0))
         self.assertEqual(self.controller.hidden, [(1, 1.0)])
         self.assertIn("emphasize", self.presenter.calls)
+
+    def test_fullscreen_vertical_arrows_show_transport_and_quarantine_hold(self):
+        for action, key in (
+            ("fullscreen-up", "up"),
+            ("fullscreen-down", "down"),
+        ):
+            with self.subTest(action=action):
+                self.setUp()
+                self.router.handle(action, 1.0)
+
+                self.assertEqual(self.presenter.calls, ["show-transport"])
+                self.assertAlmostEqual(
+                    self.router.input_quarantine.deadlines[key],
+                    1.0 + HOLD_ONSET_MAX,
+                )
+
+                continuation_action = (
+                    "transport-up" if key == "up" else "transport-down"
+                )
+                self.router.handle(continuation_action, 1.3)
+                self.assertEqual(self.presenter.calls, ["show-transport"])
+
+    def test_transport_up_focuses_top_without_synthetic_navigation(self):
+        self.router.handle("transport-up", 1.0)
+
+        self.assertEqual(self.presenter.calls, ["top"])
+        self.assertEqual(self.builtins, [])
+        self.assertIn("up", self.router.input_quarantine.deadlines)
+
+    def test_transport_right_focuses_seekable_timeline_and_guards_hold(self):
+        self.router.handle("transport-right", 1.0)
+
+        self.assertEqual(self.presenter.calls, ["timeline"])
+        self.assertEqual(self.controller.timeline, [])
+        self.assertEqual(self.builtins, [])
+
+        self.router.handle("timeline-right", 1.3)
+        self.assertEqual(self.controller.timeline, [])
+
+        deadline = max(
+            1.0 + HOLD_ONSET_MAX,
+            1.3 + HOLD_RELEASE_IDLE,
+        )
+        fresh = deadline + 0.001
+        self.router.handle("timeline-right", fresh)
+        self.assertEqual(self.controller.timeline, [(1, fresh)])
+        self.assertEqual(self.presenter.calls, ["timeline", "emphasize"])
+
+    def test_transport_right_guard_does_not_block_opposite_timeline_key(self):
+        self.router.handle("transport-right", 1.0)
+        self.router.handle("timeline-left", 1.1)
+
+        self.assertEqual(self.controller.timeline, [(-1, 1.1)])
+        self.assertEqual(self.presenter.calls, ["timeline", "emphasize"])
+
+    def test_transport_right_is_inert_when_media_is_not_seekable(self):
+        for state in ({"current": 123.0, "seekable": False}, None):
+            with self.subTest(state=state):
+                self.setUp()
+                if state is None:
+                    self.player.snapshot = mock.Mock(
+                        side_effect=RuntimeError("snapshot failed")
+                    )
+                else:
+                    self.player.state = state
+
+                self.router.handle("transport-right", 1.0)
+
+                self.assertEqual(self.presenter.calls, [])
+                self.assertEqual(
+                    self.router.input_quarantine.deadlines,
+                    {},
+                )
+
+    def test_transport_down_is_an_explicit_noop(self):
+        self.router.handle("transport-down", 1.0)
+
+        self.assertEqual(self.presenter.calls, [])
+        self.assertEqual(self.builtins, [])
+        self.assertEqual(self.router.input_quarantine.deadlines, {})
 
     def test_boundary_quarantines_cross_window_arrow_until_quiet(self):
         self.router.handle("left", 1.0)
@@ -761,6 +851,7 @@ class InputRouterTest(unittest.TestCase):
         self.router._defer_transition("top")
         self.router.on_playback_boundary(1.1)
         self.assertIsNone(self.router.pending_transition)
+        self.assertIsNone(self.router.pending_transition_key)
 
         suppressed_at = 1.3
         self.router.handle("timeline-left", suppressed_at)
@@ -939,12 +1030,124 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.presenter.calls, [])
         self.assertEqual(self.builtins, [])
 
+    def test_timeline_down_focuses_transport_without_synthetic_navigation(self):
+        self.controller.state = "skip-active"
+        self.controller.source = "fullscreen"
+
+        self.router.handle("timeline-down", 1.0)
+
+        self.assertEqual(self.controller.ends, 1)
+        self.assertEqual(self.presenter.calls, ["transport"])
+        self.assertEqual(self.builtins, [])
+        self.assertIn("down", self.router.input_quarantine.deadlines)
+
     def test_up_from_timeline_opens_pause_owned_chapter_rail(self):
         self.chapters.is_available = True
         self.router.handle("timeline-up", 1.0)
         self.assertEqual(self.controller.chapter_begins, 1)
         self.assertEqual(self.controller.source, "chapter")
         self.assertEqual(self.chapters.open_calls, [123.0])
+
+    def test_chapter_up_waits_for_hold_quiet_then_rearms_on_top_focus(self):
+        self.chapters.is_available = True
+        self.router.handle("timeline-up", 1.0)
+        self.assertTrue(self.chapters.is_open)
+
+        self.router.handle(
+            "chapter-exit",
+            1.3,
+            {"destination": "top", "physical_direction": "up"},
+        )
+        self.assertEqual(self.chapters.close_calls, 0)
+        self.assertEqual(self.controller.cancels, [])
+        self.assertIsNone(self.router.pending_transition)
+
+        release_deadline = max(
+            1.0 + HOLD_ONSET_MAX,
+            1.3 + HOLD_RELEASE_IDLE,
+        )
+        accepted_at = release_deadline + 0.001
+        self.router.handle(
+            "chapter-exit",
+            accepted_at,
+            {"destination": "top", "physical_direction": "up"},
+        )
+        self.assertEqual(self.chapters.close_calls, 1)
+        self.assertEqual(self.controller.cancels, [accepted_at])
+        self.assertEqual(self.router.pending_transition, "top")
+        self.assertEqual(self.router.pending_transition_key, "up")
+
+        self.controller.state = "idle"
+        self.now[0] = 10.0
+        self.router.tick()
+
+        self.assertEqual(self.presenter.calls, ["top"])
+        self.assertGreaterEqual(
+            self.router.input_quarantine.deadlines["up"],
+            10.0 + HOLD_ONSET_MAX,
+        )
+        self.router.handle("transport-up", 10.3)
+        self.assertEqual(self.presenter.calls, ["top"])
+
+    def test_stale_chapter_lifecycle_events_have_no_side_effects(self):
+        self.chapters.accept_events = False
+        self.controller.state = "scrub-active"
+        self.controller.source = "chapter"
+        self.chapters.is_open = True
+
+        for action, payload in (
+            (
+                "chapter-focus",
+                {"index": 1, "start_seconds": 600.0},
+            ),
+            (
+                "chapter-select",
+                {"index": 1, "start_seconds": 600.0},
+            ),
+            (
+                "chapter-exit",
+                {
+                    "destination": "top",
+                    "physical_direction": "up",
+                },
+            ),
+        ):
+            with self.subTest(action=action):
+                self.router.handle(action, 1.0, payload)
+
+        self.assertEqual(self.chapters.close_calls, 0)
+        self.assertEqual(self.controller.targets, [])
+        self.assertEqual(self.controller.confirms, [])
+        self.assertEqual(self.controller.cancels, [])
+        self.assertIsNone(self.router.pending_transition)
+        self.assertEqual(self.presenter.calls, [])
+
+    def test_chapter_down_rearms_when_timeline_focus_is_delivered(self):
+        self.controller.state = "scrub-active"
+        self.controller.source = "chapter"
+        self.chapters.is_open = True
+
+        self.router.handle(
+            "chapter-exit",
+            1.0,
+            {
+                "destination": "timeline",
+                "physical_direction": "down",
+            },
+        )
+
+        self.assertEqual(self.chapters.close_calls, 1)
+        self.assertEqual(self.router.pending_transition, "timeline")
+        self.assertEqual(self.router.pending_transition_key, "down")
+
+        self.controller.state = "idle"
+        self.now[0] = 10.0
+        self.router.tick()
+        self.assertEqual(self.presenter.calls, ["timeline"])
+
+        self.router.handle("timeline-down", 10.3)
+        self.assertEqual(self.presenter.calls, ["timeline"])
+        self.assertEqual(self.controller.ends, 0)
 
     def test_chapter_focus_updates_target_and_select_commits(self):
         self.controller.state = "pause-pending"
@@ -1079,12 +1282,20 @@ class InputRouterTest(unittest.TestCase):
     def test_physical_chapter_back_arms_guard_after_resume(self):
         self.controller.state = "scrub-active"
         self.controller.source = "chapter"
+        self.chapters.is_open = True
         self.presenter.osd = True
         self.router.handle(
             "chapter-exit",
             1.0,
             {"destination": "back", "arm_back": True},
         )
+        self.router.handle(
+            "chapter-exit",
+            1.1,
+            {"destination": "back", "arm_back": True},
+        )
+        self.assertEqual(self.chapters.close_calls, 1)
+        self.assertEqual(self.controller.cancels, [1.0])
         self.controller.state = "idle"
         self.router.tick()
         self.router.handle("osd-back", 1.1)
@@ -1147,15 +1358,20 @@ class InputRouterTest(unittest.TestCase):
                 self.router.tick()
                 self.assertEqual(self.presenter.calls, [expected])
                 self.assertIsNone(self.router.pending_transition)
+                self.assertIsNone(self.router.pending_transition_key)
 
         with self.assertRaises(ValueError):
             self.router._defer_transition("unsupported")
+        with self.assertRaises(ValueError):
+            self.router._defer_transition("top", "select")
 
     def test_deferred_timeline_up_opens_chapter_rail(self):
         self.controller.state = "skip-active"
         self.chapters.is_available = True
-        self.router.handle("timeline-up", 1.0)
+        self.router.handle("timeline-up", 1.0, input_generation=7)
         self.assertEqual(self.router.pending_transition, "timeline-up")
+        self.assertEqual(self.router.pending_transition_key, "up")
+        self.assertEqual(self.router.pending_transition_generation, 7)
         self.assertEqual(self.chapters.open_calls, [])
 
         self.controller.state = "idle"
@@ -1163,6 +1379,19 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.controller.chapter_begins, 1)
         self.assertEqual(self.chapters.open_calls, [123.0])
         self.assertIsNone(self.router.pending_transition)
+        self.assertIsNone(self.router.pending_transition_key)
+        self.assertIsNone(self.router.pending_transition_generation)
+        self.assertGreaterEqual(
+            self.router.input_quarantine.deadlines["up"],
+            self.now[0] + HOLD_ONSET_MAX,
+        )
+
+        self.router.handle(
+            "chapter-exit",
+            self.now[0] + 0.3,
+            {"destination": "top", "physical_direction": "up"},
+        )
+        self.assertEqual(self.chapters.close_calls, 0)
 
     def test_deferred_timeline_up_falls_back_to_top(self):
         self.controller.state = "skip-active"
@@ -1182,6 +1411,7 @@ class InputRouterTest(unittest.TestCase):
 
         self.router.handle("timeline-back", 1.1)
         self.assertEqual(self.router.pending_transition, "transport")
+        self.assertIsNone(self.router.pending_transition_key)
 
         self.controller.state = "idle"
         self.router.tick()
@@ -1199,6 +1429,7 @@ class InputRouterTest(unittest.TestCase):
         self.router.reset()
 
         self.assertIsNone(self.router.pending_transition)
+        self.assertIsNone(self.router.pending_transition_key)
         self.assertFalse(self.router.repeat_guard.accept("select", 1.1))
         self.assertFalse(self.router.repeat_guard.accept("back", 1.1))
         self.controller.hidden = []
@@ -1218,6 +1449,7 @@ class InputRouterTest(unittest.TestCase):
         self.router.clear()
 
         self.assertIsNone(self.router.pending_transition)
+        self.assertIsNone(self.router.pending_transition_key)
         self.assertTrue(self.router.repeat_guard.accept("select", 1.1))
         self.assertTrue(self.router.repeat_guard.accept("back", 1.1))
         self.assertEqual(self.router.input_quarantine.last_seen, {})
@@ -1721,7 +1953,8 @@ class FakeAction(object):
 
 class ChapterRailTest(unittest.TestCase):
     def _rail(self, selected):
-        events = []
+        focus_events = []
+        exit_events = []
         control = FakeChapterControl(selected)
         rail = ChapterRail(
             "ChapterRail.xml",
@@ -1732,13 +1965,16 @@ class ChapterRailTest(unittest.TestCase):
                 {"index": 0, "start_seconds": 0.0},
                 {"index": 1, "start_seconds": 600.0},
             ],
-            focus_callback=events.append,
+            focus_callback=focus_events.append,
+            exit_callback=lambda destination, direction: exit_events.append(
+                (destination, direction)
+            ),
         )
         rail.getControl = lambda _control_id: control
-        return rail, control, events
+        return rail, control, focus_events, exit_events
 
     def test_direction_emits_one_physical_focus_event(self):
-        rail, control, events = self._rail(0)
+        rail, control, events, _exit_events = self._rail(0)
 
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
@@ -1755,7 +1991,7 @@ class ChapterRailTest(unittest.TestCase):
         )
 
     def test_clamped_direction_is_still_one_physical_event(self):
-        rail, control, events = self._rail(0)
+        rail, control, events, _exit_events = self._rail(0)
 
         rail.onAction(FakeAction(ACTION_MOVE_LEFT))
 
@@ -1770,6 +2006,23 @@ class ChapterRailTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_vertical_and_back_actions_request_exit_without_closing(self):
+        cases = (
+            (ACTION_MOVE_UP, ("top", "up")),
+            (ACTION_MOVE_DOWN, ("timeline", "down")),
+            (ACTION_PREVIOUS_MENU, ("back", None)),
+            (ACTION_NAV_BACK, ("back", None)),
+        )
+        for action_id, expected in cases:
+            with self.subTest(action_id=action_id):
+                rail, _control, _focus_events, exit_events = self._rail(0)
+
+                rail.onAction(FakeAction(action_id))
+
+                self.assertEqual(exit_events, [expected])
+                self.assertFalse(rail._closing)
+                self.assertFalse(rail.closed)
 
 
 class ChapterDialogManagerTest(unittest.TestCase):
@@ -1798,6 +2051,9 @@ class ChapterDialogManagerTest(unittest.TestCase):
             self.events[1][1]["playback_token"],
             "playback-one",
         )
+        self.assertEqual(self.events[1][1]["dialog_generation"], 1)
+        self.assertTrue(self.manager.is_open)
+        self.manager.close()
         self.assertEqual(self.window.getProperty(CHAPTER_OPEN), "")
 
     def test_sync_available_and_contract_loss_closes_dialog(self):
@@ -1812,9 +2068,17 @@ class ChapterDialogManagerTest(unittest.TestCase):
             self.events[-1],
             (
                 "chapter-exit",
-                {"destination": "back", "arm_back": False},
+                {
+                    "destination": "back",
+                    "arm_back": False,
+                    "dialog_generation": 1,
+                    "synthetic": True,
+                },
             ),
         )
+        payload = self.events[-1][1]
+        self.assertTrue(self.manager.accepts_event(payload))
+        self.assertFalse(self.manager.accepts_event(payload))
 
     def test_physical_direction_survives_manager_routing(self):
         self.manager.open()
@@ -1834,10 +2098,94 @@ class ChapterDialogManagerTest(unittest.TestCase):
                         "start_seconds": 600.0,
                         "playback_token": "playback-one",
                         "physical_direction": "right",
+                        "dialog_generation": 1,
                     },
                 )
             ],
         )
+
+    def test_exit_request_keeps_dialog_open_until_router_closes_it(self):
+        self.manager.open()
+        dialog = FakeDialog.instances[-1]
+
+        dialog.kwargs["exit_callback"]("top", "up")
+
+        self.assertEqual(
+            self.events,
+            [
+                (
+                    "chapter-exit",
+                    {
+                        "destination": "top",
+                        "arm_back": False,
+                        "physical_direction": "up",
+                        "dialog_generation": 1,
+                    },
+                )
+            ],
+        )
+        self.assertTrue(self.manager.is_open)
+        self.assertEqual(self.window.getProperty(CHAPTER_OPEN), "true")
+        self.assertFalse(dialog.closed)
+
+        self.manager.close()
+        self.assertFalse(self.manager.is_open)
+        self.assertEqual(self.window.getProperty(CHAPTER_OPEN), "")
+        self.assertTrue(dialog.closed)
+
+    def test_dialog_generation_rejects_events_after_close_or_reopen(self):
+        self.manager.open()
+        first = FakeDialog.instances[-1]
+        first.kwargs["exit_callback"]("top", "up")
+        first_payload = self.events[-1][1]
+        self.assertTrue(self.manager.accepts_event(first_payload))
+
+        self.manager.close()
+        self.assertFalse(self.manager.accepts_event(first_payload))
+
+        self.manager.open()
+        second = FakeDialog.instances[-1]
+        second.kwargs["exit_callback"]("top", "up")
+        second_payload = self.events[-1][1]
+        self.assertEqual(first_payload["dialog_generation"], 1)
+        self.assertEqual(second_payload["dialog_generation"], 2)
+        self.assertFalse(self.manager.accepts_event(first_payload))
+        self.assertTrue(self.manager.accepts_event(second_payload))
+
+    def test_reopen_rejects_pending_synthetic_exit_from_old_dialog(self):
+        self.manager.open()
+        self.provider.chapters = []
+        self.manager.sync_properties()
+        old_payload = self.events[-1][1]
+        self.assertTrue(old_payload["synthetic"])
+
+        self.provider.chapters = list(FakeProvider().chapters)
+        self.manager.open()
+
+        self.assertFalse(self.manager.accepts_event(old_payload))
+        self.assertTrue(self.manager.is_open)
+
+    def test_back_exit_request_is_physical_but_not_a_direction(self):
+        self.manager.open()
+        dialog = FakeDialog.instances[-1]
+
+        dialog.kwargs["exit_callback"]("back", None)
+
+        self.assertEqual(
+            self.events,
+            [
+                (
+                    "chapter-exit",
+                    {
+                        "destination": "back",
+                        "arm_back": True,
+                        "dialog_generation": 1,
+                    },
+                )
+            ],
+        )
+        self.assertTrue(self.manager.is_open)
+        self.assertFalse(dialog.closed)
 
     def test_revision_change_notifies_controller_cancel_path(self):
         self.manager.open()
@@ -1849,7 +2197,12 @@ class ChapterDialogManagerTest(unittest.TestCase):
             [
                 (
                     "chapter-exit",
-                    {"destination": "back", "arm_back": False},
+                    {
+                        "destination": "back",
+                        "arm_back": False,
+                        "dialog_generation": 1,
+                        "synthetic": True,
+                    },
                 )
             ],
         )
@@ -1993,6 +2346,27 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         self.service.monitor = self.monitor
         self.service.router = mock.Mock()
 
+    def _install_chapter_router(self, manager):
+        controller = FakeController()
+        presenter = FakePresenter()
+        self.service.router = InputRouter(
+            controller,
+            FakePlayer(),
+            presenter,
+            manager,
+            KodiCommands(lambda _command: None),
+            clock=self.monitor.clock,
+        )
+        self.service.view = mock.Mock()
+        self.service.controller = mock.Mock()
+        self.service.controller.snapshot.return_value = {"state": "idle"}
+        self.service.player = mock.Mock()
+        self.service.player.snapshot.return_value = {"playing": True}
+        self.service.presenter = mock.Mock()
+        self.service.chapters = manager
+        self.service.publisher = mock.Mock()
+        return controller, presenter
+
     def test_boundary_after_drain_drops_old_input_before_routing(self):
         self.monitor.post_input("right", {"source": "physical"})
         old_input = self.monitor.drain()[0]
@@ -2000,6 +2374,75 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
 
         self.assertFalse(self.service._dispatch_event(old_input))
         self.service.router.handle.assert_not_called()
+
+    def test_old_dialog_event_posted_after_boundary_is_rejected(self):
+        window = FakeWindow()
+        manager = ChapterDialogManager(
+            "/addon",
+            self.monitor.post_input,
+            provider=FakeProvider(),
+            dialog_class=FakeDialog,
+            window=window,
+        )
+        self.assertTrue(manager.open())
+        old_dialog = FakeDialog.instances[-1]
+
+        self.monitor.post_player("started", {"identity": "replacement"})
+        old_dialog.kwargs["exit_callback"]("top", "up")
+        events = self.monitor.drain()
+        self.assertEqual(
+            [(event[0], event[1], event[4]) for event in events],
+            [
+                ("player", "started", 1),
+                ("input", "chapter-exit", 1),
+            ],
+        )
+
+        route_controller, route_presenter = self._install_chapter_router(
+            manager
+        )
+
+        for event in events:
+            self.assertTrue(self.service._dispatch_event(event))
+
+        self.assertFalse(manager.is_open)
+        self.assertEqual(route_controller.cancels, [])
+        self.assertEqual(route_presenter.calls, [])
+        self.assertIsNone(self.service.router.pending_transition)
+
+    def test_old_synthetic_exit_posted_after_boundary_is_rejected(self):
+        manager = ChapterDialogManager(
+            "/addon",
+            self.monitor.post_input,
+            provider=FakeProvider(),
+            dialog_class=FakeDialog,
+            window=FakeWindow(),
+        )
+        self.assertTrue(manager.open())
+
+        self.monitor.post_player("started", {"identity": "replacement"})
+        manager.provider.chapters = []
+        manager.sync_properties()
+        events = self.monitor.drain()
+        self.assertEqual(
+            [(event[0], event[1], event[4]) for event in events],
+            [
+                ("player", "started", 1),
+                ("input", "chapter-exit", 1),
+            ],
+        )
+        self.assertTrue(events[1][2]["synthetic"])
+
+        route_controller, route_presenter = self._install_chapter_router(
+            manager
+        )
+        for event in events:
+            self.assertTrue(self.service._dispatch_event(event))
+
+        self.assertFalse(manager.is_open)
+        self.assertEqual(route_controller.cancels, [])
+        self.assertEqual(route_presenter.calls, [])
+        self.assertIsNone(self.service.router.pending_transition)
 
     def test_current_physical_and_chapter_inputs_are_delivered(self):
         self.monitor.post_player("started")
@@ -2017,14 +2460,100 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         self.assertEqual(
             self.service.router.handle.call_args_list,
             [
-                mock.call("left", events[0][3], {"source": "physical"}),
+                mock.call(
+                    "left",
+                    events[0][3],
+                    {"source": "physical"},
+                    input_generation=events[0][4],
+                ),
                 mock.call(
                     "chapter-focus",
                     events[1][3],
                     {"source": "chapter", "index": 2},
+                    input_generation=events[1][4],
                 ),
             ],
         )
+
+    def test_boundary_after_drain_rejects_stale_deferred_transition(self):
+        self.service.router.pending_transition_generation = 0
+        self.monitor.post_player("ended")
+
+        self.assertFalse(self.service._tick_router())
+        self.service.router.tick.assert_not_called()
+
+    def test_deferred_transition_completes_before_waiting_boundary_posts(self):
+        self.service.router.pending_transition_generation = 0
+        tick_started = threading.Event()
+        finish_tick = threading.Event()
+        boundary_posted = threading.Event()
+        results = []
+        trace = []
+        errors = []
+
+        def tick():
+            trace.append("tick-start")
+            tick_started.set()
+            if not finish_tick.wait(1.0):
+                raise RuntimeError("tick release timed out")
+            trace.append("tick-end")
+
+        self.service.router.tick.side_effect = tick
+
+        def tick_worker():
+            try:
+                results.append(self.service._tick_router())
+            except Exception as error:
+                errors.append(error)
+
+        def boundary_worker():
+            try:
+                self.monitor.post_player("ended")
+                trace.append("boundary-posted")
+                boundary_posted.set()
+            except Exception as error:
+                errors.append(error)
+
+        transition_thread = threading.Thread(target=tick_worker)
+        transition_thread.start()
+        self.assertTrue(tick_started.wait(1.0))
+        boundary_thread = threading.Thread(target=boundary_worker)
+        boundary_thread.start()
+        self.assertFalse(boundary_posted.is_set())
+        finish_tick.set()
+        transition_thread.join(1.0)
+        boundary_thread.join(1.0)
+
+        self.assertFalse(transition_thread.is_alive())
+        self.assertFalse(boundary_thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(results, [True])
+        self.assertEqual(
+            trace,
+            ["tick-start", "tick-end", "boundary-posted"],
+        )
+        self.assertEqual(self.monitor.current_input_generation(), 1)
+
+    def test_same_thread_boundary_during_deferred_tick_is_reentrant(self):
+        self.service.router.pending_transition_generation = 0
+
+        def tick():
+            self.monitor.post_player(
+                "ended",
+                {"source": "deferred-transition"},
+            )
+
+        self.service.router.tick.side_effect = tick
+
+        self.assertTrue(self.service._tick_router())
+        events = self.monitor.drain()
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0][0], events[0][1], events[0][4]), (
+            "player",
+            "ended",
+            1,
+        ))
+        self.assertEqual(events[0][2]["source"], "deferred-transition")
 
     def test_boundary_lock_winner_rejects_waiting_old_input(self):
         self.monitor.post_input("right")
@@ -2077,7 +2606,7 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         trace = []
         errors = []
 
-        def route(*_args):
+        def route(*_args, **_kwargs):
             trace.append("route-start")
             route_started.set()
             if not finish_route.wait(1.0):
@@ -2128,7 +2657,7 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         dispatch_results = []
         errors = []
 
-        def route(*_args):
+        def route(*_args, **_kwargs):
             self.monitor.post_player("ended", {"source": "router-callback"})
 
         self.service.router.handle.side_effect = route
