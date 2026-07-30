@@ -55,6 +55,7 @@
 			<param name="remaining" value="$INFO[Window(Home).Property(htpc.review.remaining)]" />
 			<param name="buffer_progress" value="Integer.ValueOf(70)" />
 			<param name="actual_progress" value="Integer.ValueOf(40)" />
+			<param name="seekable_condition" value="true" />
 			<param name="paused_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.paused))" />
 			<param name="timeline_focus_cue_label" value="$INFO[Window(Home).Property(htpc.review.focuscue)]" />
 			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />

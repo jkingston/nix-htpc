@@ -66,6 +66,7 @@
 		<param name="remaining" default="$VAR[TimeRemainingFormat]" />
 		<param name="buffer_progress" default="Player.ProgressCache" />
 		<param name="actual_progress" default="Player.Progress" />
+		<param name="seekable_condition" default="Player.SeekEnabled + !VideoPlayer.Content(livetv) + !VideoPlayer.HasMenu" />
 		<param name="paused_condition" default="Player.Paused | Player.Forwarding | Player.Rewinding" />
 		<param name="view_inactive_condition" default="String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))" />
 		<param name="presentation_ready" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
@@ -227,7 +228,8 @@
 					<onclick condition="$PARAM[production_actions]">PlayerControl(Play)</onclick>
 					<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					<onleft>noop</onleft>
-					<onright>9300</onright>
+					<onright condition="$PARAM[seekable_condition]">9300</onright>
+					<onright condition="![$PARAM[seekable_condition]]">noop</onright>
 					<onup>9102</onup>
 					<ondown>noop</ondown>
 				</control>
@@ -246,6 +248,7 @@
 					<font />
 					<texturefocus>colors/color_transparent.png</texturefocus>
 					<texturenofocus>colors/color_transparent.png</texturenofocus>
+					<visible>$PARAM[seekable_condition]</visible>
 					<onfocus condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
 					<onunfocus condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
 					<onleft condition="$PARAM[production_actions] + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
@@ -344,7 +347,7 @@
 					<top>$PARAM[timeline_focus_cue_top]</top>
 					<width>$PARAM[timeline_focus_cue_width]</width>
 					<height>$PARAM[timeline_focus_cue_height]</height>
-					<visible>Control.HasFocus(9300) + $PARAM[view_inactive_condition]</visible>
+					<visible>$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[view_inactive_condition]</visible>
 					<control type="image">
 						<description>HTPC timeline focus cue backplate</description>
 						<width>$PARAM[timeline_focus_cue_width]</width>

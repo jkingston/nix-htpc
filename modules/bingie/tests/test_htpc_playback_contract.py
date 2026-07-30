@@ -276,15 +276,17 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             focus_actions,
             [
                 (
-                    "String.IsEmpty(Window(Home).Property("
+                    "![Player.SeekEnabled + !VideoPlayer.Content(livetv) + "
+                    "!VideoPlayer.HasMenu] | [String.IsEmpty(Window(Home).Property("
                     "htpc.seek.active)) + String.IsEmpty(Window(Home)."
-                    "Property(htpc.seek.viewactive))",
+                    "Property(htpc.seek.viewactive))]",
                     "SetFocus(9201)",
                 ),
                 (
-                    "!String.IsEmpty(Window(Home).Property("
+                    "[Player.SeekEnabled + !VideoPlayer.Content(livetv) + "
+                    "!VideoPlayer.HasMenu] + [!String.IsEmpty(Window(Home).Property("
                     "htpc.seek.active)) | !String.IsEmpty(Window(Home)."
-                    "Property(htpc.seek.viewactive))",
+                    "Property(htpc.seek.viewactive))]",
                     "SetFocus(9300)",
                 ),
             ],
@@ -334,6 +336,11 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(parameters["buffer_progress"], "Player.ProgressCache")
         self.assertEqual(parameters["actual_progress"], "Player.Progress")
         self.assertEqual(
+            parameters["seekable_condition"],
+            "Player.SeekEnabled + !VideoPlayer.Content(livetv) + "
+            "!VideoPlayer.HasMenu",
+        )
+        self.assertEqual(
             parameters["timeline_focus_cue_label"],
             "$VAR[HTPCVideoOSDTimelineFocusCueLabel]",
         )
@@ -380,7 +387,10 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
     def test_static_focus_graph_matches_the_owned_video_contract(self):
         transport = self._control("9201")
         self.assertEqual(self._actions(transport, "onleft"), ("noop",))
-        self.assertEqual(self._actions(transport, "onright"), ("9300",))
+        self.assertEqual(
+            self._actions(transport, "onright"),
+            ("9300", "noop"),
+        )
         self.assertEqual(self._actions(transport, "onup"), ("9102",))
 
         timeline = self._control("9300")
@@ -409,6 +419,55 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(self._actions(top, "ondown"), ("9201",))
         self.assertEqual(self._actions(top, "onleft"), ("9100",))
         self.assertEqual(self._actions(top, "onright"), ("9100",))
+
+    def test_non_seekable_media_keeps_an_informational_unfocused_rail(self):
+        transport = self._control("9201")
+        transport_right = [
+            (
+                action.get("condition"),
+                (action.text or "").strip(),
+            )
+            for action in transport.findall("onright")
+        ]
+        self.assertEqual(
+            transport_right,
+            [
+                ("$PARAM[seekable_condition]", "9300"),
+                ("![$PARAM[seekable_condition]]", "noop"),
+            ],
+        )
+
+        timeline = self._control("9300")
+        self.assertEqual(
+            tuple(
+                (visible.text or "").strip()
+                for visible in timeline.findall("visible")
+            ),
+            ("$PARAM[seekable_condition]",),
+        )
+
+        cue = _controls_by_description(
+            self.surface,
+            "HTPC video OSD timeline focus cue",
+        )[0]
+        self.assertEqual(
+            _visible_text(cue),
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]",
+        )
+
+        progress_controls = [
+            control
+            for control in self.surface.iter("control")
+            if control.get("type") == "progress"
+        ]
+        self.assertEqual(len(progress_controls), 2)
+        for control in progress_controls:
+            with self.subTest(description=_description(control)):
+                self.assertNotIn(
+                    "$PARAM[seekable_condition]",
+                    _visible_text(control),
+                )
 
     def test_every_numeric_navigation_target_resolves_locally(self):
         control_ids = {
@@ -446,7 +505,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(len(focus_cues), 1)
         self.assertEqual(
             _visible_text(focus_cues[0]),
-            "Control.HasFocus(9300) + "
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
             "$PARAM[view_inactive_condition]",
         )
         self.assertEqual(

@@ -145,6 +145,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(parameters["property_prefix"], "htpc.review.seek")
         self.assertEqual(parameters["production_actions"], "false")
         self.assertEqual(parameters["inert_actions"], "true")
+        self.assertEqual(parameters["seekable_condition"], "true")
         self.assertEqual(parameters["preview_background_load"], "false")
         self.assertEqual(
             parameters["timeline_focus_cue_label"],
