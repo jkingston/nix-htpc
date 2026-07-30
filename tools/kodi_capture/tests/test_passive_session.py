@@ -39,7 +39,7 @@ from tools.kodi_capture.process import (
     ProcessTransportError,
 )
 from tools.kodi_capture.ssh_policy import (
-    SSH_BASE_OPTIONS,
+    SSH_FIXED_CAPABILITY_OPTIONS,
     SSH_OPTION_TERMINATOR,
     SSH_PROGRAM,
 )
@@ -342,21 +342,7 @@ class RemotePassiveEvidenceSessionTest(unittest.TestCase):
             [
                 SSH_PROGRAM,
                 "-T",
-                "-F",
-                "/dev/null",
-                *SSH_BASE_OPTIONS,
-                "-o",
-                "ForwardAgent=no",
-                "-o",
-                "ForwardX11=no",
-                "-o",
-                "PermitLocalCommand=no",
-                "-o",
-                "EscapeChar=none",
-                "-o",
-                "ControlMaster=no",
-                "-o",
-                "ControlPath=none",
+                *SSH_FIXED_CAPABILITY_OPTIONS,
                 SSH_OPTION_TERMINATOR,
                 "root@htpc-pi.local",
                 REMOTE_PASSIVE_EVIDENCE_PROGRAM,

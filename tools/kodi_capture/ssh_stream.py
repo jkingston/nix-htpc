@@ -13,10 +13,14 @@ from .process import (
     ProcessTransportError,
 )
 from .ssh_policy import (
-    SSH_BASE_OPTIONS,
+    SSH_FIXED_CAPABILITY_OPTIONS,
     SSH_OPTION_TERMINATOR,
+    SSH_PROGRAM,
     validate_ssh_host,
 )
+
+
+KODI_JSON_RPC_ENDPOINT = "127.0.0.1:9090"
 
 
 class OpenSshByteStream:
@@ -26,22 +30,18 @@ class OpenSshByteStream:
         self,
         host: str,
         *,
-        port: int = 9090,
-        ssh_binary: str = "ssh",
         clock: Callable[[], float] = time.monotonic,
         popen_factory: Callable[..., subprocess.Popen[bytes]] = subprocess.Popen,
         terminate_timeout: float = 1.0,
         max_stderr_bytes: int = 64 * 1024,
     ):
         validate_ssh_host(host)
-        if not 1 <= port <= 65535:
-            raise ValueError("port must be between 1 and 65535")
 
         self.argv = [
-            ssh_binary,
-            *SSH_BASE_OPTIONS,
+            SSH_PROGRAM,
+            *SSH_FIXED_CAPABILITY_OPTIONS,
             "-W",
-            "127.0.0.1:%d" % port,
+            KODI_JSON_RPC_ENDPOINT,
             SSH_OPTION_TERMINATOR,
             host,
         ]

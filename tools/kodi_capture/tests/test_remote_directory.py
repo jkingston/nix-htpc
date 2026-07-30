@@ -26,6 +26,7 @@ from tools.kodi_capture.remote_directory import (
     StatStamp,
     _parse_snapshot,
 )
+from tools.kodi_capture.ssh_policy import SSH_FIXED_CAPABILITY_OPTIONS
 
 
 HEADER = [
@@ -400,10 +401,7 @@ class StableObservationTest(unittest.TestCase):
         expected_argv = [
             "ssh",
             "-T",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ClearAllForwardings=yes",
+            *SSH_FIXED_CAPABILITY_OPTIONS,
             "--",
             "root@htpc-pi.local",
             REMOTE_EVIDENCE_PROGRAM,

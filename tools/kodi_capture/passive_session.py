@@ -37,7 +37,7 @@ from .process import (
     ProcessTransportError,
 )
 from .ssh_policy import (
-    SSH_BASE_OPTIONS,
+    SSH_FIXED_CAPABILITY_OPTIONS,
     SSH_OPTION_TERMINATOR,
     SSH_PROGRAM,
     validate_ssh_host,
@@ -66,23 +66,6 @@ POISONED = "poisoned"
 
 _NONCE_PATTERN = re.compile(
     r"\A[0-9a-f]{%d}\Z" % NONCE_HEX_LENGTH
-)
-_SESSION_SSH_OPTIONS = (
-    "-F",
-    "/dev/null",
-    *SSH_BASE_OPTIONS,
-    "-o",
-    "ForwardAgent=no",
-    "-o",
-    "ForwardX11=no",
-    "-o",
-    "PermitLocalCommand=no",
-    "-o",
-    "EscapeChar=none",
-    "-o",
-    "ControlMaster=no",
-    "-o",
-    "ControlPath=none",
 )
 
 
@@ -166,7 +149,7 @@ class RemotePassiveEvidenceSession:
         self._argv = [
             SSH_PROGRAM,
             "-T",
-            *_SESSION_SSH_OPTIONS,
+            *SSH_FIXED_CAPABILITY_OPTIONS,
             SSH_OPTION_TERMINATOR,
             host,
             REMOTE_PASSIVE_EVIDENCE_PROGRAM,

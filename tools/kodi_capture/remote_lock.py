@@ -15,7 +15,7 @@ from .process import (
     ProcessTransportError,
 )
 from .ssh_policy import (
-    SSH_BASE_OPTIONS,
+    SSH_FIXED_CAPABILITY_OPTIONS,
     SSH_OPTION_TERMINATOR,
     SSH_PROGRAM,
     validate_ssh_host,
@@ -112,7 +112,7 @@ class RemoteCaptureLock:
         self._argv = [
             SSH_PROGRAM,
             "-T",
-            *SSH_BASE_OPTIONS,
+            *SSH_FIXED_CAPABILITY_OPTIONS,
             SSH_OPTION_TERMINATOR,
             host,
             REMOTE_FLOCK_PROGRAM,

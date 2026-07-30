@@ -4,11 +4,25 @@ from __future__ import annotations
 
 
 SSH_PROGRAM = "ssh"
-SSH_BASE_OPTIONS = (
+SSH_FIXED_CAPABILITY_OPTIONS = (
+    "-F",
+    "/dev/null",
     "-o",
     "BatchMode=yes",
     "-o",
     "ClearAllForwardings=yes",
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ForwardX11=no",
+    "-o",
+    "PermitLocalCommand=no",
+    "-o",
+    "EscapeChar=none",
+    "-o",
+    "ControlMaster=no",
+    "-o",
+    "ControlPath=none",
 )
 SSH_OPTION_TERMINATOR = "--"
 

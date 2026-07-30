@@ -44,7 +44,10 @@ let
 in
 {
   kodi-capture = pkgs.runCommand "kodi-capture-tests" {
-    nativeBuildInputs = [ pkgs.python3 ];
+    nativeBuildInputs = [
+      pkgs.openssh
+      pkgs.python3
+    ];
   } ''
     cd ${captureSource}
     export PYTHONDONTWRITEBYTECODE=1

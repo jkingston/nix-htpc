@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import signal
 import subprocess
 import sys
@@ -7,7 +8,15 @@ import unittest
 from unittest import mock
 
 from tools.kodi_capture.jsonrpc import JsonRpcTimeout, JsonRpcTransportError
-from tools.kodi_capture.ssh_stream import OpenSshByteStream
+from tools.kodi_capture.ssh_policy import (
+    SSH_FIXED_CAPABILITY_OPTIONS,
+    SSH_OPTION_TERMINATOR,
+    SSH_PROGRAM,
+)
+from tools.kodi_capture.ssh_stream import (
+    KODI_JSON_RPC_ENDPOINT,
+    OpenSshByteStream,
+)
 
 
 class RecordingPopenFactory(object):
@@ -42,6 +51,11 @@ class OpenSshByteStreamTest(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 with self.assertRaises(ValueError):
                     OpenSshByteStream(**arguments)
+
+    def test_constructor_exposes_no_transport_configuration(self):
+        parameters = inspect.signature(OpenSshByteStream).parameters
+        self.assertNotIn("ssh_binary", parameters)
+        self.assertNotIn("port", parameters)
 
     def test_start_failure_is_a_transport_error(self):
         def fail_to_start(_argv, **_kwargs):
@@ -101,14 +115,11 @@ class OpenSshByteStreamTest(unittest.TestCase):
             self.assertEqual(
                 argv,
                 [
-                    "ssh",
-                    "-o",
-                    "BatchMode=yes",
-                    "-o",
-                    "ClearAllForwardings=yes",
+                    SSH_PROGRAM,
+                    *SSH_FIXED_CAPABILITY_OPTIONS,
                     "-W",
-                    "127.0.0.1:9090",
-                    "--",
+                    KODI_JSON_RPC_ENDPOINT,
+                    SSH_OPTION_TERMINATOR,
                     "htpc-pi.local",
                 ],
             )

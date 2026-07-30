@@ -23,6 +23,7 @@ from tools.kodi_capture.remote_lock import (
     RemoteLockTimeout,
     RemoteLockTransportError,
 )
+from tools.kodi_capture.ssh_policy import SSH_FIXED_CAPABILITY_OPTIONS
 
 
 ECHO_SCRIPT = (
@@ -201,10 +202,7 @@ class RemoteCaptureLockTest(unittest.TestCase):
                 [
                     "ssh",
                     "-T",
-                    "-o",
-                    "BatchMode=yes",
-                    "-o",
-                    "ClearAllForwardings=yes",
+                    *SSH_FIXED_CAPABILITY_OPTIONS,
                     "--",
                     "htpc-pi.local",
                     "/run/current-system/sw/bin/flock",
