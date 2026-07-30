@@ -30,7 +30,11 @@ class OpenSshByteStreamTest(unittest.TestCase):
     def test_constructor_arguments_are_validated(self):
         invalid = [
             {"host": None},
+            {"host": ""},
             {"host": "-option"},
+            {"host": "host name"},
+            {"host": "host\nname"},
+            {"host": "x" * 256},
             {"host": "host", "terminate_timeout": 0},
             {"host": "host", "max_stderr_bytes": 0},
         ]
@@ -104,6 +108,7 @@ class OpenSshByteStreamTest(unittest.TestCase):
                     "ClearAllForwardings=yes",
                     "-W",
                     "127.0.0.1:9090",
+                    "--",
                     "htpc-pi.local",
                 ],
             )

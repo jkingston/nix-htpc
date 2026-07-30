@@ -12,6 +12,11 @@ from .process import (
     ProcessTimeout,
     ProcessTransportError,
 )
+from .ssh_policy import (
+    SSH_BASE_OPTIONS,
+    SSH_OPTION_TERMINATOR,
+    validate_ssh_host,
+)
 
 
 class OpenSshByteStream:
@@ -28,23 +33,16 @@ class OpenSshByteStream:
         terminate_timeout: float = 1.0,
         max_stderr_bytes: int = 64 * 1024,
     ):
-        if (
-            not isinstance(host, str)
-            or not host
-            or host.startswith("-")
-        ):
-            raise ValueError("host must not be empty or start with '-'")
+        validate_ssh_host(host)
         if not 1 <= port <= 65535:
             raise ValueError("port must be between 1 and 65535")
 
         self.argv = [
             ssh_binary,
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ClearAllForwardings=yes",
+            *SSH_BASE_OPTIONS,
             "-W",
             "127.0.0.1:%d" % port,
+            SSH_OPTION_TERMINATOR,
             host,
         ]
         self._cleanup_error = None

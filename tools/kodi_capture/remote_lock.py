@@ -14,16 +14,11 @@ from .process import (
     ProcessTimeout,
     ProcessTransportError,
 )
-
-
-SSH_PROGRAM = "ssh"
-SSH_OPTIONS = (
-    "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ClearAllForwardings=yes",
-    "--",
+from .ssh_policy import (
+    SSH_BASE_OPTIONS,
+    SSH_OPTION_TERMINATOR,
+    SSH_PROGRAM,
+    validate_ssh_host,
 )
 REMOTE_FLOCK_PROGRAM = "/run/current-system/sw/bin/flock"
 REMOTE_CAT_PROGRAM = "/run/current-system/sw/bin/cat"
@@ -103,7 +98,7 @@ class RemoteCaptureLock:
         terminate_timeout: float = 1.0,
         max_stderr_bytes: int = 64 * 1024,
     ):
-        self._validate_host(host)
+        validate_ssh_host(host)
         self._validate_deadline(acquire_deadline)
         if not callable(nonce_factory):
             raise ValueError("nonce_factory must be callable")
@@ -116,7 +111,9 @@ class RemoteCaptureLock:
 
         self._argv = [
             SSH_PROGRAM,
-            *SSH_OPTIONS,
+            "-T",
+            *SSH_BASE_OPTIONS,
+            SSH_OPTION_TERMINATOR,
             host,
             REMOTE_FLOCK_PROGRAM,
             "-n",
@@ -308,20 +305,6 @@ class RemoteCaptureLock:
         except RemoteLockCleanupError as cleanup_error:
             raise primary from cleanup_error
         raise primary
-
-    @staticmethod
-    def _validate_host(host: str) -> None:
-        if (
-            not isinstance(host, str)
-            or not host
-            or len(host) > 255
-            or host.startswith("-")
-            or any(
-                ord(character) <= 32 or ord(character) == 127
-                for character in host
-            )
-        ):
-            raise ValueError("host must be a bounded non-option SSH destination")
 
     @staticmethod
     def _validate_deadline(deadline: float) -> None:
