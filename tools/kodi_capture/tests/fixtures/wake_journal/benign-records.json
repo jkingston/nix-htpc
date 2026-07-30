@@ -1,0 +1,46 @@
+[
+  {
+    "MESSAGE": "Unrelated system activity",
+    "__CURSOR": "fixture-global-cursor",
+    "__MONOTONIC_TIMESTAMP": "99",
+    "__REALTIME_TIMESTAMP": "203",
+    "_BOOT_ID": "11111111111111111111111111111111",
+    "_SYSTEMD_UNIT": "example.service"
+  },
+  {
+    "MESSAGE": "TV is in standby; CEC source activation armed",
+    "PRIORITY": "6",
+    "__CURSOR": "fixture-cursor-1",
+    "__MONOTONIC_TIMESTAMP": "100",
+    "__REALTIME_TIMESTAMP": "201",
+    "_BOOT_ID": "11111111111111111111111111111111",
+    "_PID": "4242",
+    "_SYSTEMD_INVOCATION_ID": "22222222222222222222222222222222",
+    "_SYSTEMD_UNIT": "cec-tv-wake.service",
+    "_UID": "0"
+  },
+  {
+    "MESSAGE": "TV power status: standby",
+    "PRIORITY": "6",
+    "__CURSOR": "fixture-cursor-2",
+    "__MONOTONIC_TIMESTAMP": "100",
+    "__REALTIME_TIMESTAMP": "200",
+    "_BOOT_ID": "11111111111111111111111111111111",
+    "_PID": "4242",
+    "_SYSTEMD_INVOCATION_ID": "22222222222222222222222222222222",
+    "_SYSTEMD_UNIT": "cec-tv-wake.service",
+    "_UID": "0"
+  },
+  {
+    "MESSAGE": "TV power status: on",
+    "PRIORITY": "6",
+    "__CURSOR": "fixture-cursor-3",
+    "__MONOTONIC_TIMESTAMP": "101",
+    "__REALTIME_TIMESTAMP": "202",
+    "_BOOT_ID": "11111111111111111111111111111111",
+    "_PID": "4242",
+    "_SYSTEMD_INVOCATION_ID": "22222222222222222222222222222222",
+    "_SYSTEMD_UNIT": "cec-tv-wake.service",
+    "_UID": "0"
+  }
+]
