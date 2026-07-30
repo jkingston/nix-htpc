@@ -129,6 +129,7 @@ class RuntimeHarness:
             focus = {
                 "transport-paused": "9201",
                 "timeline-idle": "9300",
+                "timeline-chapters": "9300",
                 "seek-backward": "9300",
                 "seek-forward": "9300",
                 "top-stop": "9101",

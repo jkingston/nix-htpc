@@ -21,13 +21,17 @@
 		<value condition="Control.HasFocus(9105)">$LOCALIZE[33061]</value>
 	</variable>
 
+	<variable name="HTPCVideoOSDTimelineFocusCueLabel">
+		<value condition="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))">$LOCALIZE[31581]</value>
+		<value>$LOCALIZE[31580]</value>
+	</variable>
+
 	<include name="HTPCVideoOSD">
 		<param name="visible" default="Player.HasVideo" />
 		<param name="rail_left" default="384" />
 		<param name="rail_top" default="964" />
 		<param name="rail_width" default="1152" />
 		<param name="rail_height" default="7" />
-		<param name="rail_focus_top" default="962" />
 		<param name="marker_top" default="955" />
 		<param name="marker_height" default="24" />
 		<param name="target_marker_top" default="957" />
@@ -47,7 +51,11 @@
 		<param name="preview_top" default="634" />
 		<param name="preview_width" default="380" />
 		<param name="preview_height" default="320" />
-		<param name="chapter_affordance_top" default="904" />
+		<param name="timeline_focus_cue_left" default="610" />
+		<param name="timeline_focus_cue_top" default="900" />
+		<param name="timeline_focus_cue_width" default="700" />
+		<param name="timeline_focus_cue_height" default="40" />
+		<param name="timeline_focus_cue_label" default="$VAR[HTPCVideoOSDTimelineFocusCueLabel]" />
 		<param name="time_top" default="948" />
 		<param name="elapsed_left" default="194" />
 		<param name="remaining_left" default="1556" />
@@ -59,7 +67,6 @@
 		<param name="buffer_progress" default="Player.ProgressCache" />
 		<param name="actual_progress" default="Player.Progress" />
 		<param name="paused_condition" default="Player.Paused | Player.Forwarding | Player.Rewinding" />
-		<param name="chapter_available" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
 		<param name="view_inactive_condition" default="String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))" />
 		<param name="presentation_ready" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
 		<param name="property_window" default="Home" />
@@ -259,15 +266,6 @@
 					<onclick condition="$PARAM[inert_actions]">noop</onclick>
 				</control>
 
-				<control type="image">
-					<description>HTPC video OSD timeline focus halo</description>
-					<left>$PARAM[rail_left]</left>
-					<top>$PARAM[rail_focus_top]</top>
-					<width>$PARAM[rail_width]</width>
-					<height>11</height>
-					<texture colordiffuse="4dffffff">diffuse/panel2.png</texture>
-					<visible>Control.HasFocus(9300)</visible>
-				</control>
 				<control type="progress">
 					<description>HTPC video OSD buffer</description>
 					<left>$PARAM[rail_left]</left>
@@ -340,17 +338,29 @@
 					<label>$PARAM[remaining]</label>
 				</control>
 
-				<control type="label">
-					<description>HTPC chapter rail affordance</description>
-					<left>$PARAM[rail_left]</left>
-					<top>$PARAM[chapter_affordance_top]</top>
-					<width>$PARAM[rail_width]</width>
-					<height>32</height>
-					<font>Reg22</font>
-					<align>center</align>
-					<textcolor>ccffffff</textcolor>
-					<label>↑  $LOCALIZE[21396]</label>
-					<visible>Control.HasFocus(9300) + $PARAM[chapter_available] + $PARAM[view_inactive_condition]</visible>
+				<control type="group">
+					<description>HTPC video OSD timeline focus cue</description>
+					<left>$PARAM[timeline_focus_cue_left]</left>
+					<top>$PARAM[timeline_focus_cue_top]</top>
+					<width>$PARAM[timeline_focus_cue_width]</width>
+					<height>$PARAM[timeline_focus_cue_height]</height>
+					<visible>Control.HasFocus(9300) + $PARAM[view_inactive_condition]</visible>
+					<control type="image">
+						<description>HTPC timeline focus cue backplate</description>
+						<width>$PARAM[timeline_focus_cue_width]</width>
+						<height>$PARAM[timeline_focus_cue_height]</height>
+						<texture border="18" colordiffuse="b3080808">diffuse/panel2.png</texture>
+					</control>
+					<control type="label">
+						<description>HTPC timeline focus cue label</description>
+						<width>$PARAM[timeline_focus_cue_width]</width>
+						<height>$PARAM[timeline_focus_cue_height]</height>
+						<font>Reg22</font>
+						<align>center</align>
+						<aligny>center</aligny>
+						<textcolor>e6ffffff</textcolor>
+						<label>$PARAM[timeline_focus_cue_label]</label>
+					</control>
 				</control>
 			</control>
 		</definition>

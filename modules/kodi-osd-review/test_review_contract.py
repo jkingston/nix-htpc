@@ -90,11 +90,31 @@ class ReviewContractTest(unittest.TestCase):
         self.assertNotIn("htpc.review.bufferprogress", forward)
 
     def test_non_seek_scenarios_publish_no_seek_view(self):
-        for scenario in ("transport-paused", "timeline-idle", "top-stop"):
+        for scenario in (
+            "transport-paused",
+            "timeline-idle",
+            "timeline-chapters",
+            "top-stop",
+        ):
             values = scenario_properties(scenario)
             self.assertFalse(
                 any(key.startswith("htpc.review.seek.") for key in values)
             )
+
+    def test_chapter_focus_cue_preserves_seek_help(self):
+        idle = scenario_properties("timeline-idle")[
+            "htpc.review.focuscue"
+        ]
+        chapters = scenario_properties("timeline-chapters")[
+            "htpc.review.focuscue"
+        ]
+        self.assertNotEqual(idle, chapters)
+        for token in ("10s", "Hold to scrub"):
+            with self.subTest(token=token):
+                self.assertIn(token, idle)
+                self.assertIn(token, chapters)
+        self.assertNotIn("Chapters", idle)
+        self.assertIn("↑  Chapters", chapters)
 
     def test_driver_keys_and_focus_equal_the_skin_contract(self):
         root = ET.parse(REVIEW_WINDOW).getroot()

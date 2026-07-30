@@ -16,6 +16,7 @@ PROPERTY_NAMES = (
     "subtitle",
     "elapsed",
     "remaining",
+    "focuscue",
     "seek.viewactive",
     "seek.viewslot",
     "seek.a.revision",
@@ -35,6 +36,7 @@ PROPERTY_KEYS = tuple(PROPERTY_PREFIX + name for name in PROPERTY_NAMES)
 SCENARIOS = (
     "transport-paused",
     "timeline-idle",
+    "timeline-chapters",
     "seek-backward",
     "seek-forward",
     "top-stop",
@@ -42,6 +44,7 @@ SCENARIOS = (
 EXPECTED_FOCUS = {
     "transport-paused": "9201",
     "timeline-idle": "9300",
+    "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
     "top-stop": "9101",
@@ -54,6 +57,20 @@ _COMMON = {
     "subtitle": "Deterministic fixture",
     "elapsed": "40:00",
     "remaining": "\N{MINUS SIGN}1:00:00",
+    "focuscue": (
+        "\N{LEFTWARDS ARROW}  10s   \N{BULLET}   Hold to scrub"
+        "   \N{BULLET}   10s  \N{RIGHTWARDS ARROW}"
+    ),
+}
+
+_FOCUS_CUE = {
+    "timeline-chapters": {
+        "focuscue": (
+            "\N{LEFTWARDS ARROW}  10s   \N{BULLET}   Hold to scrub"
+            "   \N{BULLET}   10s  \N{RIGHTWARDS ARROW}"
+            "    \N{UPWARDS ARROW}  Chapters"
+        ),
+    },
 }
 
 _SEEK = {
@@ -120,6 +137,7 @@ def scenario_properties(scenario):
 
     values = dict(_COMMON)
     values["scenario"] = scenario
+    values.update(_FOCUS_CUE.get(scenario, {}))
     values.update(_SEEK.get(scenario, {}))
     return {
         PROPERTY_PREFIX + name: value

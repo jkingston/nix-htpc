@@ -20,6 +20,7 @@ REVIEW_ASSETS = SKIN_ROOT / "resources" / "review"
 EXPECTED_FOCUS = {
     "transport-paused": "9201",
     "timeline-idle": "9300",
+    "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
     "top-stop": "9101",
@@ -33,6 +34,7 @@ EXPECTED_CLEANUP = {
     "htpc.review.subtitle",
     "htpc.review.elapsed",
     "htpc.review.remaining",
+    "htpc.review.focuscue",
     "htpc.review.seek.viewactive",
     "htpc.review.seek.viewslot",
     "htpc.review.seek.a.revision",
@@ -144,7 +146,10 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(parameters["production_actions"], "false")
         self.assertEqual(parameters["inert_actions"], "true")
         self.assertEqual(parameters["preview_background_load"], "false")
-        self.assertEqual(parameters["chapter_available"], "false")
+        self.assertEqual(
+            parameters["timeline_focus_cue_label"],
+            "$INFO[Window(Home).Property(htpc.review.focuscue)]",
+        )
         self.assertEqual(
             parameters["presentation_ready"],
             "true",

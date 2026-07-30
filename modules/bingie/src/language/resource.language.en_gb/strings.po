@@ -2377,3 +2377,13 @@ msgstr ""
 msgctxt "#31579"
 msgid "color for play icon"
 msgstr ""
+
+#. Playback timeline remote-control hint
+msgctxt "#31580"
+msgid "←  10s   •   Hold to scrub   •   10s  →"
+msgstr ""
+
+#. Playback timeline remote-control hint when chapters are available
+msgctxt "#31581"
+msgid "←  10s   •   Hold to scrub   •   10s  →    ↑  Chapters"
+msgstr ""

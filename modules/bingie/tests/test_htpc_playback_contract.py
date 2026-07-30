@@ -24,6 +24,12 @@ VIDEO_OSD_REVIEW_XML = XML_ROOT / "Custom_1192_HTPCVideoOSDReview.xml"
 INCLUDES_XML = XML_ROOT / "Includes.xml"
 OSD_XML = XML_ROOT / "IncludesOSD.xml"
 VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
+EN_GB_STRINGS = (
+    SKIN_ROOT
+    / "language"
+    / "resource.language.en_gb"
+    / "strings.po"
+)
 SETTINGS_ROOT = Path(
     os.environ.get(
         "HTPC_SETTINGS_ROOT",
@@ -212,8 +218,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(parameters["buffer_progress"], "Player.ProgressCache")
         self.assertEqual(parameters["actual_progress"], "Player.Progress")
         self.assertEqual(
-            parameters["chapter_available"],
-            "!String.IsEmpty(Window(Home).Property(htpc.chapter.available))",
+            parameters["timeline_focus_cue_label"],
+            "$VAR[HTPCVideoOSDTimelineFocusCueLabel]",
         )
         self.assertEqual(
             parameters["view_inactive_condition"],
@@ -317,15 +323,22 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             if node.get("content") == "HTPCPlaybackPresentationLayout"
         ]
         self.assertEqual(len(playback_consumers), 1)
-        focus_halo = _controls_by_description(
+        focus_cues = _controls_by_description(
             self.surface,
-            "HTPC video OSD timeline focus halo",
+            "HTPC video OSD timeline focus cue",
         )
-        self.assertEqual(len(focus_halo), 1)
-        self.assertEqual(focus_halo[0].findtext("height"), "11")
+        self.assertEqual(len(focus_cues), 1)
         self.assertEqual(
-            _visible_text(focus_halo[0]),
-            "Control.HasFocus(9300)",
+            _visible_text(focus_cues[0]),
+            "Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]",
+        )
+        self.assertEqual(
+            _controls_by_description(
+                self.surface,
+                "HTPC video OSD timeline focus halo",
+            ),
+            [],
         )
         self.assertFalse(
             any(
@@ -333,6 +346,145 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 for control in self.surface.iter("control")
             ),
             "the owned surface must not add another slider authority",
+        )
+
+    def test_timeline_focus_cue_is_fixed_noninteractive_and_localized(self):
+        cue = _controls_by_description(
+            self.surface,
+            "HTPC video OSD timeline focus cue",
+        )[0]
+        parameters = {
+            node.get("name"): node.get("default")
+            for node in self.surface.findall("param")
+        }
+        expected_geometry = {
+            "left": "timeline_focus_cue_left",
+            "top": "timeline_focus_cue_top",
+            "width": "timeline_focus_cue_width",
+            "height": "timeline_focus_cue_height",
+        }
+        for node, parameter in expected_geometry.items():
+            with self.subTest(node=node):
+                self.assertEqual(
+                    cue.findtext(node),
+                    f"$PARAM[{parameter}]",
+                )
+
+        children = cue.findall("control")
+        self.assertEqual(
+            tuple(_description(child) for child in children),
+            (
+                "HTPC timeline focus cue backplate",
+                "HTPC timeline focus cue label",
+            ),
+        )
+        self.assertEqual(
+            tuple(child.get("type") for child in children),
+            ("image", "label"),
+        )
+        backplate, label = children
+        texture = backplate.find("texture")
+        self.assertEqual(texture.text.strip(), "diffuse/panel2.png")
+        self.assertEqual(texture.get("border"), "18")
+        self.assertEqual(texture.get("colordiffuse"), "b3080808")
+        self.assertEqual(label.findtext("align"), "center")
+        self.assertEqual(label.findtext("aligny"), "center")
+        self.assertEqual(
+            label.findtext("label"),
+            "$PARAM[timeline_focus_cue_label]",
+        )
+
+        forbidden_tags = {
+            "animation",
+            "info",
+            "onclick",
+            "ondown",
+            "onleft",
+            "onright",
+            "onup",
+        }
+        for node in cue.iter():
+            with self.subTest(tag=node.tag):
+                self.assertIsNone(node.get("id"))
+                self.assertNotIn(node.tag, forbidden_tags)
+                self.assertNotIn(
+                    node.get("type"),
+                    {"progress", "ranges", "slider"},
+                )
+        serialized = ET.tostring(cue, encoding="unicode")
+        for token in ("Player.", "htpc.seek", "NotifyAll(", "SetFocus("):
+            with self.subTest(token=token):
+                self.assertNotIn(token, serialized)
+
+        rail_left = int(parameters["rail_left"])
+        rail_right = rail_left + int(parameters["rail_width"])
+        cue_left = int(parameters["timeline_focus_cue_left"])
+        cue_right = cue_left + int(parameters["timeline_focus_cue_width"])
+        cue_top = int(parameters["timeline_focus_cue_top"])
+        cue_bottom = cue_top + int(parameters["timeline_focus_cue_height"])
+        marker_top = min(
+            int(parameters["rail_top"]),
+            int(parameters["marker_top"]),
+            int(parameters["target_marker_top"]),
+        )
+        self.assertGreaterEqual(cue_left, rail_left)
+        self.assertLessEqual(cue_right, rail_right)
+        self.assertLess(cue_bottom, marker_top)
+        self.assertLessEqual(cue_bottom, 1080)
+
+        self.assertEqual(
+            parameters["timeline_focus_cue_label"],
+            "$VAR[HTPCVideoOSDTimelineFocusCueLabel]",
+        )
+        strings = EN_GB_STRINGS.read_text(encoding="utf-8")
+        match = re.search(
+            r'msgctxt "#31580"\s+msgid "([^"]+)"',
+            strings,
+        )
+        self.assertIsNotNone(match)
+        self.assertEqual(
+            match.group(1),
+            "←  10s   •   Hold to scrub   •   10s  →",
+        )
+
+        focus_visuals = [
+            _description(control)
+            for control in self.surface.iter("control")
+            if "Control.HasFocus(9300)" in _visible_text(control)
+        ]
+        self.assertEqual(
+            focus_visuals,
+            [
+                "HTPC video OSD timeline focus cue",
+            ],
+        )
+
+        variables = {
+            node.get("name"): node
+            for node in self.root.findall("variable")
+        }
+        cue_label = variables["HTPCVideoOSDTimelineFocusCueLabel"]
+        values = cue_label.findall("value")
+        self.assertEqual(len(values), 2)
+        self.assertEqual(
+            values[0].get("condition"),
+            "!String.IsEmpty(Window(Home).Property("
+            "htpc.chapter.available))",
+        )
+        self.assertEqual(
+            (values[0].text or "").strip(),
+            "$LOCALIZE[31581]",
+        )
+        self.assertIsNone(values[1].get("condition"))
+        self.assertEqual((values[1].text or "").strip(), "$LOCALIZE[31580]")
+        chapter_match = re.search(
+            r'msgctxt "#31581"\s+msgid "([^"]+)"',
+            strings,
+        )
+        self.assertIsNotNone(chapter_match)
+        self.assertEqual(
+            chapter_match.group(1),
+            "←  10s   •   Hold to scrub   •   10s  →    ↑  Chapters",
         )
 
     def test_shared_rail_parameters_own_progress_geometry(self):
