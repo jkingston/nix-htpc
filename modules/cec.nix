@@ -1,10 +1,14 @@
 {
+  lib,
   nixos-raspberrypi,
   pkgs,
   ...
 }:
 let
   rpiKodi = nixos-raspberrypi.packages.aarch64-linux.kodi-gbm;
+  kodiPassiveEvidence = import ./kodi-passive-evidence/package.nix {
+    inherit lib pkgs;
+  };
   kodiCecActivate = pkgs.writeScriptBin "kodi-cec-activate" ''
     #!${pkgs.python3}/bin/python3
     import socket
@@ -25,9 +29,16 @@ in
 {
   # libcec for CEC support
   environment.systemPackages = with pkgs; [
+    kodiPassiveEvidence
     libcec
     v4l-utils
   ];
+
+  # Linux restricts CEC monitor mode to CAP_NET_ADMIN. The fixed, no-argument
+  # evidence producer runs through the existing root SSH boundary instead of
+  # adding sudo rules, file capabilities, a privileged daemon, or a setuid
+  # executable.
+  system.build.kodiPassiveEvidence = kodiPassiveEvidence;
 
   # udev rules for CEC device access
   services.udev.extraRules = ''
