@@ -978,8 +978,16 @@ class SeekController(object):
         now = self.clock() if now is None else float(now)
         if self.controller_paused and self.was_playing:
             self._request_resume("shutdown", now)
-        else:
-            self.reset(clear_handoff=True)
+            return
+        if self.state in (PAUSE_PENDING, CANCEL_WAIT_PAUSE) and self.was_playing:
+            snapshot = self._read_snapshot()
+            if self._snapshot_matches(snapshot) and snapshot.get("paused"):
+                self._retire_operation(self.pending_operation)
+                self.pending_operation = None
+                self.controller_paused = True
+                self._request_resume("shutdown", now)
+                return
+        self.reset(clear_handoff=True)
 
     def reset(self, clear_handoff=False):
         self._retire_all_operations()

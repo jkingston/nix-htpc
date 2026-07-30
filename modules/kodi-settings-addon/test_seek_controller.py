@@ -369,6 +369,87 @@ class SeekControllerTest(unittest.TestCase):
         self.assertEqual(h.controller.state, RESUME_PENDING)
         self.assertEqual(len(h.player.resume_requests), 1)
 
+    def test_shutdown_resumes_same_media_pause_before_callback(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        pause_operation = h.player.pause_requests[-1][0]
+        # Kodi applied the pause synchronously, but shutdown won the race with
+        # its Python callback.
+        h.player.paused = True
+        h.controller.shutdown(0.70)
+
+        self.assertIn(pause_operation, h.player.retired)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+        self.assertEqual(h.player.resume_requests[0][1:], ("item-one", 1))
+
+    def test_shutdown_does_not_toggle_when_pause_request_never_applied(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.controller.shutdown(0.70)
+
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_shutdown_resumes_cancelled_pause_before_callback(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        pause_operation = h.player.pause_requests[-1][0]
+        h.controller.cancel(0.62)
+        self.assertEqual(h.controller.state, CANCEL_WAIT_PAUSE)
+        h.player.paused = True
+
+        h.controller.shutdown(0.70)
+
+        self.assertIn(pause_operation, h.player.retired)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_shutdown_discards_cancelled_pause_that_never_applied(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        pause_operation = h.player.pause_requests[-1][0]
+        h.controller.cancel(0.62)
+        self.assertEqual(h.controller.state, CANCEL_WAIT_PAUSE)
+
+        h.controller.shutdown(0.70)
+
+        self.assertIn(pause_operation, h.player.retired)
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_shutdown_does_not_toggle_paused_replacement_media(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.player.paused = True
+        h.player.identity = "item-two"
+        h.player.epoch = 2
+        h.controller.shutdown(0.70)
+
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_shutdown_preserves_preexisting_user_pause(self):
+        h = ControllerHarness(paused=True)
+        h.start_timeline_hold(1)
+        self.assertFalse(h.controller.was_playing)
+
+        h.controller.shutdown(0.70)
+
+        self.assertEqual(h.controller.state, IDLE)
+        self.assertTrue(h.player.paused)
+        self.assertEqual(h.player.resume_requests, [])
+
+    def test_shutdown_resumes_confirmed_controller_owned_pause(self):
+        h = ControllerHarness()
+        h.start_timeline_hold(1)
+        h.ack_pause(0.65)
+        h.controller.shutdown(0.70)
+
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+        self.assertEqual(h.player.resume_requests[0][1:], ("item-one", 1))
+
     def test_untagged_and_wrong_seek_callbacks_never_commit(self):
         h = ControllerHarness()
         h.start_timeline_hold(1)
