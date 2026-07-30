@@ -40,7 +40,8 @@ let
       id = "standby_pc_on_tv_standby";
       value = ignoreTvStandby;
     }
-    # An explicit HTPC shutdown may put the TV into standby.
+    # Preserve Kodi's shutdown flag; the None/empty target pair above leaves
+    # no CEC device to receive a standby command.
     {
       id = "standby_tv_on_pc_standby";
       value = booleanEnabled;
