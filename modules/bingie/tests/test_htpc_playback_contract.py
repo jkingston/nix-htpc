@@ -19,8 +19,10 @@ SKIN_ROOT = Path(
 ).resolve()
 XML_ROOT = SKIN_ROOT / "1080i"
 PLAYBACK_XML = XML_ROOT / "IncludesHTPCPlayback.xml"
+VIDEO_OSD_XML = XML_ROOT / "IncludesHTPCVideoOSD.xml"
 INCLUDES_XML = XML_ROOT / "Includes.xml"
 OSD_XML = XML_ROOT / "IncludesOSD.xml"
+VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
 SETTINGS_ROOT = Path(
     os.environ.get(
         "HTPC_SETTINGS_ROOT",
@@ -72,6 +74,10 @@ def _literal_texture_paths(root: ET.Element):
     texture_tags = {
         "texture",
         "texturebg",
+        "texturefocus",
+        "texturenofocus",
+        "alttexturefocus",
+        "alttexturenofocus",
         "lefttexture",
         "midtexture",
         "righttexture",
@@ -94,7 +100,14 @@ class ExpectedForkLayoutTest(unittest.TestCase):
     def test_expected_vendored_fork_layout_exists(self):
         missing = [
             path
-            for path in (SKIN_ROOT, PLAYBACK_XML, INCLUDES_XML, OSD_XML)
+            for path in (
+                SKIN_ROOT,
+                PLAYBACK_XML,
+                VIDEO_OSD_XML,
+                INCLUDES_XML,
+                OSD_XML,
+                VIDEO_OSD_WINDOW_XML,
+            )
             if not path.exists()
         ]
         self.assertEqual(
@@ -103,6 +116,322 @@ class ExpectedForkLayoutTest(unittest.TestCase):
             "the structural suite targets the planned vendored fork; "
             "missing: " + ", ".join(str(path) for path in missing),
         )
+
+
+class ForkOwnedVideoOsdContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        required = (
+            VIDEO_OSD_XML,
+            INCLUDES_XML,
+            VIDEO_OSD_WINDOW_XML,
+        )
+        if not all(path.is_file() for path in required):
+            raise unittest.SkipTest("fork-owned video OSD source is absent")
+        cls.root = ET.parse(VIDEO_OSD_XML).getroot()
+        cls.playback_root = ET.parse(PLAYBACK_XML).getroot()
+        cls.includes_root = ET.parse(INCLUDES_XML).getroot()
+        cls.window_root = ET.parse(VIDEO_OSD_WINDOW_XML).getroot()
+        definitions = [
+            node
+            for node in cls.root.findall("include")
+            if node.get("name") == "HTPCVideoOSD"
+        ]
+        if len(definitions) != 1:
+            raise AssertionError(
+                "expected exactly one HTPCVideoOSD definition"
+            )
+        cls.surface = definitions[0]
+
+    def _control(self, control_id: str) -> ET.Element:
+        matches = [
+            control
+            for control in self.surface.iter("control")
+            if control.get("id") == control_id
+        ]
+        self.assertEqual(
+            len(matches),
+            1,
+            f"expected exactly one control id {control_id}",
+        )
+        return matches[0]
+
+    @staticmethod
+    def _actions(control: ET.Element, name: str) -> tuple[str, ...]:
+        return tuple(
+            (node.text or "").strip()
+            for node in control.findall(name)
+        )
+
+    def test_surface_file_is_registered_once_but_not_live_yet(self):
+        registrations = [
+            node
+            for node in self.includes_root.iter("include")
+            if node.get("file") == VIDEO_OSD_XML.name
+        ]
+        self.assertEqual(len(registrations), 1)
+        live_consumers = []
+        for source in sorted(XML_ROOT.glob("*.xml")):
+            if source == VIDEO_OSD_XML:
+                continue
+            serialized = source.read_text(
+                encoding="utf-8-sig",
+                errors="replace",
+            )
+            consumes_owned_osd = re.search(
+                r'<include\b[^>]*\bcontent=["\']HTPCVideoOSD["\'][^>]*>'
+                r"|<include\b[^>]*>\s*HTPCVideoOSD\s*</include>",
+                serialized,
+            )
+            if consumes_owned_osd:
+                live_consumers.append(source.name)
+        self.assertEqual(
+            live_consumers,
+            [],
+            "the structural OSD commit must not cut production over",
+        )
+
+    def test_fixture_sensitive_inputs_have_safe_production_defaults(self):
+        parameters = {
+            node.get("name"): node.get("default")
+            for node in self.surface.findall("param")
+        }
+        self.assertEqual(parameters["visible"], "Player.HasVideo")
+        self.assertEqual(parameters["buffer_progress"], "Player.ProgressCache")
+        self.assertEqual(parameters["actual_progress"], "Player.Progress")
+        self.assertEqual(
+            parameters["chapter_available"],
+            "!String.IsEmpty(Window(Home).Property(htpc.chapter.available))",
+        )
+
+    def test_private_interactive_ids_are_unique_and_exclude_legacy_proxies(self):
+        controls = [
+            control
+            for control in self.surface.iter("control")
+            if control.get("id")
+        ]
+        ids = tuple(control.get("id") for control in controls)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(
+            set(ids),
+            {
+                "9100",
+                "9101",
+                "9102",
+                "9103",
+                "9104",
+                "9105",
+                "9201",
+                "9300",
+            },
+        )
+        self.assertTrue(
+            all(identifier.startswith(("91", "92", "93")) for identifier in ids)
+        )
+        self.assertTrue({"203", "187", "200", "300", "400", "401"}.isdisjoint(ids))
+
+    def test_static_focus_graph_matches_the_owned_video_contract(self):
+        transport = self._control("9201")
+        self.assertEqual(self._actions(transport, "onleft"), ("noop",))
+        self.assertEqual(self._actions(transport, "onright"), ("9300",))
+        self.assertEqual(self._actions(transport, "onup"), ("9102",))
+
+        timeline = self._control("9300")
+        self.assertEqual(
+            self._actions(timeline, "ondown")[-1],
+            "9201",
+        )
+        self.assertIn(
+            "NotifyAll(htpc.seek,timeline-left)",
+            self._actions(timeline, "onleft"),
+        )
+        self.assertIn(
+            "NotifyAll(htpc.seek,timeline-right)",
+            self._actions(timeline, "onright"),
+        )
+        self.assertIn(
+            "NotifyAll(htpc.seek,timeline-up)",
+            self._actions(timeline, "onup"),
+        )
+        self.assertIn(
+            "NotifyAll(htpc.seek,timeline-confirm)",
+            self._actions(timeline, "onclick"),
+        )
+
+        top = self._control("9100")
+        self.assertEqual(self._actions(top, "ondown"), ("9201",))
+        self.assertEqual(self._actions(top, "onleft"), ("9100",))
+        self.assertEqual(self._actions(top, "onright"), ("9100",))
+
+    def test_every_numeric_navigation_target_resolves_locally(self):
+        control_ids = {
+            control.get("id")
+            for control in self.surface.iter("control")
+            if control.get("id")
+        }
+        unresolved = []
+        for control in self.surface.iter("control"):
+            for direction in ("onleft", "onright", "onup", "ondown"):
+                for action in self._actions(control, direction):
+                    if action.isdigit() and action not in control_ids:
+                        unresolved.append(
+                            (control.get("id"), direction, action)
+                        )
+        self.assertEqual(unresolved, [])
+
+    def test_timeline_is_a_visible_focus_target_with_one_owned_presentation(self):
+        timeline = self._control("9300")
+        self.assertEqual(timeline.get("type"), "button")
+        self.assertEqual(
+            (timeline.findtext("texturefocus") or "").strip(),
+            "colors/color_transparent.png",
+        )
+        playback_consumers = [
+            node
+            for node in self.surface.iter("include")
+            if node.get("content") == "HTPCPlaybackPresentationLayout"
+        ]
+        self.assertEqual(len(playback_consumers), 1)
+        focus_halo = _controls_by_description(
+            self.surface,
+            "HTPC video OSD timeline focus halo",
+        )
+        self.assertEqual(len(focus_halo), 1)
+        self.assertEqual(focus_halo[0].findtext("height"), "11")
+        self.assertEqual(
+            _visible_text(focus_halo[0]),
+            "Control.HasFocus(9300)",
+        )
+        self.assertFalse(
+            any(
+                control.get("type") == "slider"
+                for control in self.surface.iter("control")
+            ),
+            "the owned surface must not add another slider authority",
+        )
+
+    def test_shared_rail_parameters_own_progress_geometry(self):
+        progress_controls = [
+            control
+            for control in self.surface.iter("control")
+            if control.get("type") == "progress"
+        ]
+        self.assertEqual(
+            tuple(_description(control) for control in progress_controls),
+            (
+                "HTPC video OSD buffer",
+                "HTPC video OSD actual progress",
+            ),
+        )
+        for control in progress_controls:
+            with self.subTest(description=_description(control)):
+                self.assertEqual(control.findtext("left"), "$PARAM[rail_left]")
+                self.assertEqual(control.findtext("top"), "$PARAM[rail_top]")
+                self.assertEqual(
+                    control.findtext("width"),
+                    "$PARAM[rail_width]",
+                )
+                self.assertEqual(
+                    control.findtext("height"),
+                    "$PARAM[rail_height]",
+                )
+        actual = progress_controls[1]
+        self.assertEqual(_visible_text(actual), "")
+
+        playback_consumers = [
+            node
+            for node in self.surface.iter("include")
+            if node.get("content") == "HTPCPlaybackPresentationLayout"
+        ]
+        self.assertEqual(len(playback_consumers), 1)
+        passed_parameters = {
+            node.get("name"): node.get("value")
+            for node in playback_consumers[0].findall("param")
+        }
+        for parameter in (
+            "rail_left",
+            "rail_top",
+            "rail_width",
+            "rail_height",
+            "marker_top",
+            "marker_height",
+            "target_marker_top",
+            "target_marker_height",
+            "preview_left",
+            "preview_top",
+            "preview_width",
+            "preview_height",
+        ):
+            with self.subTest(parameter=parameter):
+                self.assertEqual(
+                    passed_parameters[parameter],
+                    f"$PARAM[{parameter}]",
+                )
+        self.assertEqual(passed_parameters["target_fill_color"], "80ffffff")
+        self.assertEqual(passed_parameters["stable_preview_card"], "true")
+
+        for description in (
+            TARGET_FILL_DESCRIPTION,
+            CUT_MARKERS_DESCRIPTION,
+            CHAPTER_MARKERS_DESCRIPTION,
+            TARGET_MARKER_DESCRIPTION,
+            PREVIEW_DESCRIPTION,
+        ):
+            controls = _controls_by_description(
+                self.playback_root,
+                description,
+            )
+            self.assertEqual(len(controls), 2)
+            for control in controls:
+                self.assertIn("$PARAM[", ET.tostring(
+                    control,
+                    encoding="unicode",
+                ))
+
+    def test_top_actions_are_video_only_and_bookmark_modal_is_absent(self):
+        expected = {
+            "9101": "PlayerControl(Stop)",
+            "9102": "ActivateWindow(osdsubtitlesettings)",
+            "9103": "ActivateWindow(osdaudiosettings)",
+            "9104": "ActivateWindow(osdvideosettings)",
+            "9105": "PlayerControl(ShowVideoMenu)",
+        }
+        for control_id, action in expected.items():
+            with self.subTest(control_id=control_id):
+                self.assertIn(
+                    action,
+                    self._actions(self._control(control_id), "onclick"),
+                )
+        serialized = ET.tostring(self.surface, encoding="unicode").lower()
+        self.assertNotIn("videobookmarks", serialized)
+        self.assertNotIn(">bookmarks<", serialized)
+        self.assertNotIn("playercontrol(previous)", serialized)
+        self.assertNotIn("playercontrol(next)", serialized)
+        self.assertNotIn("stop_fo.png", serialized)
+        self.assertNotIn("dvd_fo.png", serialized)
+
+    def test_seek_preview_does_not_compete_with_metadata(self):
+        for description in (
+            "HTPC video OSD title",
+            "HTPC video OSD subtitle",
+        ):
+            controls = _controls_by_description(self.surface, description)
+            self.assertEqual(len(controls), 1)
+            self.assertIn(
+                "String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))",
+                _visible_text(controls[0]),
+            )
+        parameters = {
+            node.get("name"): node.get("default")
+            for node in self.surface.findall("param")
+        }
+        preview_time_bottom = int(parameters["preview_top"]) + 304
+        self.assertLess(preview_time_bottom, int(parameters["time_top"]))
+        transport_right = (
+            int(parameters["transport_left"])
+            + int(parameters["transport_size"])
+        )
+        self.assertLess(transport_right, int(parameters["elapsed_left"]))
 
 
 class PlaybackXmlContractTest(unittest.TestCase):
@@ -152,20 +481,49 @@ class PlaybackXmlContractTest(unittest.TestCase):
             if node.get("name")
         ]
         self.assertEqual(
-            len(definitions),
-            1,
-            "the local file should expose one reviewable presentation include",
+            {node.get("name") for node in definitions},
+            {
+                "HTPCPlaybackPresentation",
+                "HTPCPlaybackPresentationLayout",
+            },
         )
-        include_name = definitions[0].get("name")
+        compatibility_wrapper = next(
+            node
+            for node in definitions
+            if node.get("name") == "HTPCPlaybackPresentation"
+        )
+        wrapper_targets = [
+            node.get("content")
+            for node in compatibility_wrapper.findall(".//include")
+        ]
+        self.assertEqual(
+            wrapper_targets,
+            ["HTPCPlaybackPresentationLayout"],
+        )
+        parameterized_layout = next(
+            node
+            for node in definitions
+            if node.get("name") == "HTPCPlaybackPresentationLayout"
+        )
+        layout_defaults = {
+            node.get("name"): node.get("default")
+            for node in parameterized_layout.findall("param")
+        }
+        self.assertEqual(
+            layout_defaults["target_fill_color"],
+            "$INFO[Skin.String(BingieOSDProgressBarColor)]",
+        )
+        self.assertEqual(layout_defaults["stable_preview_card"], "false")
+        self.assertEqual(layout_defaults["preview_top"], "650")
         consumers = [
             node
             for node in self.osd_root.iter("include")
-            if (node.text or "").strip() == include_name
+            if (node.text or "").strip() == "HTPCPlaybackPresentation"
         ]
         self.assertEqual(
             len(consumers),
             1,
-            f"{include_name!r} must be consumed exactly once by IncludesOSD.xml",
+            "the inherited OSD must retain exactly one compatibility consumer",
         )
 
     def test_two_presentation_slots_are_mutually_exclusive(self):
@@ -378,12 +736,25 @@ class PlaybackXmlContractTest(unittest.TestCase):
         existing_xml = "\n".join(
             path.read_text(encoding="utf-8", errors="replace")
             for path in sorted(XML_ROOT.glob("*.xml"))
-            if path != PLAYBACK_XML
+            if path not in (PLAYBACK_XML, VIDEO_OSD_XML)
         )
         missing = []
-        for relative in sorted(set(_literal_texture_paths(self.playback_root))):
+        owned_textures = set(_literal_texture_paths(self.playback_root))
+        video_osd_root = ET.parse(VIDEO_OSD_XML).getroot()
+        owned_textures.update(_literal_texture_paths(video_osd_root))
+        parameterized_icon_root = 'value="osd/bingie/"'
+        for relative in sorted(owned_textures):
             candidate = SKIN_ROOT / "media" / relative
-            if not candidate.is_file() and relative not in existing_xml:
+            known_parameterized_icon = (
+                relative.startswith("osd/bingie/")
+                and parameterized_icon_root in existing_xml
+                and f"$PARAM[iconspath]{Path(relative).name}" in existing_xml
+            )
+            if (
+                not candidate.is_file()
+                and relative not in existing_xml
+                and not known_parameterized_icon
+            ):
                 missing.append(relative)
         self.assertEqual(
             missing,
@@ -398,6 +769,14 @@ class PlaybackXmlContractTest(unittest.TestCase):
         for slot in anchors.SLOTS:
             with self.subTest(slot=slot):
                 preview = self._one_slot_control(slot, PREVIEW_DESCRIPTION)
+                stable_card = self._one_slot_control(
+                    slot,
+                    "HTPC stable preview card",
+                )
+                self.assertIn(
+                    "$PARAM[stable_preview_card]",
+                    _visible_text(stable_card),
+                )
                 rows = anchors.extract_anchor_rows(PLAYBACK_XML, slot)
                 self.assertEqual(rows, anchors.anchor_rows())
                 self.assertEqual(rows[0], (0, 0))

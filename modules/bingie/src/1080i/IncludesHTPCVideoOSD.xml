@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fork-owned video OSD.
+
+  This surface deliberately does not share the inherited music/PVR OSD
+  factories. Its three focus zones use a private ID range:
+
+    91xx  top actions
+    92xx  transport
+    93xx  timeline
+
+  The seek service still owns input classification and playback transactions.
+  This file owns only focus, layout, and rendering.
+-->
+<includes>
+	<variable name="HTPCVideoOSDTopActionLabel">
+		<value condition="Control.HasFocus(9101)">$LOCALIZE[36044]</value>
+		<value condition="Control.HasFocus(9102)">$LOCALIZE[24012]</value>
+		<value condition="Control.HasFocus(9103)">$LOCALIZE[292]</value>
+		<value condition="Control.HasFocus(9104)">$LOCALIZE[291]</value>
+		<value condition="Control.HasFocus(9105)">$LOCALIZE[33061]</value>
+	</variable>
+
+	<include name="HTPCVideoOSD">
+		<param name="visible" default="Player.HasVideo" />
+		<param name="rail_left" default="384" />
+		<param name="rail_top" default="964" />
+		<param name="rail_width" default="1152" />
+		<param name="rail_height" default="7" />
+		<param name="rail_focus_top" default="962" />
+		<param name="marker_top" default="955" />
+		<param name="marker_height" default="24" />
+		<param name="target_marker_top" default="957" />
+		<param name="target_marker_height" default="11" />
+		<param name="timeline_hit_top" default="922" />
+		<param name="timeline_hit_height" default="80" />
+		<param name="transport_left" default="112" />
+		<param name="transport_top" default="929" />
+		<param name="transport_size" default="70" />
+		<param name="top_left" default="72" />
+		<param name="top_top" default="48" />
+		<param name="top_size" default="68" />
+		<param name="top_gap" default="10" />
+		<param name="metadata_top" default="820" />
+		<param name="subtitle_top" default="862" />
+		<param name="preview_left" default="194" />
+		<param name="preview_top" default="634" />
+		<param name="preview_width" default="380" />
+		<param name="preview_height" default="320" />
+		<param name="chapter_affordance_top" default="904" />
+		<param name="time_top" default="948" />
+		<param name="elapsed_left" default="194" />
+		<param name="remaining_left" default="1556" />
+		<param name="time_width" default="170" />
+		<param name="title" default="$INFO[VideoPlayer.Title]" />
+		<param name="subtitle" default="$INFO[VideoPlayer.TVShowTitle]$INFO[VideoPlayer.Season, • S,]$INFO[VideoPlayer.Episode,E,]" />
+		<param name="elapsed" default="$VAR[PlayTimeFormat]" />
+		<param name="remaining" default="$VAR[TimeRemainingFormat]" />
+		<param name="buffer_progress" default="Player.ProgressCache" />
+		<param name="actual_progress" default="Player.Progress" />
+		<param name="paused_condition" default="Player.Paused | Player.Forwarding | Player.Rewinding" />
+		<param name="chapter_available" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
+		<definition>
+			<control type="group">
+				<description>HTPC fork-owned video OSD</description>
+				<visible>$PARAM[visible]</visible>
+
+				<animation type="WindowOpen">
+					<effect type="fade" start="0" end="100" time="140" />
+				</animation>
+				<animation type="WindowClose">
+					<effect type="fade" start="100" end="0" time="120" />
+				</animation>
+
+				<!-- Quiet edge gradients preserve the picture while grounding controls. -->
+				<control type="image">
+					<description>HTPC video OSD top gradient</description>
+					<left>0</left>
+					<top>0</top>
+					<width>1920</width>
+					<height>230</height>
+					<texture background="true" flipy="true">overlays/osd_gradient.png</texture>
+				</control>
+				<control type="image">
+					<description>HTPC video OSD bottom gradient</description>
+					<left>0</left>
+					<bottom>0</bottom>
+					<width>1920</width>
+					<height>390</height>
+					<texture background="true">overlays/osd_gradient.png</texture>
+				</control>
+
+				<!-- Top actions. Stop is explicit; Back remains one UI level. -->
+				<control type="grouplist" id="9100">
+					<description>HTPC video OSD top actions</description>
+					<left>$PARAM[top_left]</left>
+					<top>$PARAM[top_top]</top>
+					<width>620</width>
+					<height>$PARAM[top_size]</height>
+					<orientation>horizontal</orientation>
+					<itemgap>$PARAM[top_gap]</itemgap>
+					<onleft>9100</onleft>
+					<onright>9100</onright>
+					<onup>9100</onup>
+					<ondown>9201</ondown>
+
+					<control type="button" id="9102">
+						<description>HTPC subtitle settings</description>
+						<width>$PARAM[top_size]</width>
+						<height>$PARAM[top_size]</height>
+						<label />
+						<font />
+						<texturefocus>osd/bingie/subtitles_fo.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">osd/bingie/subtitles.png</texturenofocus>
+						<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
+					</control>
+					<control type="button" id="9103">
+						<description>HTPC audio settings</description>
+						<width>$PARAM[top_size]</width>
+						<height>$PARAM[top_size]</height>
+						<label />
+						<font />
+						<texturefocus>osd/bingie/audio_fo.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">osd/bingie/audio.png</texturenofocus>
+						<onclick>ActivateWindow(osdaudiosettings)</onclick>
+					</control>
+					<control type="button" id="9104">
+						<description>HTPC video settings</description>
+						<width>$PARAM[top_size]</width>
+						<height>$PARAM[top_size]</height>
+						<label />
+						<font />
+						<texturefocus>osd/bingie/video_fo.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">osd/bingie/video.png</texturenofocus>
+						<onclick>ActivateWindow(osdvideosettings)</onclick>
+					</control>
+					<control type="button" id="9105">
+						<description>HTPC disc menu</description>
+						<width>$PARAM[top_size]</width>
+						<height>$PARAM[top_size]</height>
+						<label />
+						<font />
+						<texturefocus colordiffuse="ffffffff">osd/bingie/dvd.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">osd/bingie/dvd.png</texturenofocus>
+						<onclick>PlayerControl(ShowVideoMenu)</onclick>
+						<visible>VideoPlayer.HasMenu</visible>
+					</control>
+					<control type="button" id="9101">
+						<description>HTPC stop playback</description>
+						<width>$PARAM[top_size]</width>
+						<height>$PARAM[top_size]</height>
+						<label />
+						<font />
+						<texturefocus colordiffuse="ffffffff">osd/bingie/stop.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">osd/bingie/stop.png</texturenofocus>
+						<onclick>PlayerControl(Stop)</onclick>
+					</control>
+				</control>
+				<control type="label">
+					<description>HTPC video OSD focused top action label</description>
+					<left>$PARAM[top_left]</left>
+					<top>122</top>
+					<width>620</width>
+					<height>38</height>
+					<font>Reg24</font>
+					<textcolor>e6ffffff</textcolor>
+					<label>$VAR[HTPCVideoOSDTopActionLabel]</label>
+				</control>
+
+				<!-- Media identity stays subordinate to the picture. -->
+				<control type="label">
+					<description>HTPC video OSD title</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[metadata_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>42</height>
+					<font>Bold30</font>
+					<textcolor>ffffffff</textcolor>
+					<label>$PARAM[title]</label>
+					<visible>String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+				</control>
+				<control type="label">
+					<description>HTPC video OSD subtitle</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[subtitle_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>36</height>
+					<font>Reg24</font>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[subtitle]</label>
+					<visible>String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+				</control>
+
+				<!-- Transport is a real visible control, not a blank focus proxy. -->
+				<control type="togglebutton" id="9201">
+					<description>HTPC play pause</description>
+					<left>$PARAM[transport_left]</left>
+					<top>$PARAM[transport_top]</top>
+					<width>$PARAM[transport_size]</width>
+					<height>$PARAM[transport_size]</height>
+					<label />
+					<font />
+					<texturefocus>osd/bingie/pause_fo.png</texturefocus>
+					<texturenofocus colordiffuse="ccffffff">osd/bingie/pause.png</texturenofocus>
+					<usealttexture>$PARAM[paused_condition]</usealttexture>
+					<alttexturefocus>osd/bingie/play_fo.png</alttexturefocus>
+					<alttexturenofocus colordiffuse="ccffffff">osd/bingie/play.png</alttexturenofocus>
+					<onclick>PlayerControl(Play)</onclick>
+					<onleft>noop</onleft>
+					<onright>9300</onright>
+					<onup>9102</onup>
+					<ondown>noop</ondown>
+				</control>
+
+				<!--
+				  One timeline owns navigation. The visible track and target
+				  presentation below share the same parameter block.
+				-->
+				<control type="button" id="9300">
+					<description>HTPC video OSD timeline</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[timeline_hit_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>$PARAM[timeline_hit_height]</height>
+					<label />
+					<font />
+					<texturefocus>colors/color_transparent.png</texturefocus>
+					<texturenofocus>colors/color_transparent.png</texturenofocus>
+					<onfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
+					<onunfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
+					<onleft condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
+					<onleft condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepBack</onleft>
+					<onright condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-right)</onright>
+					<onright condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepForward</onright>
+					<onup condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</onup>
+					<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
+					<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">9102</onup>
+					<ondown condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
+					<ondown condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal))">9201</ondown>
+					<onclick condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
+					<onclick condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">SetFocus(9201)</onclick>
+				</control>
+
+				<control type="image">
+					<description>HTPC video OSD timeline focus halo</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[rail_focus_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>11</height>
+					<texture colordiffuse="4dffffff">diffuse/panel2.png</texture>
+					<visible>Control.HasFocus(9300)</visible>
+				</control>
+				<control type="progress">
+					<description>HTPC video OSD buffer</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[rail_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>$PARAM[rail_height]</height>
+					<texturebg colordiffuse="59ffffff">diffuse/panel2.png</texturebg>
+					<lefttexture />
+					<midtexture colordiffuse="73ffffff">diffuse/panel2.png</midtexture>
+					<righttexture />
+					<overlaytexture />
+					<info>$PARAM[buffer_progress]</info>
+				</control>
+				<control type="progress">
+					<description>HTPC video OSD actual progress</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[rail_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>$PARAM[rail_height]</height>
+					<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
+					<lefttexture />
+					<midtexture colordiffuse="$INFO[Skin.String(BingieOSDProgressBarColor)]">diffuse/panel2.png</midtexture>
+					<righttexture />
+					<overlaytexture />
+					<info>$PARAM[actual_progress]</info>
+				</control>
+				<include content="HTPCPlaybackPresentationLayout">
+					<param name="visible" value="$PARAM[visible]" />
+					<param name="rail_left" value="$PARAM[rail_left]" />
+					<param name="rail_top" value="$PARAM[rail_top]" />
+					<param name="rail_width" value="$PARAM[rail_width]" />
+					<param name="rail_height" value="$PARAM[rail_height]" />
+					<param name="marker_top" value="$PARAM[marker_top]" />
+					<param name="marker_height" value="$PARAM[marker_height]" />
+					<param name="target_marker_top" value="$PARAM[target_marker_top]" />
+					<param name="target_marker_height" value="$PARAM[target_marker_height]" />
+					<param name="preview_left" value="$PARAM[preview_left]" />
+					<param name="preview_top" value="$PARAM[preview_top]" />
+					<param name="preview_width" value="$PARAM[preview_width]" />
+					<param name="preview_height" value="$PARAM[preview_height]" />
+					<param name="target_fill_color" value="80ffffff" />
+					<param name="stable_preview_card" value="true" />
+				</include>
+
+				<control type="label">
+					<description>HTPC video OSD elapsed time</description>
+					<left>$PARAM[elapsed_left]</left>
+					<top>$PARAM[time_top]</top>
+					<width>$PARAM[time_width]</width>
+					<height>38</height>
+					<font>Reg24</font>
+					<align>right</align>
+					<textcolor>ccffffff</textcolor>
+					<label>$PARAM[elapsed]</label>
+				</control>
+				<control type="label">
+					<description>HTPC video OSD remaining time</description>
+					<left>$PARAM[remaining_left]</left>
+					<top>$PARAM[time_top]</top>
+					<width>$PARAM[time_width]</width>
+					<height>38</height>
+					<font>Reg24</font>
+					<textcolor>ccffffff</textcolor>
+					<label>$PARAM[remaining]</label>
+				</control>
+
+				<control type="label">
+					<description>HTPC chapter rail affordance</description>
+					<left>$PARAM[rail_left]</left>
+					<top>$PARAM[chapter_affordance_top]</top>
+					<width>$PARAM[rail_width]</width>
+					<height>32</height>
+					<font>Reg22</font>
+					<align>center</align>
+					<textcolor>ccffffff</textcolor>
+					<label>↑  $LOCALIZE[21396]</label>
+					<visible>Control.HasFocus(9300) + $PARAM[chapter_available] + String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))</visible>
+				</control>
+			</control>
+		</definition>
+	</include>
+</includes>

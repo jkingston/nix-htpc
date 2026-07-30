@@ -41,6 +41,7 @@
     <include file="IncludesViewsLayoutSquare.xml" />
     <include file="IncludesViewsLayoutBanner.xml" />
     <include file="IncludesHTPCPlayback.xml" />
+    <include file="IncludesHTPCVideoOSD.xml" />
     <include file="IncludesOSD.xml" />
     <include file="IncludesSkinSettings.xml" />
     <include file="IncludesContextMenu.xml" />

@@ -8,28 +8,49 @@
 -->
 <includes>
 	<include name="HTPCPlaybackPresentation">
+		<!-- Compatibility wrapper for the currently live inherited OSD. -->
+		<include content="HTPCPlaybackPresentationLayout" />
+	</include>
+
+	<include name="HTPCPlaybackPresentationLayout">
+		<param name="visible" default="Player.HasVideo" />
+		<param name="rail_left" default="384" />
+		<param name="rail_top" default="964" />
+		<param name="rail_width" default="1152" />
+		<param name="rail_height" default="7" />
+		<param name="marker_top" default="955" />
+		<param name="marker_height" default="24" />
+		<param name="target_marker_top" default="957" />
+		<param name="target_marker_height" default="11" />
+		<param name="preview_left" default="194" />
+		<param name="preview_top" default="650" />
+		<param name="preview_width" default="380" />
+		<param name="preview_height" default="320" />
+		<param name="target_fill_color" default="$INFO[Skin.String(BingieOSDProgressBarColor)]" />
+		<param name="stable_preview_card" default="false" />
+		<definition>
 		<control type="group">
 			<description>HTPC playback presentation slot a</description>
-			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.viewactive)) + String.IsEqual(Window(Home).Property(htpc.seek.viewslot),a) + Player.HasVideo</visible>
+			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.viewactive)) + String.IsEqual(Window(Home).Property(htpc.seek.viewslot),a) + $PARAM[visible]</visible>
 			<control type="ranges">
 				<description>HTPC target progress fill</description>
-				<posx>384</posx>
-				<posy>964</posy>
-				<width>1152</width>
-				<height>7</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[rail_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[rail_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<lefttexture/>
-				<midtexture colordiffuse="$INFO[Skin.String(BingieOSDProgressBarColor)]">diffuse/panel2.png</midtexture>
+				<midtexture colordiffuse="$PARAM[target_fill_color]">diffuse/panel2.png</midtexture>
 				<righttexture/>
 				<info>Window(Home).Property(htpc.seek.a.targetfill)</info>
 				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.a.targetvalid))</visible>
 			</control>
 			<control type="ranges">
 				<description>HTPC cut markers</description>
-				<posx>384</posx>
-				<posy>955</posy>
-				<width>1152</width>
-				<height>24</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[marker_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<midtexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</midtexture>
 				<info>Player.Cutlist</info>
@@ -37,10 +58,10 @@
 			</control>
 			<control type="ranges">
 				<description>HTPC chapter markers</description>
-				<posx>384</posx>
-				<posy>955</posy>
-				<width>1152</width>
-				<height>24</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[marker_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<righttexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</righttexture>
 				<info>Player.Chapters</info>
@@ -48,10 +69,10 @@
 			</control>
 			<control type="ranges">
 				<description>HTPC target position marker</description>
-				<posx>384</posx>
-				<posy>957</posy>
-				<width>1152</width>
-				<height>11</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[target_marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[target_marker_height]</height>
 				<texturebg colordiffuse="00ffffff">common/slider/slider_button_nofocus.png</texturebg>
 				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
 				<midtexture/>
@@ -61,10 +82,10 @@
 			</control>
 			<control type="group">
 				<description>HTPC cursor-following preview</description>
-				<posx>194</posx>
-				<posy>650</posy>
-				<width>380</width>
-				<height>320</height>
+				<posx>$PARAM[preview_left]</posx>
+				<posy>$PARAM[preview_top]</posy>
+				<width>$PARAM[preview_width]</width>
+				<height>$PARAM[preview_height]</height>
 				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.a.targetvalid))</visible>
 				<!-- BEGIN GENERATED PREVIEW ANCHORS a -->
 				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.a.previewanchor),0)">Conditional</animation>
@@ -169,6 +190,15 @@
 				<animation effect="slide" end="1140,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.a.previewanchor),99)">Conditional</animation>
 				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.a.previewanchor),100)">Conditional</animation>
 				<!-- END GENERATED PREVIEW ANCHORS a -->
+				<control type="image">
+					<description>HTPC stable preview card</description>
+					<posx>-10</posx>
+					<posy>-10</posy>
+					<width>400</width>
+					<height>234</height>
+					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
+					<visible>$PARAM[stable_preview_card] + !String.IsEqual(Window(Home).Property(htpc.seek.a.previewstatus),ready)</visible>
+				</control>
 				<control type="group">
 					<visible>String.IsEqual(Window(Home).Property(htpc.seek.a.previewstatus),ready) + !String.IsEmpty(Window(Home).Property(htpc.seek.a.previewpath))</visible>
 					<control type="image">
@@ -219,26 +249,26 @@
 
 		<control type="group">
 			<description>HTPC playback presentation slot b</description>
-			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.viewactive)) + String.IsEqual(Window(Home).Property(htpc.seek.viewslot),b) + Player.HasVideo</visible>
+			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.viewactive)) + String.IsEqual(Window(Home).Property(htpc.seek.viewslot),b) + $PARAM[visible]</visible>
 			<control type="ranges">
 				<description>HTPC target progress fill</description>
-				<posx>384</posx>
-				<posy>964</posy>
-				<width>1152</width>
-				<height>7</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[rail_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[rail_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<lefttexture/>
-				<midtexture colordiffuse="$INFO[Skin.String(BingieOSDProgressBarColor)]">diffuse/panel2.png</midtexture>
+				<midtexture colordiffuse="$PARAM[target_fill_color]">diffuse/panel2.png</midtexture>
 				<righttexture/>
 				<info>Window(Home).Property(htpc.seek.b.targetfill)</info>
 				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.b.targetvalid))</visible>
 			</control>
 			<control type="ranges">
 				<description>HTPC cut markers</description>
-				<posx>384</posx>
-				<posy>955</posy>
-				<width>1152</width>
-				<height>24</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[marker_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<midtexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</midtexture>
 				<info>Player.Cutlist</info>
@@ -246,10 +276,10 @@
 			</control>
 			<control type="ranges">
 				<description>HTPC chapter markers</description>
-				<posx>384</posx>
-				<posy>955</posy>
-				<width>1152</width>
-				<height>24</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[marker_height]</height>
 				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
 				<righttexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</righttexture>
 				<info>Player.Chapters</info>
@@ -257,10 +287,10 @@
 			</control>
 			<control type="ranges">
 				<description>HTPC target position marker</description>
-				<posx>384</posx>
-				<posy>957</posy>
-				<width>1152</width>
-				<height>11</height>
+				<posx>$PARAM[rail_left]</posx>
+				<posy>$PARAM[target_marker_top]</posy>
+				<width>$PARAM[rail_width]</width>
+				<height>$PARAM[target_marker_height]</height>
 				<texturebg colordiffuse="00ffffff">common/slider/slider_button_nofocus.png</texturebg>
 				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
 				<midtexture/>
@@ -270,10 +300,10 @@
 			</control>
 			<control type="group">
 				<description>HTPC cursor-following preview</description>
-				<posx>194</posx>
-				<posy>650</posy>
-				<width>380</width>
-				<height>320</height>
+				<posx>$PARAM[preview_left]</posx>
+				<posy>$PARAM[preview_top]</posy>
+				<width>$PARAM[preview_width]</width>
+				<height>$PARAM[preview_height]</height>
 				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.b.targetvalid))</visible>
 				<!-- BEGIN GENERATED PREVIEW ANCHORS b -->
 				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.b.previewanchor),0)">Conditional</animation>
@@ -378,6 +408,15 @@
 				<animation effect="slide" end="1140,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.b.previewanchor),99)">Conditional</animation>
 				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.b.previewanchor),100)">Conditional</animation>
 				<!-- END GENERATED PREVIEW ANCHORS b -->
+				<control type="image">
+					<description>HTPC stable preview card</description>
+					<posx>-10</posx>
+					<posy>-10</posy>
+					<width>400</width>
+					<height>234</height>
+					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
+					<visible>$PARAM[stable_preview_card] + !String.IsEqual(Window(Home).Property(htpc.seek.b.previewstatus),ready)</visible>
+				</control>
 				<control type="group">
 					<visible>String.IsEqual(Window(Home).Property(htpc.seek.b.previewstatus),ready) + !String.IsEmpty(Window(Home).Property(htpc.seek.b.previewpath))</visible>
 					<control type="image">
@@ -425,5 +464,6 @@
 				</control>
 			</control>
 		</control>
+		</definition>
 	</include>
 </includes>

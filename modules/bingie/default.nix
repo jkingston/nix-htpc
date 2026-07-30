@@ -48,6 +48,7 @@ kodiPackages.buildKodiAddon {
       1080i/IncludesBingie.xml \
       1080i/IncludesHomeBingie.xml \
       1080i/IncludesHTPCPlayback.xml \
+      1080i/IncludesHTPCVideoOSD.xml \
       1080i/IncludesOSD.xml \
       1080i/IncludesViewsLayoutLandscape.xml \
       1080i/IncludesViewsLayoutPoster.xml \
@@ -85,6 +86,7 @@ kodiPackages.buildKodiAddon {
     addon_dir="$out/share/kodi/addons/skin.bingie"
     test -f "$addon_dir/addon.xml"
     test -f "$addon_dir/1080i/Home.xml"
+    test -f "$addon_dir/1080i/IncludesHTPCVideoOSD.xml"
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"
