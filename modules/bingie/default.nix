@@ -2,7 +2,7 @@
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-htpc";
   namespace = "skin.bingie";
-  version = "2.0.2.7";
+  version = "2.0.2.8";
 
   src = pkgs.fetchzip {
     url = "https://raw.githubusercontent.com/matke-84/repository.bingie/main/omega/skin.bingie/skin.bingie-2.0.2.zip";
@@ -103,6 +103,8 @@ kodiPackages.buildKodiAddon rec {
     test "$(grep -ci 'ActivateWindow(VideoBookmarks)' 1080i/IncludesOSD.xml)" -eq 2
     test "$(grep -c 'id="1901"' 1080i/IncludesOSD.xml)" -eq 1
     test "$(grep -c 'id="1902"' 1080i/IncludesOSD.xml)" -eq 1
+    test "$(grep -c '<info>Window(Home).Property(htpc.seek.percent)</info>' 1080i/IncludesOSD.xml)" -eq 1
+    test "$(grep -c 'Property(htpc.seek.previewbucket)' 1080i/IncludesOSD.xml)" -eq 20
     grep -q 'Window(Home).Property(htpc.service.ready).*StepForward' \
       1080i/IncludesOSD.xml
     grep -q 'htpc.service.ready.*htpc.seek.active.*htpc.service.ready.*htpc.chapter.open' \

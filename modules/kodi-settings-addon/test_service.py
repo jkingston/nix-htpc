@@ -21,14 +21,6 @@ class FakeKodiPlayerBase(object):
     pass
 
 
-class FakeControl(object):
-    def __init__(self):
-        self.positions = []
-
-    def setPosition(self, x, y):
-        self.positions.append((x, y))
-
-
 class FakeWindow(object):
     def __init__(self):
         self.properties = {}
@@ -42,10 +34,6 @@ class FakeWindow(object):
 
     def getProperty(self, name):
         return self.properties.get(name, "")
-
-    def getControl(self, control_id):
-        return self.controls[control_id]
-
 
 class FakeWindowXMLDialog(object):
     def __init__(self, *args, **kwargs):
@@ -661,10 +649,14 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish(snapshot)
         self.assertEqual(window.getProperty("htpc.seek.modal"), "true")
         self.assertEqual(window.getProperty("htpc.seek.mode"), "scrub")
+        self.assertEqual(window.getProperty("htpc.seek.percent"), "10.0000")
+        self.assertEqual(window.getProperty("htpc.seek.previewbucket"), "2")
 
         snapshot["modal"] = False
+        snapshot["percent"] = 100
         publisher.publish(snapshot)
         self.assertEqual(window.getProperty("htpc.seek.modal"), "")
+        self.assertEqual(window.getProperty("htpc.seek.previewbucket"), "20")
 
     def test_lease_rearms_before_crash_expiry_and_clears_on_stop(self):
         self.assertEqual(SERVICE_READY, "htpc.service.ready")
@@ -691,15 +683,11 @@ class PresenterAndLeaseTest(unittest.TestCase):
         lease.stop()
         self.assertEqual(window.getProperty(SERVICE_READY), "")
 
-    def test_presenter_centers_final_skin_marker_and_card_geometry(self):
-        window = FakeWindow()
-        window.controls = {1901: FakeControl(), 1902: FakeControl()}
-        WINDOWS[12901] = window
+    def test_presenter_never_mutates_window_controls(self):
         CONDITIONS["Window.IsActive(videoosd)"] = True
         presenter = BingiePresenter()
         presenter.update({"active": True, "generation": 1, "percent": 25.0})
-        self.assertEqual(window.controls[1901].positions, [(662, 952)])
-        self.assertEqual(window.controls[1902].positions, [(482, 650)])
+        self.assertNotIn(12901, WINDOWS)
 
     def test_bingie_settings_enable_information_bypass(self):
         calls = []

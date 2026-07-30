@@ -24,15 +24,6 @@ from media_contract import (
 )
 
 
-VIDEO_OSD_WINDOW_ID = 12901
-TARGET_MARKER_CONTROL_ID = 1901
-TARGET_CARD_CONTROL_ID = 1902
-TIMELINE_X = 384
-TIMELINE_WIDTH = 1152
-TARGET_MARKER_WIDTH = 20
-TARGET_MARKER_Y = 952
-TARGET_CARD_WIDTH = 380
-TARGET_CARD_Y = 650
 LEASE_REFRESH_SECONDS = 0.75
 
 
@@ -42,6 +33,7 @@ class KodiPropertyPublisher(object):
         self.last = {}
 
     def publish(self, snapshot):
+        percent = max(0.0, min(100.0, float(snapshot["percent"])))
         values = {
             "active": "true" if snapshot["active"] else "",
             "generation": str(snapshot["generation"]),
@@ -49,7 +41,10 @@ class KodiPropertyPublisher(object):
             "mode": snapshot.get("mode", ""),
             "source": snapshot["source"],
             "targetseconds": str(snapshot["target_seconds"]),
-            "percent": "%.4f" % snapshot["percent"],
+            "percent": "%.4f" % percent,
+            # Skin-owned 5% buckets let the preview follow the cursor without
+            # retaining xbmcgui.Control pointers across OSD reconstruction.
+            "previewbucket": str(int((percent + 2.5) // 5.0)),
             "time": snapshot["time"],
             "delta": snapshot["delta"],
             "confirm": "true" if snapshot["confirm"] else "",
@@ -141,12 +136,6 @@ class BingiePresenter(object):
         self.clock = clock or time.monotonic
         self.last_generation = None
         self.last_active = False
-        self.last_osd_active = False
-        self.marker = None
-        self.card = None
-        self.last_marker_position = None
-        self.last_card_position = None
-        self.last_error_time = 0.0
         self.pending_timeline_focus = False
 
     @staticmethod
@@ -184,19 +173,9 @@ class BingiePresenter(object):
     def osd_action(action):
         xbmc.executebuiltin("Action(%s,videoosd)" % action)
 
-    def _clear_control_cache(self):
-        self.marker = None
-        self.card = None
-        self.last_marker_position = None
-        self.last_card_position = None
-
     def update(self, snapshot):
         active = bool(snapshot["active"])
         osd_active = self.osd_active()
-
-        if self.last_osd_active and not osd_active:
-            self._clear_control_cache()
-        self.last_osd_active = osd_active
 
         if not active:
             self.last_generation = None
@@ -213,44 +192,3 @@ class BingiePresenter(object):
         if self.pending_timeline_focus:
             self.focus_timeline()
             self.pending_timeline_focus = False
-
-        try:
-            if self.marker is None or self.card is None:
-                window = xbmcgui.Window(VIDEO_OSD_WINDOW_ID)
-                self.marker = window.getControl(TARGET_MARKER_CONTROL_ID)
-                self.card = window.getControl(TARGET_CARD_CONTROL_ID)
-
-            cursor_x = TIMELINE_X + (
-                TIMELINE_WIDTH * float(snapshot["percent"]) / 100.0
-            )
-            marker_position = (
-                int(cursor_x - (TARGET_MARKER_WIDTH / 2.0)),
-                TARGET_MARKER_Y,
-            )
-            card_position = (
-                int(
-                    max(
-                        40,
-                        min(
-                            1920 - 40 - TARGET_CARD_WIDTH,
-                            cursor_x - (TARGET_CARD_WIDTH / 2.0),
-                        ),
-                    )
-                ),
-                TARGET_CARD_Y,
-            )
-            if marker_position != self.last_marker_position:
-                self.marker.setPosition(*marker_position)
-                self.last_marker_position = marker_position
-            if card_position != self.last_card_position:
-                self.card.setPosition(*card_position)
-                self.last_card_position = card_position
-        except Exception as error:
-            self._clear_control_cache()
-            now = self.clock()
-            if self.logger and now - self.last_error_time >= 5.0:
-                self.logger(
-                    "OSD preview update deferred: %s" % error,
-                    xbmc.LOGWARNING,
-                )
-                self.last_error_time = now

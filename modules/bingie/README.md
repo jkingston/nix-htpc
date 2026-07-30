@@ -1,7 +1,7 @@
 # HTPC BINGIE fork
 
 `default.nix` packages the pinned BINGIE 2.0.2 archive as `skin.bingie`
-version 2.0.2.7. The NixOS greetd pre-start stages and validates the immutable
+version 2.0.2.8. The NixOS greetd pre-start stages and validates the immutable
 package, then checksum-synchronises it into Kodi's writable user add-on
 directory while Kodi is stopped. It preserves only Skin Shortcuts' generated
 `1080i/script-skinshortcuts-includes.xml`; managed skin sources remain
@@ -54,13 +54,16 @@ and keeps the OSD open while a seek transaction is active:
   fallbacks if the service readiness lease expires.
 
 `htpc-trickplay.patch` adds one cursor-following exact preview, a rounded target
-time/delta, a stable target marker, and a subdued actual playhead. The live
-playhead is never reused as the target, so decoder settlement cannot flicker
-the cursor back to the current position. Up from the focused timeline exposes
-a custom chapter-only thumbnail rail after Jellyfin has atomically published
-every retained chapter frame. Up exits that rail to the top controls;
-Down/Back return to the timeline. Kodi's native bookmark window remains a
-separate OSD facility.
+time/delta, a stable target marker, and a subdued actual playhead. The marker
+is a native skin slider driven by the target percentage; the preview position
+uses mutually exclusive skin animation buckets. Python never retains or moves
+live OSD control pointers, which Kodi can invalidate while reconstructing the
+OSD during a seek. The target marker shares the normal playhead's exact
+geometry, so entering or leaving a seek does not move or resize it. Up from the
+focused timeline exposes a custom chapter-only thumbnail rail after Jellyfin
+has atomically published every retained chapter frame. Up exits that rail to
+the top controls; Down/Back return to the timeline. Kodi's native bookmark
+window remains a separate OSD facility.
 
 The persistent controller in `modules/kodi-settings-addon` owns absolute
 targets, pause/resume ownership, commit/cancel state, input routing, focus, and

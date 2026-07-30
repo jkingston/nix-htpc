@@ -1,6 +1,6 @@
 --- a/1080i/IncludesOSD.xml
 +++ b/1080i/IncludesOSD.xml
-@@ -1245,8 +1245,101 @@
+@@ -1245,8 +1245,118 @@
  			<width>1152</width>
  			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
  			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
@@ -31,29 +31,46 @@
 +			<textureslidernib colordiffuse="55ffffff">common/slider/slider_button_nofocus.png</textureslidernib>
 +			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +		</control>
-+		<control type="group" id="1901">
-+			<description>Stable HTPC target marker positioned by service.htpc.settings</description>
-+			<posx>374</posx>
-+			<posy>952</posy>
-+			<width>20</width>
-+			<height>20</height>
++		<control type="slider" id="1901">
++			<description>Skin-owned HTPC target marker</description>
++			<info>Window(Home).Property(htpc.seek.percent)</info>
++			<posx>384</posx>
++			<posy>957</posy>
++			<height>11</height>
++			<width>1152</width>
++			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
++			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
 +			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
-+			<control type="image">
-+				<width>20</width>
-+				<height>20</height>
-+				<texture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</texture>
-+				<aspectratio>keep</aspectratio>
-+			</control>
 +		</control>
 +		<control type="group" id="1902">
-+			<description>Cursor-following exact preview and rounded seek time</description>
-+			<posx>770</posx>
++			<description>Skin-owned cursor-following exact preview and rounded seek time</description>
++			<posx>194</posx>
 +			<posy>650</posy>
 +			<width>380</width>
 +			<height>320</height>
 +			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.active)) + Player.HasVideo</visible>
 +			<animation effect="fade" start="0" end="100" time="120">Visible</animation>
 +			<animation effect="fade" start="100" end="0" time="90">Hidden</animation>
++			<animation effect="slide" end="58,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),1)">Conditional</animation>
++			<animation effect="slide" end="115,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),2)">Conditional</animation>
++			<animation effect="slide" end="173,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),3)">Conditional</animation>
++			<animation effect="slide" end="230,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),4)">Conditional</animation>
++			<animation effect="slide" end="288,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),5)">Conditional</animation>
++			<animation effect="slide" end="346,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),6)">Conditional</animation>
++			<animation effect="slide" end="403,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),7)">Conditional</animation>
++			<animation effect="slide" end="461,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),8)">Conditional</animation>
++			<animation effect="slide" end="518,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),9)">Conditional</animation>
++			<animation effect="slide" end="576,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),10)">Conditional</animation>
++			<animation effect="slide" end="634,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),11)">Conditional</animation>
++			<animation effect="slide" end="691,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),12)">Conditional</animation>
++			<animation effect="slide" end="749,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),13)">Conditional</animation>
++			<animation effect="slide" end="806,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),14)">Conditional</animation>
++			<animation effect="slide" end="864,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),15)">Conditional</animation>
++			<animation effect="slide" end="922,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),16)">Conditional</animation>
++			<animation effect="slide" end="979,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),17)">Conditional</animation>
++			<animation effect="slide" end="1037,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),18)">Conditional</animation>
++			<animation effect="slide" end="1094,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),19)">Conditional</animation>
++			<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window(Home).Property(htpc.seek.previewbucket),20)">Conditional</animation>
 +			<control type="group">
 +				<visible>!String.IsEmpty(Window(Home).Property(htpc.seek.previewready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.previewpath))</visible>
 +				<control type="image">

@@ -8,7 +8,7 @@ let
   kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
-    version = "2.1.0";
+    version = "2.1.1";
     src = ./kodi-settings-addon;
     nativeCheckInputs = [
       pkgs.buildPackages.libxml2
@@ -38,6 +38,13 @@ let
       do
         test -f "$addon_dir/$runtime_file"
       done
+
+      if grep -R -n '\.setPosition(' --include='*.py' "$addon_dir" \
+        || grep -n '\.getControl(' "$addon_dir/presenter.py"
+      then
+        echo "Presenter must not retain or mutate Kodi window controls" >&2
+        exit 1
+      fi
     '';
   };
   jellyfinHtpc = import ./jellyfin {

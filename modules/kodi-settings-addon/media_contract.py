@@ -22,6 +22,7 @@ SEEK_PROPERTY_KEYS = (
     "source",
     "targetseconds",
     "percent",
+    "previewbucket",
     "time",
     "delta",
     "confirm",
