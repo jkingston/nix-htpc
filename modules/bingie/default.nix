@@ -54,6 +54,7 @@ kodiPackages.buildKodiAddon {
       1080i/IncludesViewsLayoutPoster.xml \
       1080i/IncludesViewsLayoutSquare.xml \
       1080i/MyVideoNav.xml \
+      1080i/DialogSeekBar.xml \
       1080i/VideoFullScreen.xml \
       1080i/VideoOSD.xml \
       1080i/VideoOSDBookmarks.xml \
@@ -86,10 +87,21 @@ kodiPackages.buildKodiAddon {
 
   postInstall = ''
     addon_dir="$out/share/kodi/addons/skin.bingie"
-    test -f "$addon_dir/addon.xml"
-    test -f "$addon_dir/1080i/Home.xml"
-    test -f "$addon_dir/1080i/IncludesHTPCVideoOSD.xml"
-    test -f "$addon_dir/1080i/Custom_1192_HTPCVideoOSDReview.xml"
+    for required_file in \
+      addon.xml \
+      1080i/Home.xml \
+      1080i/DialogSeekBar.xml \
+      1080i/Includes.xml \
+      1080i/IncludesHTPCPlayback.xml \
+      1080i/IncludesHTPCVideoOSD.xml \
+      1080i/IncludesOSD.xml \
+      1080i/VideoOSD.xml \
+      1080i/Custom_1158_AutoCloseOSD.xml \
+      1080i/Custom_1192_HTPCVideoOSDReview.xml
+    do
+      test -f "$addon_dir/$required_file"
+    done
+
     test -f "$addon_dir/resources/review/seek-25.png"
     test -f "$addon_dir/resources/review/seek-75.png"
     test -f "$addon_dir/media/Textures.xbt"

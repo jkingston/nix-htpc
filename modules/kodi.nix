@@ -160,12 +160,37 @@ in
         -a --checksum --delete --chmod=Du+rwx,Fu+rw \
         "$source_skin/" "$staged_skin/"
 
-      test -f "$staged_skin/addon.xml"
-      test -f "$staged_skin/1080i/Home.xml"
+      for required_file in \
+        addon.xml \
+        1080i/Home.xml \
+        1080i/DialogSeekBar.xml \
+        1080i/Includes.xml \
+        1080i/IncludesHTPCPlayback.xml \
+        1080i/IncludesHTPCVideoOSD.xml \
+        1080i/IncludesOSD.xml \
+        1080i/VideoOSD.xml \
+        1080i/Custom_1158_AutoCloseOSD.xml
+      do
+        test -f "$staged_skin/$required_file"
+      done
+
       xmllint --noout \
         "$staged_skin/addon.xml" \
         "$staged_skin/1080i/Home.xml" \
-        "$staged_skin/1080i/IncludesOSD.xml"
+        "$staged_skin/1080i/DialogSeekBar.xml" \
+        "$staged_skin/1080i/Includes.xml" \
+        "$staged_skin/1080i/IncludesHTPCPlayback.xml" \
+        "$staged_skin/1080i/IncludesHTPCVideoOSD.xml" \
+        "$staged_skin/1080i/IncludesOSD.xml" \
+        "$staged_skin/1080i/VideoOSD.xml" \
+        "$staged_skin/1080i/Custom_1158_AutoCloseOSD.xml"
+
+      owned_consumer_count="$(
+        xmllint \
+          --xpath 'count(//include[@content="HTPCVideoOSD"])' \
+          "$staged_skin/1080i/VideoOSD.xml"
+      )"
+      test "$owned_consumer_count" = 1
       grep -q 'id="skin.bingie"' "$staged_skin/addon.xml"
 
       install -d -m 0755 -o htpc -g users "$target_skin"
