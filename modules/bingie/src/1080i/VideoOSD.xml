@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- BINGIE -->
 <window>
-	<onload>SetFocus(203)</onload>
+	<defaultcontrol always="true">9201</defaultcontrol>
+	<onload condition="String.IsEmpty(Window(Home).Property(htpc.seek.active)) + String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))">SetFocus(9201)</onload>
+	<onload condition="!String.IsEmpty(Window(Home).Property(htpc.seek.active)) | !String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))">SetFocus(9300)</onload>
 	<onload condition="Player.Forwarding | Player.Rewinding">Play</onload>
 	<onload>ClearProperty(DialogMPAATopBar,home)</onload>
 	<onload>ClearProperty(DisableOSDCast,Home)</onload>
@@ -10,10 +12,18 @@
 	<onunload>AlarmClock(HideMPAATopBar,SetProperty(HideDialogMPAATopBar,1,home),00:00,silent)</onunload>
 	<onunload>AlarmClock(FocusPlayButton,SetProperty(OSDPlayButtonFocused,1,home),00:00,silent)</onunload>
 	<onload condition="Skin.HasSetting(OSDShowInfoOnPause) + !Skin.HasSetting(EnableOSDInfo)">Skin.ToggleSetting(EnableOSDInfo)</onload>
-    <controls>		
-        <control type="group">
-            <include>OSDButtonsModern</include>
-            <include>HideOsdConditions</include>
+	<controls>
+		<control type="group">
+			<include>HideOsdConditions</include>
+			<include content="HTPCVideoOSD">
+				<param name="visible" value="Player.HasVideo" />
+				<param name="presentation_ready" value="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
+				<param name="property_window" value="Home" />
+				<param name="property_prefix" value="htpc.seek" />
+				<param name="production_actions" value="true" />
+				<param name="inert_actions" value="false" />
+				<param name="preview_background_load" value="true" />
+			</include>
 		</control>
-    </controls>
+	</controls>
 </window>

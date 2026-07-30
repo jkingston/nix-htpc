@@ -24,6 +24,7 @@ VIDEO_OSD_REVIEW_XML = XML_ROOT / "Custom_1192_HTPCVideoOSDReview.xml"
 INCLUDES_XML = XML_ROOT / "Includes.xml"
 OSD_XML = XML_ROOT / "IncludesOSD.xml"
 VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
+PASSIVE_SEEK_HUD_XML = XML_ROOT / "DialogSeekBar.xml"
 EN_GB_STRINGS = (
     SKIN_ROOT
     / "language"
@@ -124,6 +125,7 @@ class ExpectedForkLayoutTest(unittest.TestCase):
                 INCLUDES_XML,
                 OSD_XML,
                 VIDEO_OSD_WINDOW_XML,
+                PASSIVE_SEEK_HUD_XML,
             )
             if not path.exists()
         ]
@@ -142,6 +144,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             VIDEO_OSD_XML,
             INCLUDES_XML,
             VIDEO_OSD_WINDOW_XML,
+            PASSIVE_SEEK_HUD_XML,
         )
         if not all(path.is_file() for path in required):
             raise unittest.SkipTest("fork-owned video OSD source is absent")
@@ -149,6 +152,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         cls.playback_root = ET.parse(PLAYBACK_XML).getroot()
         cls.includes_root = ET.parse(INCLUDES_XML).getroot()
         cls.window_root = ET.parse(VIDEO_OSD_WINDOW_XML).getroot()
+        cls.passive_hud_root = ET.parse(PASSIVE_SEEK_HUD_XML).getroot()
         definitions = [
             node
             for node in cls.root.findall("include")
@@ -180,13 +184,23 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             for node in control.findall(name)
         )
 
-    def test_surface_is_reviewable_but_not_consumed_by_production(self):
+    def test_surface_is_registered_and_consumed_by_review_and_production(self):
         registrations = [
             node
             for node in self.includes_root.iter("include")
             if node.get("file") == VIDEO_OSD_XML.name
         ]
         self.assertEqual(len(registrations), 1)
+        registered_files = [
+            node.get("file")
+            for node in self.includes_root.findall("include")
+        ]
+        self.assertLess(
+            registered_files.index(PLAYBACK_XML.name),
+            registered_files.index(VIDEO_OSD_XML.name),
+            "the playback layout dependency must be registered before "
+            "the owned video OSD",
+        )
         live_consumers = []
         for source in sorted(XML_ROOT.glob("*.xml")):
             if source == VIDEO_OSD_XML:
@@ -204,9 +218,111 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 live_consumers.append(source.name)
         self.assertEqual(
             live_consumers,
-            [VIDEO_OSD_REVIEW_XML.name],
-            "only the deterministic review window may consume the OSD "
-            "before production cutover",
+            [
+                VIDEO_OSD_REVIEW_XML.name,
+                VIDEO_OSD_WINDOW_XML.name,
+            ],
+            "the deterministic review host and production video OSD must "
+            "consume the same owned surface",
+        )
+
+    def test_production_window_owns_surface_actions_and_properties(self):
+        owned = [
+            node
+            for node in self.window_root.iter("include")
+            if node.get("content") == "HTPCVideoOSD"
+        ]
+        self.assertEqual(len(owned), 1)
+        parameters = {
+            node.get("name"): node.get("value")
+            for node in owned[0].findall("param")
+        }
+        self.assertEqual(
+            parameters,
+            {
+                "visible": "Player.HasVideo",
+                "presentation_ready": (
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.service.ready))"
+                ),
+                "property_window": "Home",
+                "property_prefix": "htpc.seek",
+                "production_actions": "true",
+                "inert_actions": "false",
+                "preview_background_load": "true",
+            },
+        )
+        inherited = [
+            node
+            for node in self.window_root.iter("include")
+            if (node.text or "").strip() == "OSDButtonsModern"
+        ]
+        self.assertEqual(inherited, [])
+
+    def test_production_window_focuses_transport_or_active_timeline(self):
+        default_control = self.window_root.find("defaultcontrol")
+        self.assertIsNotNone(default_control)
+        self.assertEqual((default_control.text or "").strip(), "9201")
+        self.assertEqual(default_control.get("always"), "true")
+        focus_actions = [
+            (
+                node.get("condition"),
+                (node.text or "").strip(),
+            )
+            for node in self.window_root.findall("onload")
+            if (node.text or "").strip().startswith("SetFocus(")
+        ]
+        self.assertEqual(
+            focus_actions,
+            [
+                (
+                    "String.IsEmpty(Window(Home).Property("
+                    "htpc.seek.active)) + String.IsEmpty(Window(Home)."
+                    "Property(htpc.seek.viewactive))",
+                    "SetFocus(9201)",
+                ),
+                (
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.seek.active)) | !String.IsEmpty(Window(Home)."
+                    "Property(htpc.seek.viewactive))",
+                    "SetFocus(9300)",
+                ),
+            ],
+        )
+
+    def test_passive_seek_hud_is_globally_absent_behind_video_osd(self):
+        visibility = tuple(
+            (node.text or "").strip()
+            for node in self.passive_hud_root.findall("visible")
+        )
+        self.assertEqual(
+            visibility,
+            (
+                "Window.IsActive(fullscreenvideo)",
+                "!Window.IsVisible(VideoOSD.xml)",
+                (
+                    "Player.ShowInfo | Player.Seeking | "
+                    "Player.DisplayAfterSeek | "
+                    "!String.IsEmpty(Player.SeekNumeric) | "
+                    "[Player.Paused + !Player.Caching] | "
+                    "Player.Forwarding | Player.Rewinding"
+                ),
+            ),
+            "DialogSeekBar must be a passive fullscreen HUD whose whole "
+            "window disappears while VideoOSD remains visible, including "
+            "beneath child dialogs",
+        )
+        nested_guards = [
+            node
+            for control in self.passive_hud_root.iter("control")
+            for node in control.findall("visible")
+            if (node.text or "").strip()
+            == "!Window.IsVisible(VideoOSD.xml)"
+        ]
+        self.assertEqual(
+            nested_guards,
+            [],
+            "the OSD exclusion must guard the window, not selected children",
         )
 
     def test_fixture_sensitive_inputs_have_safe_production_defaults(self):
@@ -1106,6 +1222,15 @@ class ProducerSafetyContractTest(unittest.TestCase):
                     contract,
                     "renderer properties must be cleared with SEEK_PROPERTY_KEYS",
                 )
+
+    def test_presenter_targets_only_owned_video_osd_focus_ids(self):
+        source = PRESENTER.read_text(encoding="utf-8")
+        for legacy in ("SetFocus(300)", "SetFocus(187)", "SetFocus(203)"):
+            with self.subTest(legacy=legacy):
+                self.assertNotIn(legacy, source)
+        self.assertIn("TOP_BAR_CONTROL_ID = 9102", source)
+        self.assertIn("TIMELINE_CONTROL_ID = 9300", source)
+        self.assertIn("TRANSPORT_CONTROL_ID = 9201", source)
 
 
 if __name__ == "__main__":

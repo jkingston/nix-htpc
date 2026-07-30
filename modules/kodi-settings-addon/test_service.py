@@ -1636,15 +1636,15 @@ class PresenterAndLeaseTest(unittest.TestCase):
         presenter.show_transport()
 
         self.assertEqual(presenter.pending_focus_target, "transport")
-        self.assertNotIn("SetFocus(187)", BUILTINS)
-        self.assertNotIn("SetFocus(203)", BUILTINS)
+        self.assertNotIn("SetFocus(9300)", BUILTINS)
+        self.assertNotIn("SetFocus(9201)", BUILTINS)
 
         CONDITIONS["Window.IsActive(videoosd)"] = True
         presenter.update({"active": False})
 
         self.assertIsNone(presenter.pending_focus_target)
-        self.assertNotIn("SetFocus(187)", BUILTINS)
-        self.assertEqual(BUILTINS[-1], "SetFocus(203)")
+        self.assertNotIn("SetFocus(9300)", BUILTINS)
+        self.assertEqual(BUILTINS[-1], "SetFocus(9201)")
 
     def test_presenter_delivers_focus_immediately_when_osd_is_active(self):
         CONDITIONS["Window.IsActive(videoosd)"] = True
@@ -1653,7 +1653,21 @@ class PresenterAndLeaseTest(unittest.TestCase):
         presenter.emphasize_timeline()
 
         self.assertIsNone(presenter.pending_focus_target)
-        self.assertEqual(BUILTINS, ["SetFocus(187)"])
+        self.assertEqual(BUILTINS, ["SetFocus(9300)"])
+
+    def test_presenter_focus_methods_target_owned_osd_controls(self):
+        BingiePresenter.focus_top_bar()
+        BingiePresenter.focus_timeline()
+        BingiePresenter.focus_transport()
+
+        self.assertEqual(
+            BUILTINS,
+            [
+                "SetFocus(9102)",
+                "SetFocus(9300)",
+                "SetFocus(9201)",
+            ],
+        )
 
     def test_presenter_rejects_unknown_pending_focus_target(self):
         presenter = BingiePresenter()

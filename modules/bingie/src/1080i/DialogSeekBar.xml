@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- BINGIE -->
 <window>
-    <visible>Window.IsActive(fullscreenvideo)</visible>
-    <visible>Window.IsActive(videoosd) | [Player.ShowInfo + !Window.IsActive(videoosd)] | Player.Seeking | Player.DisplayAfterSeek | !String.IsEmpty(Player.SeekNumeric) | [Player.Paused + !Player.Caching] | Player.Forwarding | Player.Rewinding</visible>
+	<visible>Window.IsActive(fullscreenvideo)</visible>
+	<visible>!Window.IsVisible(VideoOSD.xml)</visible>
+	<visible>Player.ShowInfo | Player.Seeking | Player.DisplayAfterSeek | !String.IsEmpty(Player.SeekNumeric) | [Player.Paused + !Player.Caching] | Player.Forwarding | Player.Rewinding</visible>
 	<zorder>0</zorder>
 	<controls>
 			

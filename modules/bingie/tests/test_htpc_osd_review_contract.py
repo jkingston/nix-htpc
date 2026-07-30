@@ -130,7 +130,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(len(owned), 1)
         self.assertGreater(children.index(owned[0]), 0)
 
-    def test_owned_osd_uses_isolated_data_and_inert_actions(self):
+    def test_owned_osd_review_remains_isolated_and_inert_after_cutover(self):
         include = next(
             node
             for node in self.root.iter("include")

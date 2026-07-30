@@ -226,6 +226,9 @@ class ServiceLease(object):
 
 class BingiePresenter(object):
     PENDING_FOCUS_TARGETS = frozenset(("timeline", "transport"))
+    TOP_BAR_CONTROL_ID = 9102
+    TIMELINE_CONTROL_ID = 9300
+    TRANSPORT_CONTROL_ID = 9201
 
     def __init__(self, logger=None, clock=None):
         self.logger = logger
@@ -275,15 +278,21 @@ class BingiePresenter(object):
 
     @staticmethod
     def focus_top_bar():
-        xbmc.executebuiltin("SetFocus(300)")
+        xbmc.executebuiltin(
+            "SetFocus(%d)" % BingiePresenter.TOP_BAR_CONTROL_ID
+        )
 
     @staticmethod
     def focus_timeline():
-        xbmc.executebuiltin("SetFocus(187)")
+        xbmc.executebuiltin(
+            "SetFocus(%d)" % BingiePresenter.TIMELINE_CONTROL_ID
+        )
 
     @staticmethod
     def focus_transport():
-        xbmc.executebuiltin("SetFocus(203)")
+        xbmc.executebuiltin(
+            "SetFocus(%d)" % BingiePresenter.TRANSPORT_CONTROL_ID
+        )
 
     @staticmethod
     def osd_action(action):
