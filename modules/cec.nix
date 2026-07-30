@@ -27,6 +27,8 @@ let
   '';
 in
 {
+  imports = [ ./kodi-cec-policy.nix ];
+
   # libcec for CEC support
   environment.systemPackages = with pkgs; [
     kodiPassiveEvidence

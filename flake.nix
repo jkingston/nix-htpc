@@ -54,6 +54,7 @@
         let
           pkgs = inputs.nixpkgs.legacyPackages.${system};
           qualityChecks = import ./checks {
+            htpcConfiguration = htpcPi.config;
             inherit pkgs;
             lib = pkgs.lib;
             repositoryRoot = ./.;
