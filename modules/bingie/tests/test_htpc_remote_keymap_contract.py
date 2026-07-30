@@ -81,8 +81,8 @@ class ManagedRemoteKeymapContractTest(unittest.TestCase):
         self.assertEqual(
             _bindings(self.root, "FullscreenVideo", "remote"),
             {
-                "up": "ActivateWindow(VideoOSD)",
-                "down": "ActivateWindow(VideoOSD)",
+                "up": "NotifyAll(htpc.seek,fullscreen-up)",
+                "down": "NotifyAll(htpc.seek,fullscreen-down)",
                 "left": "NotifyAll(htpc.seek,left)",
                 "right": "NotifyAll(htpc.seek,right)",
                 "select": "NotifyAll(htpc.seek,primary)",
@@ -94,8 +94,8 @@ class ManagedRemoteKeymapContractTest(unittest.TestCase):
         self.assertEqual(
             _bindings(self.root, "FullscreenVideo", "keyboard"),
             {
-                "up": "ActivateWindow(VideoOSD)",
-                "down": "ActivateWindow(VideoOSD)",
+                "up": "NotifyAll(htpc.seek,fullscreen-up)",
+                "down": "NotifyAll(htpc.seek,fullscreen-down)",
                 "left": "NotifyAll(htpc.seek,left)",
                 "right": "NotifyAll(htpc.seek,right)",
                 "enter": "NotifyAll(htpc.seek,primary)",

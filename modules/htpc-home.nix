@@ -18,25 +18,23 @@ in
     </advancedsettings>
   '';
 
-  # VideoOSD directions are delivered directly to the focused skin control.
-  # During fullscreen playback the managed service distinguishes exact
-  # ten-second taps from the CEC adapter's repeat cadence for a held button,
-  # then owns the resulting pause/scrub transaction. Up/Down stay native and
-  # never pause merely to reveal the OSD.
+  # The managed service fences held buttons when playback input crosses an
+  # OSD focus boundary. Left/Right retain the proven tap/hold classifier;
+  # Up/Down only reveal the transport and never pause or chapter-skip.
   home.file.".kodi/userdata/keymaps/zz-htpc-remote.xml".text = ''
     <keymap>
       <FullscreenVideo>
         <remote>
-          <up>ActivateWindow(VideoOSD)</up>
-          <down>ActivateWindow(VideoOSD)</down>
+          <up>NotifyAll(htpc.seek,fullscreen-up)</up>
+          <down>NotifyAll(htpc.seek,fullscreen-down)</down>
           <left>NotifyAll(htpc.seek,left)</left>
           <right>NotifyAll(htpc.seek,right)</right>
           <select>NotifyAll(htpc.seek,primary)</select>
           <back>NotifyAll(htpc.seek,fullscreen-back)</back>
         </remote>
         <keyboard>
-          <up>ActivateWindow(VideoOSD)</up>
-          <down>ActivateWindow(VideoOSD)</down>
+          <up>NotifyAll(htpc.seek,fullscreen-up)</up>
+          <down>NotifyAll(htpc.seek,fullscreen-down)</down>
           <left>NotifyAll(htpc.seek,left)</left>
           <right>NotifyAll(htpc.seek,right)</right>
           <enter>NotifyAll(htpc.seek,primary)</enter>
