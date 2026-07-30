@@ -149,7 +149,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(parameters["chapter_available"], "false")
         self.assertEqual(
             parameters["presentation_ready"],
-            "!String.IsEmpty(Window(Home).Property(htpc.review.ready))",
+            "true",
         )
         self.assertEqual(
             parameters["view_inactive_condition"],

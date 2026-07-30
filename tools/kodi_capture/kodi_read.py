@@ -52,6 +52,7 @@ CAPTURE_SETTING_IDS = (
 )
 CAPTURE_ADDON_IDS = (
     "plugin.video.jellyfin",
+    "script.htpc.osd-review",
     "service.htpc.settings",
     "skin.bingie",
 )

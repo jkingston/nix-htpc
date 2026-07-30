@@ -2,6 +2,7 @@
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
   kodiSettingsAddonVersion = "2.1.6";
+  kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   kodiScreenshotEvidence = import ./kodi-screenshot-evidence/package.nix {
     inherit lib pkgs;
@@ -71,12 +72,49 @@ let
       fi
     '';
   };
+  kodiOsdReviewAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
+    pname = "htpc-osd-review";
+    namespace = "script.htpc.osd-review";
+    version = kodiOsdReviewAddonVersion;
+    src = ./kodi-osd-review;
+    nativeCheckInputs = [
+      pkgs.buildPackages.libxml2
+      pkgs.buildPackages.python3
+    ];
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      export HTPC_OSD_REVIEW_WINDOW=${
+        ./bingie/src/1080i/Custom_1192_HTPCVideoOSDReview.xml
+      }
+      export HTPC_OSD_REVIEW_SKIN_ROOT=${./bingie/src}
+      PYTHONDONTWRITEBYTECODE=1 \
+        python3 -B -m unittest discover -s . -p 'test_*.py'
+      xmllint --noout addon.xml
+      runHook postCheck
+    '';
+    postInstall = ''
+      addon_dir="$out/share/kodi/addons/script.htpc.osd-review"
+      for runtime_file in addon.xml default.py review_contract.py
+      do
+        test -f "$addon_dir/$runtime_file"
+      done
+      grep -Fq \
+        'version="${kodiOsdReviewAddonVersion}"' \
+        "$addon_dir/addon.xml"
+      grep -Fq 'id="script.htpc.osd-review"' "$addon_dir/addon.xml"
+      grep -Fq \
+        'point="xbmc.python.script" library="default.py"' \
+        "$addon_dir/addon.xml"
+    '';
+  };
   jellyfinHtpc = import ./jellyfin {
     kodiPackages = rpiPackages.kodi-gbm.packages;
   };
   kodiWithAddons = rpiPackages.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
     jellyfinHtpc
     kodiSettingsAddon
+    kodiOsdReviewAddon
   ]);
 in
 {
@@ -84,6 +122,7 @@ in
     kodiScreenshotEvidence
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
+  system.build.kodiOsdReviewAddon = kodiOsdReviewAddon;
 
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
@@ -140,6 +179,7 @@ in
       bingieMod
       jellyfinHtpc
       kodiSettingsAddon
+      kodiOsdReviewAddon
     ];
   };
 
@@ -154,33 +194,40 @@ in
     };
   };
 
-  # Kodi disables newly discovered third-party add-ons by default. Enable the
-  # managed settings service once Kodi's local JSON-RPC endpoint is ready.
+  # Kodi disables newly discovered third-party add-ons by default. Enable all
+  # managed add-ons once Kodi's local JSON-RPC endpoint is ready.
   systemd.services.kodi-settings = {
-    description = "Enable managed Kodi settings";
+    description = "Enable managed Kodi add-ons";
     wantedBy = [ "multi-user.target" ];
     requires = [ "greetd.service" ];
     after = [ "greetd.service" ];
     partOf = [ "greetd.service" ];
 
     script = ''
-      for ((attempt = 0; attempt < 60; attempt++)); do
-        response="$(
-          ${pkgs.coreutils}/bin/printf '%s\n' \
-            '{"jsonrpc":"2.0","method":"Addons.SetAddonEnabled","params":{"addonid":"service.htpc.settings","enabled":true},"id":1}' \
-            | ${pkgs.netcat-openbsd}/bin/nc -N -w 1 127.0.0.1 9090 \
-            || true
-        )"
+      enable_managed_addon() {
+        addon_id="$1"
+        for ((attempt = 0; attempt < 60; attempt++)); do
+          response="$(
+            ${pkgs.coreutils}/bin/printf \
+              '{"jsonrpc":"2.0","method":"Addons.SetAddonEnabled","params":{"addonid":"%s","enabled":true},"id":1}\n' \
+              "$addon_id" \
+              | ${pkgs.netcat-openbsd}/bin/nc -N -w 1 127.0.0.1 9090 \
+              || true
+          )"
 
-        case "$response" in
-          *'"result":"OK"'*) exit 0 ;;
-        esac
+          case "$response" in
+            *'"result":"OK"'*) return 0 ;;
+          esac
 
-        sleep 1
-      done
+          sleep 1
+        done
 
-      echo "Kodi did not enable service.htpc.settings within 60 seconds" >&2
-      exit 1
+        echo "Kodi did not enable $addon_id within 60 seconds" >&2
+        return 1
+      }
+
+      enable_managed_addon service.htpc.settings
+      enable_managed_addon script.htpc.osd-review
     '';
 
     serviceConfig = {

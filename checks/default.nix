@@ -60,6 +60,15 @@ let
       (repositoryRoot + "/tools/kodi_capture")
     ];
   };
+  osdReviewSource = lib.fileset.toSource {
+    root = repositoryRoot;
+    fileset = lib.fileset.unions [
+      (repositoryRoot + "/modules/kodi-osd-review")
+      (repositoryRoot
+        + "/modules/bingie/src/1080i/Custom_1192_HTPCVideoOSDReview.xml")
+      (repositoryRoot + "/modules/bingie/src/resources/review")
+    ];
+  };
 in
 {
   kodi-cec-policy =
@@ -181,4 +190,23 @@ in
       python3 -B checks/test_passive_evidence_producer_protocol.py -v
       touch "$out"
     '';
+
+  kodi-osd-review = pkgs.runCommand "kodi-osd-review-tests" {
+    nativeBuildInputs = [
+      pkgs.libxml2
+      pkgs.python3
+    ];
+  } ''
+    cd ${osdReviewSource}/modules/kodi-osd-review
+    export HTPC_OSD_REVIEW_WINDOW=${
+      osdReviewSource
+    }/modules/bingie/src/1080i/Custom_1192_HTPCVideoOSDReview.xml
+    export HTPC_OSD_REVIEW_SKIN_ROOT=${
+      osdReviewSource
+    }/modules/bingie/src
+    export PYTHONDONTWRITEBYTECODE=1
+    python3 -B -m unittest discover -s . -p 'test_*.py' -v
+    xmllint --noout addon.xml "$HTPC_OSD_REVIEW_WINDOW"
+    touch "$out"
+  '';
 }

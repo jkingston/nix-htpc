@@ -58,7 +58,11 @@
 			<param name="paused_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.paused))" />
 			<param name="chapter_available" value="false" />
 			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />
-			<param name="presentation_ready" value="!String.IsEmpty(Window(Home).Property(htpc.review.ready))" />
+			<!--
+			  Controls must exist for onload focus before the driver publishes
+			  its externally observable ready fence.
+			-->
+			<param name="presentation_ready" value="true" />
 			<param name="property_window" value="Home" />
 			<param name="property_prefix" value="htpc.review.seek" />
 			<param name="production_actions" value="false" />

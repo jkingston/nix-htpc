@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon
+  id="script.htpc.osd-review"
+  name="HTPC OSD Review"
+  version="0.1.0"
+  provider-name="NixOS HTPC">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+  <extension point="xbmc.python.script" library="default.py">
+    <provides>executable</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en_GB">Render deterministic BINGIE OSD review states</summary>
+    <description lang="en_GB">Opens an inert, media-free review window for headless visual verification.</description>
+    <platform>all</platform>
+    <license>MIT</license>
+  </extension>
+</addon>
