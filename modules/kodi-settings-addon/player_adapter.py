@@ -33,10 +33,12 @@ class KodiPlayerAdapter(xbmc.Player):
         # DBID and title are populated lazily and may change during startup.
         # Filename/path is the stable item identity; epoch distinguishes
         # repeated playback of the same path.
+        playing_file = ""
         try:
-            playing_file = self.getPlayingFile()
+            if self.isPlayingVideo():
+                playing_file = self.getPlayingFile()
         except Exception:
-            playing_file = ""
+            pass
         return playing_file or xbmc.getInfoLabel("Player.Filenameandpath")
 
     def _snapshot_locked(self):
@@ -47,21 +49,26 @@ class KodiPlayerAdapter(xbmc.Player):
             and not xbmc.getCondVisibility("VideoPlayer.Content(livetv)")
             and not xbmc.getCondVisibility("VideoPlayer.HasMenu")
         )
-        try:
-            current = float(self.getTime())
-        except Exception:
-            current = 0.0
-        try:
-            duration = float(self.getTotalTime())
-        except Exception:
-            duration = 0.0
+        current = 0.0
+        duration = 0.0
+        identity = ""
+        if playing:
+            try:
+                current = float(self.getTime())
+            except Exception:
+                current = 0.0
+            try:
+                duration = float(self.getTotalTime())
+            except Exception:
+                duration = 0.0
+            identity = self._identity()
         return {
             "seekable": seekable,
             "playing": playing,
             "current": current,
             "duration": duration,
             "paused": xbmc.getCondVisibility("Player.Paused"),
-            "identity": self._identity(),
+            "identity": identity,
             "epoch": self.epoch,
         }
 

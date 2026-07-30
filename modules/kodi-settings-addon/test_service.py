@@ -1052,6 +1052,28 @@ class PlayerAdapterAttributionTest(unittest.TestCase):
         )
         self.assertEqual(self.adapter.pause_calls, 0)
 
+    def test_idle_snapshot_never_probes_playback_only_player_fields(self):
+        self.adapter.playing = False
+        self.adapter.getTime = mock.Mock(
+            side_effect=AssertionError("idle getTime probe")
+        )
+        self.adapter.getTotalTime = mock.Mock(
+            side_effect=AssertionError("idle getTotalTime probe")
+        )
+        self.adapter.getPlayingFile = mock.Mock(
+            side_effect=AssertionError("idle getPlayingFile probe")
+        )
+
+        snapshot = self.adapter.snapshot()
+        self.assertFalse(snapshot["playing"])
+        self.assertFalse(snapshot["seekable"])
+        self.assertEqual(snapshot["current"], 0.0)
+        self.assertEqual(snapshot["duration"], 0.0)
+        self.assertEqual(snapshot["identity"], "")
+        self.adapter.getTime.assert_not_called()
+        self.adapter.getTotalTime.assert_not_called()
+        self.adapter.getPlayingFile.assert_not_called()
+
     def test_mutable_dbid_and_title_do_not_change_identity(self):
         identity = self.adapter.snapshot()["identity"]
         INFO_LABELS["VideoPlayer.DBID"] = "42"
