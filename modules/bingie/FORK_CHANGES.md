@@ -54,9 +54,3 @@ behind each implementation revision.
   newer, still-optimistic gesture.
 - Keep the OSD open through visual settlement, while allowing Back to dismiss
   it after an already-issued short seek without misreporting cancellation.
-
-## Version 2.0.2.10
-
-- Remove the inherited OpenELEC and LibreELEC settings windows and their
-  exclusive image payload. Those platform add-ons are outside this NixOS
-  appliance's runtime closure.

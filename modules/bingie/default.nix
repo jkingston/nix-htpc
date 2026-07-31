@@ -2,7 +2,7 @@
 
 let
   upstream = import ./upstream-assets.nix { inherit pkgs; };
-  version = "2.0.2.10";
+  version = "2.0.2.9";
 
   # Keep reviewable skin source in this repository. Only the large immutable
   # payloads listed in upstream-assets.nix come from the hash-pinned archive.
@@ -23,14 +23,6 @@ let
     '') upstream.binaryPaths}
 
     test ! -e "$out/1080i/script-skinshortcuts-includes.xml"
-    for retired_window in \
-      mainWindow.xml \
-      service-LibreELEC-Settings-mainWindow.xml \
-      service-OpenELEC-Settings-mainWindow.xml
-    do
-      test ! -e "$out/1080i/$retired_window"
-    done
-    test ! -e "$out/extras/openelec"
   '';
 in
 kodiPackages.buildKodiAddon {
@@ -83,7 +75,6 @@ kodiPackages.buildKodiAddon {
 
     BINGIE_SKIN_ROOT="$PWD" \
       BINGIE_TOOLS_ROOT=${./tools} \
-      BINGIE_UPSTREAM_ASSETS=${./upstream-assets.nix} \
       HTPC_SETTINGS_ROOT=${../kodi-settings-addon} \
       HTPC_HOME_MODULE=${../htpc-home.nix} \
       PYTHONDONTWRITEBYTECODE=1 \
@@ -122,14 +113,6 @@ kodiPackages.buildKodiAddon {
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"
-    for retired_window in \
-      mainWindow.xml \
-      service-LibreELEC-Settings-mainWindow.xml \
-      service-OpenELEC-Settings-mainWindow.xml
-    do
-      test ! -e "$addon_dir/1080i/$retired_window"
-    done
-    test ! -e "$addon_dir/extras/openelec"
   '';
 
   meta = {

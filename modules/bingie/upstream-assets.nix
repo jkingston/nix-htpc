@@ -23,6 +23,7 @@ in
     "media"
     "resources"
     "extras/media"
+    "extras/openelec"
     "extras/viewthumbs"
     "extras/skinthemes/Reset.jpg"
   ];

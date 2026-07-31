@@ -164,8 +164,6 @@ class DependencyInventoryTest(unittest.TestCase):
             "service.upnext",
         }
         self.assertTrue(required.issubset(references["addons"]))
-        self.assertNotIn("service.openelec.settings", references["addons"])
-        self.assertNotIn("service.libreelec.settings", references["addons"])
         self.assertIn(
             "resource.images.moviegenreicons",
             references["resource_families"],
