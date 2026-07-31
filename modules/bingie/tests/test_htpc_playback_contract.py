@@ -47,6 +47,15 @@ PRESENTER = SETTINGS_ROOT / "presenter.py"
 MEDIA_CONTRACT = SETTINGS_ROOT / "media_contract.py"
 UPSTREAM_ASSETS = BINGIE_ROOT / "upstream-assets.nix"
 OSD_ASSETS = SKIN_ROOT / "resources" / "htpc" / "osd"
+PINNED_UPSTREAM_XBT_TEXTURES = frozenset(
+    {
+        "osd/bingie/dvd.png",
+        "osd/bingie/subtitles.png",
+        "osd/bingie/subtitles_fo.png",
+        "osd/bingie/video.png",
+        "osd/bingie/video_fo.png",
+    }
+)
 
 sys.path.insert(0, str(TOOLS_ROOT))
 
@@ -1752,11 +1761,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 "210",
                 "212",
                 "10",
-                "215",
-                "705",
                 "101",
-                "102",
-                "104",
                 "105",
                 "701",
                 "500",
@@ -1773,16 +1778,12 @@ class PlaybackXmlContractTest(unittest.TestCase):
             (
                 "204",
                 "10",
-                "104",
                 "101",
                 "811",
                 "500",
                 "701",
-                "102",
                 "806",
                 "807",
-                "215",
-                "209",
                 "808",
             ),
         )
@@ -1790,7 +1791,16 @@ class PlaybackXmlContractTest(unittest.TestCase):
             ET.tostring(layout, encoding="unicode")
             for layout in layouts.values()
         ).lower()
-        self.assertNotIn("activatewindow(videobookmarks)", serialized_layouts)
+        for retired_action in (
+            "ActivateWindow(VideoBookmarks)",
+            "ActivateWindow(osdsubtitlesettings)",
+            "ActivateWindow(123)",
+            "PlayerControl(ShowVideoMenu)",
+            "StereoMode",
+            "seek(-298800)",
+        ):
+            with self.subTest(retired_action=retired_action):
+                self.assertNotIn(retired_action.lower(), serialized_layouts)
 
         descriptions = [
             node
@@ -1809,11 +1819,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
             (
                 "10",
                 "101",
-                "102",
-                "104",
                 "204",
-                "209",
-                "215",
                 "500",
                 "701",
                 "806",
@@ -1840,12 +1846,9 @@ class PlaybackXmlContractTest(unittest.TestCase):
             (
                 "bingie_osd_buttons_back",
                 "bingie_osd_buttons_record",
-                "bingie_osd_buttons_subtitles",
                 "bingie_osd_buttons_audio",
-                "bingie_osd_buttons_video",
                 "bingie_osd_buttons_channellist",
                 "bingie_osd_buttons_pvrguide",
-                "bingie_osd_buttons_play_beginning",
                 "bingie_osd_buttons_playlist",
                 "bingie_osd_buttons_viz",
                 "bingie_osd_buttons_lyrics",
@@ -1863,6 +1866,19 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 default_ids.append(match.group(1))
         self.assertEqual(len(default_ids), len(set(default_ids)))
         self.assertEqual(set(default_ids), set(option_ids))
+        bingie_layouts = [
+            node
+            for node in self.osd_root.findall("include")
+            if node.get("name") == "OSDButtons_Bingie_Layout"
+        ]
+        self.assertEqual(len(bingie_layouts), 1)
+        consumer_ids = set(
+            re.findall(
+                r"Skin\.HasSetting\((bingie_osd_buttons_[^)]+)\)",
+                ET.tostring(bingie_layouts[0], encoding="unicode"),
+            )
+        )
+        self.assertEqual(consumer_ids, set(option_ids))
 
     def test_conventional_video_bookmark_window_is_retained(self):
         bookmark_root = ET.parse(VIDEO_BOOKMARKS_XML).getroot()
@@ -2009,6 +2025,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 not candidate.is_file()
                 and relative not in existing_xml
                 and not known_parameterized_icon
+                and relative not in PINNED_UPSTREAM_XBT_TEXTURES
             ):
                 missing.append(relative)
         self.assertEqual(

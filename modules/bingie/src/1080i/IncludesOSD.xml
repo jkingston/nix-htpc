@@ -937,28 +937,6 @@
 				<onclick>PVR.ToggleRecordPlayingChannel</onclick>
 				<visible>PVR.CanRecordPlayingChannel</visible>
 			</control>
-			<control type="button" id="215">
-				<description>disc menu</description>
-				<width>$PARAM[size]</width>
-				<height>$PARAM[size]</height>
-				<label/>
-				<font/>
-				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]dvd.png</texturefocus>
-				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]dvd.png</texturenofocus>
-				<onclick>PlayerControl(ShowVideoMenu)</onclick>
-				<visible>VideoPlayer.HasMenu</visible>
-			</control>
-			<control type="button" id="705">
-				<description>stereoscopic</description>
-				<width>$PARAM[size]</width>
-				<height>$PARAM[size]</height>
-				<label/>
-				<font/>
-				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]stereoscopic.png</texturefocus>
-				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]stereoscopic.png</texturenofocus>
-				<onclick>StereoMode</onclick>
-				<visible>VideoPlayer.IsStereoscopic</visible>
-			</control>
 			<control type="button" id="101">
 				<description>Audio Settings</description>
 				<width>$PARAM[size]</width>
@@ -968,29 +946,6 @@
 				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]audio.png</texturefocus>
 				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]audio.png</texturenofocus>
 				<onclick>ActivateWindow(124)</onclick>
-			</control>
-			<control type="button" id="102">
-				<description>Video Settings</description>
-				<width>$PARAM[size]</width>
-				<height>$PARAM[size]</height>
-				<label>$LOCALIZE[13395]</label>
-				<align>left</align>
-				<font/>
-				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]video.png</texturefocus>
-				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]video.png</texturenofocus>
-				<onclick>ActivateWindow(123)</onclick>
-				<visible>Player.HasVideo</visible>
-			</control>
-			<control type="button" id="104">
-				<description>Subtitles</description>
-			    <width>$PARAM[size]</width>
-				<height>$PARAM[size]</height>
-				<label/>
-				<font/>
-				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]subtitles.png</texturefocus>
-				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]subtitles.png</texturenofocus>
-				<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
-				<visible>!Player.HasAudio</visible>
 			</control>
 			<control type="button" id="105">
 				<description>teletext</description>
@@ -1747,18 +1702,6 @@
 					<visible>PVR.CanRecordPlayingChannel</visible>
 					<visible>Skin.HasSetting(bingie_osd_buttons_record)</visible>
 				</control>
-				<control type="button" id="104">
-					<description>Subtitles</description>
-					<width>$PARAM[topsize]</width>
-					<height>$PARAM[topsize]</height>
-					<label/>
-					<font/>
-					<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]subtitles_fo.png</texturefocus>
-					<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]subtitles.png</texturenofocus>
-					<onclick>ActivateWindow(osdsubtitlesettings)</onclick>
-					<visible>Skin.HasSetting(bingie_osd_buttons_subtitles)</visible>
-					<visible>!Player.HasAudio</visible>
-				</control>
                 <control type="button" id="101">
                     <description>Audio Settings</description>
                     <width>$PARAM[topsize]</width>
@@ -1814,18 +1757,6 @@
 					<visible>System.HasAddon(script.cu.lrclyrics)</visible>
 					<visible>Skin.HasSetting(bingie_osd_buttons_lyrics)</visible>
 				</control>
-                <control type="button" id="102">
-                    <description>Video Settings</description>
-                    <width>$PARAM[topsize]</width>
-                    <height>$PARAM[topsize]</height>
-                    <label/>
-                    <font/>
-                    <texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]video_fo.png</texturefocus>
-                    <texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]video.png</texturenofocus>
-                    <onclick>ActivateWindow(123)</onclick>
-					<visible>Skin.HasSetting(bingie_osd_buttons_video)</visible>
-					<visible>Player.HasVideo</visible>
-                </control>
 				<control type="button" id="806">
 					<description> pvr </description>
 					<width>$PARAM[topsize]</width>
@@ -1851,31 +1782,6 @@
 					<visible>VideoPlayer.Content(livetv) + VideoPlayer.HasEpg</visible>
 					<onclick>ActivateWindow(pvrchannelguide)</onclick>
 					<visible>Skin.HasSetting(bingie_osd_buttons_pvrguide)</visible>
-				</control>
-				<control type="button" id="215">
-					<description>pvrguide</description>
-					<width>$PARAM[topsize]</width>
-					<height>$PARAM[topsize]</height>
-					<label/>
-					<font/>
-					<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]epg_fo.png</texturefocus>
-					<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]epg.png</texturenofocus>
-					<onclick>PlayerControl(ShowVideoMenu)</onclick>
-					<visible>VideoPlayer.HasMenu</visible>
-				</control>
-				<control type="button" id="209">
-					<description>Play From Beginning</description>
-					<width>$PARAM[topsize]</width>
-					<height>$PARAM[topsize]</height>
-					<font/>
-					<label/>
-					<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]play_beginning_fo.png</texturefocus>
-					<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]play_beginning.png</texturenofocus>
-					<onclick>seek(-298800)</onclick>
-					<onclick condition="Player.Paused">PlayerControl(Play)</onclick>
-					<visible>Player.SeekEnabled</visible>
-					<visible>!Player.HasAudio</visible>
-					<visible>Skin.HasSetting(bingie_osd_buttons_play_beginning)</visible>
 				</control>
                 <control type="button" id="808">
                     <description>infopanel</description>
@@ -2142,11 +2048,7 @@
     <variable name="osd_button_description">
 		<value condition="Control.HasFocus(10)">[UPPERCASE]$LOCALIZE[264][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(101)">[UPPERCASE]$LOCALIZE[292][/UPPERCASE]</value>
-        <value condition="Control.HasFocus(102)">[UPPERCASE]$LOCALIZE[291][/UPPERCASE]</value>
-        <value condition="Control.HasFocus(104)">[UPPERCASE]$LOCALIZE[24012][/UPPERCASE]</value>
         <value condition="Control.HasFocus(204)">[UPPERCASE]$LOCALIZE[13012][/UPPERCASE]</value>
-		<value condition="Control.HasFocus(209)">[UPPERCASE]$LOCALIZE[12021][/UPPERCASE]</value>
-		<value condition="Control.HasFocus(215)">[UPPERCASE]$LOCALIZE[33061][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(500)">[UPPERCASE]$LOCALIZE[250][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(701)">[UPPERCASE]$LOCALIZE[24013][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(806)">[UPPERCASE]$LOCALIZE[10700][/UPPERCASE]</value>

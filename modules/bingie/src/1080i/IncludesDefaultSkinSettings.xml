@@ -87,11 +87,8 @@
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(videoinfo_details_genre)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(tmdbbingiehelper_search_all)</onload>		
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_info)</onload>
-	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_video)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_audio)</onload>
-	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_subtitles)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_back)</onload>
-	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_play_beginning)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_record)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_pvrguide)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(bingie_osd_buttons_channellist)</onload>

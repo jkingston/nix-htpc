@@ -302,12 +302,9 @@
     <setting id="bingie_osd_buttons" value="||MULTISELECT||" label="" condition="" icon="" description="">	 
 		<option id="bingie_osd_buttons_back" label="$LOCALIZE[13012]" condition=""/>
 		<option id="bingie_osd_buttons_record" label="$LOCALIZE[264]" condition="PVR.HasTVChannels | PVR.HasRadioChannels"/>
-        <option id="bingie_osd_buttons_subtitles" label="$LOCALIZE[287]" condition=""/>
 		<option id="bingie_osd_buttons_audio" label="$LOCALIZE[13396]" condition=""/>
-        <option id="bingie_osd_buttons_video" label="$LOCALIZE[13395]" condition=""/>
 		<option id="bingie_osd_buttons_channellist" label="$LOCALIZE[10700]" condition="PVR.HasTVChannels | PVR.HasRadioChannels"/>
 		<option id="bingie_osd_buttons_pvrguide" label="$LOCALIZE[10702]" condition="PVR.HasTVChannels | PVR.HasRadioChannels"/>
-		<option id="bingie_osd_buttons_play_beginning" label="$LOCALIZE[12021]" condition=""/>		
 		<option id="bingie_osd_buttons_playlist" label="$LOCALIZE[559]" condition=""/>
 		<option id="bingie_osd_buttons_viz" label="$LOCALIZE[250]" condition=""/>
 		<option id="bingie_osd_buttons_lyrics" label="$LOCALIZE[24013]" condition="System.HasAddon(script.cu.lrclyrics)"/>
