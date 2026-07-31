@@ -7,7 +7,9 @@
 -->
 <window type="dialog" id="1192">
 	<defaultcontrol always="true">9201</defaultcontrol>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),transport-playing)">SetFocus(9201)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),transport-paused)">SetFocus(9201)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-playing)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-idle)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-chapters)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-backward)">SetFocus(9300)</onload>

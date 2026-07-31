@@ -127,7 +127,9 @@ class RuntimeHarness:
             self.current_dialog = 11192
             scenario = self.window.values["htpc.review.scenario"]
             focus = {
+                "transport-playing": "9201",
                 "transport-paused": "9201",
+                "timeline-playing": "9300",
                 "timeline-idle": "9300",
                 "timeline-chapters": "9300",
                 "seek-backward": "9300",
@@ -213,6 +215,23 @@ class ReviewRuntimeTest(unittest.TestCase):
             harness.all_events.index(expose),
             harness.all_events.index(activate),
         )
+
+    def test_playing_transport_keeps_paused_property_absent(self):
+        harness = RuntimeHarness()
+        self.assertTrue(harness.runtime.run(["state=transport-playing"]))
+        self.assertEqual(harness.current_focus, "9201")
+        self.assertFalse(
+            any(
+                event[:2] == ("set", "htpc.review.paused")
+                for event in harness.window.events
+            )
+        )
+        ready = ("set", "htpc.review.ready", "true")
+        self.assertLess(
+            harness.all_events.index(("builtin", "ActivateWindow(1192)")),
+            harness.all_events.index(ready),
+        )
+        self.assertEqual(harness.window.values, {})
 
     def test_open_refuses_an_existing_review_without_mutation(self):
         harness = RuntimeHarness(review_active=True)

@@ -115,7 +115,9 @@ class ReviewContractTest(unittest.TestCase):
 
     def test_non_seek_scenarios_publish_no_seek_view(self):
         for scenario in (
+            "transport-playing",
             "transport-paused",
+            "timeline-playing",
             "timeline-idle",
             "timeline-chapters",
             "top-stop",
@@ -124,6 +126,42 @@ class ReviewContractTest(unittest.TestCase):
             self.assertFalse(
                 any(key.startswith("htpc.review.seek.") for key in values)
             )
+
+    def test_playing_fixtures_differ_only_by_playback_state(self):
+        playing = scenario_properties("transport-playing")
+        paused = scenario_properties("transport-paused")
+        self.assertEqual(playing["htpc.review.paused"], "")
+        self.assertEqual(paused["htpc.review.paused"], "true")
+        ignored = {
+            "htpc.review.scenario",
+            "htpc.review.paused",
+        }
+        self.assertEqual(
+            {
+                key: value
+                for key, value in playing.items()
+                if key not in ignored
+            },
+            {
+                key: value
+                for key, value in paused.items()
+                if key not in ignored
+            },
+        )
+        timeline = scenario_properties("timeline-playing")
+        self.assertEqual(timeline["htpc.review.paused"], "")
+        self.assertEqual(
+            {
+                key: value
+                for key, value in timeline.items()
+                if key not in ignored
+            },
+            {
+                key: value
+                for key, value in paused.items()
+                if key not in ignored
+            },
+        )
 
     def test_chapter_focus_cue_preserves_seek_help(self):
         idle = scenario_properties("timeline-idle")[

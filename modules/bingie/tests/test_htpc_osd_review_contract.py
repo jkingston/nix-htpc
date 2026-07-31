@@ -20,7 +20,9 @@ VIDEO_OSD_XML = XML_ROOT / "IncludesHTPCVideoOSD.xml"
 OSD_ICON_ASSETS = SKIN_ROOT / "resources" / "htpc" / "osd"
 
 EXPECTED_FOCUS = {
+    "transport-playing": "9201",
     "transport-paused": "9201",
+    "timeline-playing": "9300",
     "timeline-idle": "9300",
     "timeline-chapters": "9300",
     "seek-backward": "9300",
@@ -207,6 +209,48 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
                 self.assertIn(int(percentage), range(101))
                 self.assertNotIn("Window(", expression)
                 self.assertNotIn("$INFO", expression)
+
+    def test_review_transport_state_maps_to_the_owned_toggle_textures(self):
+        include = next(
+            node
+            for node in self.root.iter("include")
+            if node.get("content") == "HTPCVideoOSD"
+        )
+        parameters = {
+            node.get("name"): node.get("value")
+            for node in include.findall("param")
+        }
+        self.assertEqual(
+            parameters["paused_condition"],
+            "!String.IsEmpty(Window(Home).Property(htpc.review.paused))",
+        )
+
+        osd_root = ET.parse(VIDEO_OSD_XML).getroot()
+        transports = [
+            control
+            for control in osd_root.iter("control")
+            if control.get("id") == "9201"
+        ]
+        self.assertEqual(len(transports), 1)
+        transport = transports[0]
+        self.assertEqual(transport.get("type"), "togglebutton")
+        self.assertEqual(
+            (transport.findtext("usealttexture") or "").strip(),
+            "$PARAM[paused_condition]",
+        )
+        expected = {
+            "texturefocus": "osd/bingie/pause_fo.png",
+            "texturenofocus": "osd/bingie/pause.png",
+            "alttexturefocus": "osd/bingie/play_fo.png",
+            "alttexturenofocus": "osd/bingie/play.png",
+        }
+        self.assertEqual(
+            {
+                name: (transport.findtext(name) or "").strip()
+                for name in expected
+            },
+            expected,
+        )
 
     def test_window_has_no_media_or_device_side_effect(self):
         serialized = ET.tostring(self.root, encoding="unicode")

@@ -45,7 +45,9 @@ PROPERTY_NAMES = (
 PROPERTY_KEYS = tuple(PROPERTY_PREFIX + name for name in PROPERTY_NAMES)
 
 SCENARIOS = (
+    "transport-playing",
     "transport-paused",
+    "timeline-playing",
     "timeline-idle",
     "timeline-chapters",
     "seek-backward",
@@ -54,7 +56,9 @@ SCENARIOS = (
     "top-stop",
 )
 EXPECTED_FOCUS = {
+    "transport-playing": "9201",
     "transport-paused": "9201",
+    "timeline-playing": "9300",
     "timeline-idle": "9300",
     "timeline-chapters": "9300",
     "seek-backward": "9300",
@@ -83,6 +87,15 @@ _FOCUS_CUE = {
             "   \N{BULLET}   10s  \N{RIGHTWARDS ARROW}"
             "    \N{UPWARDS ARROW}  Chapters"
         ),
+    },
+}
+
+_PLAYBACK_STATE = {
+    "transport-playing": {
+        "paused": "",
+    },
+    "timeline-playing": {
+        "paused": "",
     },
 }
 
@@ -167,6 +180,7 @@ def scenario_properties(scenario):
 
     values = dict(_COMMON)
     values["scenario"] = scenario
+    values.update(_PLAYBACK_STATE.get(scenario, {}))
     values.update(_FOCUS_CUE.get(scenario, {}))
     values.update(_SEEK.get(scenario, {}))
     return {
