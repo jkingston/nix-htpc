@@ -2135,6 +2135,9 @@ class FakeChapterControl(object):
         self.selected = selected
         self.selections.append(selected)
 
+    def simulate_native_navigation(self, selected):
+        self.selected = selected
+
 
 class FakeAction(object):
     def __init__(self, action_id):
@@ -2157,6 +2160,7 @@ class ChapterRailTest(unittest.TestCase):
             chapters=[
                 {"index": 0, "start_seconds": 0.0},
                 {"index": 1, "start_seconds": 600.0},
+                {"index": 2, "start_seconds": 1200.0},
             ],
             focus_callback=focus_events.append,
             exit_callback=lambda destination, direction: exit_events.append(
@@ -2166,12 +2170,13 @@ class ChapterRailTest(unittest.TestCase):
         rail.getControl = lambda _control_id: control
         return rail, control, focus_events, exit_events
 
-    def test_direction_emits_one_physical_focus_event(self):
+    def test_right_observes_native_selection_and_emits_one_focus_event(self):
         rail, control, events, _exit_events = self._rail(0)
+        control.simulate_native_navigation(1)
 
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
-        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selections, [])
         self.assertEqual(
             events,
             [
@@ -2183,12 +2188,13 @@ class ChapterRailTest(unittest.TestCase):
             ],
         )
 
-    def test_clamped_direction_is_still_one_physical_event(self):
-        rail, control, events, _exit_events = self._rail(0)
+    def test_left_observes_native_selection_and_emits_one_focus_event(self):
+        rail, control, events, _exit_events = self._rail(1)
+        control.simulate_native_navigation(0)
 
         rail.onAction(FakeAction(ACTION_MOVE_LEFT))
 
-        self.assertEqual(control.selections, [0])
+        self.assertEqual(control.selections, [])
         self.assertEqual(
             events,
             [
@@ -2199,6 +2205,39 @@ class ChapterRailTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_repeated_right_actions_follow_each_native_position_once(self):
+        rail, control, events, _exit_events = self._rail(0)
+
+        control.simulate_native_navigation(1)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        control.simulate_native_navigation(2)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        self.assertEqual(control.selections, [])
+        self.assertEqual(
+            [event["index"] for event in events],
+            [1, 2],
+        )
+
+    def test_end_stops_emit_current_item_without_python_movement(self):
+        cases = (
+            (0, ACTION_MOVE_LEFT, "left"),
+            (2, ACTION_MOVE_RIGHT, "right"),
+        )
+        for selected, action_id, direction in cases:
+            with self.subTest(direction=direction):
+                rail, control, events, _exit_events = self._rail(selected)
+
+                rail.onAction(FakeAction(action_id))
+
+                self.assertEqual(control.selections, [])
+                self.assertEqual(len(events), 1)
+                self.assertEqual(events[0]["index"], selected)
+                self.assertEqual(
+                    events[0]["physical_direction"],
+                    direction,
+                )
 
     def test_vertical_and_back_actions_request_exit_without_closing(self):
         cases = (

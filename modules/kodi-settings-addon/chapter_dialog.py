@@ -118,17 +118,13 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
         action_id = action.getId()
         if action_id in (ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT):
             control = self.getControl(CHAPTER_LIST_ID)
-            current = control.getSelectedPosition()
-            delta = -1 if action_id == ACTION_MOVE_LEFT else 1
-            selected = max(0, min(len(self.chapters) - 1, current + delta))
-            try:
-                control.selectItem(selected)
-            except AttributeError:
-                pass
+            selected = control.getSelectedPosition()
+            if not 0 <= selected < len(self.chapters):
+                return
             if self.focus_callback:
                 chapter = dict(self.chapters[selected])
                 chapter["physical_direction"] = (
-                    "left" if delta < 0 else "right"
+                    "left" if action_id == ACTION_MOVE_LEFT else "right"
                 )
                 self.focus_callback(chapter)
         elif action_id == ACTION_MOVE_UP:
