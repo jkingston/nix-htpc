@@ -369,7 +369,31 @@
 						<visible>$PARAM[presentation_ready] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].actualmarker))</visible>
 					</control>
 				</control>
-				<include content="HTPCPlaybackPresentationLayout">
+				<include content="HTPCPlaybackPresentationSlot">
+					<param name="slot" value="a" />
+					<param name="visible" value="$PARAM[visible]" />
+					<param name="rail_left" value="$PARAM[rail_left]" />
+					<param name="rail_top" value="$PARAM[rail_top]" />
+					<param name="rail_width" value="$PARAM[rail_width]" />
+					<param name="rail_height" value="$PARAM[rail_height]" />
+					<param name="marker_top" value="$PARAM[marker_top]" />
+					<param name="marker_height" value="$PARAM[marker_height]" />
+					<param name="target_marker_top" value="$PARAM[target_marker_top]" />
+					<param name="target_marker_height" value="$PARAM[target_marker_height]" />
+					<param name="preview_left" value="$PARAM[preview_left]" />
+					<param name="preview_top" value="$PARAM[preview_top]" />
+					<param name="preview_width" value="$PARAM[preview_width]" />
+					<param name="preview_height" value="$PARAM[preview_height]" />
+					<param name="preview_loading_label" value="$PARAM[preview_loading_label]" />
+					<param name="preview_unavailable_label" value="$PARAM[preview_unavailable_label]" />
+					<param name="target_fill_color" value="80ffffff" />
+					<param name="preview_background_load" value="$PARAM[preview_background_load]" />
+					<param name="ready_condition" value="$PARAM[presentation_ready]" />
+					<param name="property_window" value="$PARAM[property_window]" />
+					<param name="property_prefix" value="$PARAM[property_prefix]" />
+				</include>
+				<include content="HTPCPlaybackPresentationSlot">
+					<param name="slot" value="b" />
 					<param name="visible" value="$PARAM[visible]" />
 					<param name="rail_left" value="$PARAM[rail_left]" />
 					<param name="rail_top" value="$PARAM[rail_top]" />

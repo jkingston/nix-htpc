@@ -64,12 +64,14 @@ LAYOUT_VIEW_SLOT = (
     "Window($PARAM[property_window])."
     "Property($PARAM[property_prefix].viewslot)"
 )
+PRESENTATION_SLOTS = ("a", "b")
+SLOT_PARAMETER = "$PARAM[slot]"
 
 
-def _slot_info(slot: str, field: str) -> str:
+def _slot_info(field: str) -> str:
     return (
         "Window($PARAM[property_window]).Property("
-        f"$PARAM[property_prefix].{slot}.{field})"
+        f"$PARAM[property_prefix].{SLOT_PARAMETER}.{field})"
     )
 
 
@@ -598,17 +600,18 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         presentation = [
             node
             for node in self.surface.iter("include")
-            if node.get("content") == "HTPCPlaybackPresentationLayout"
+            if node.get("content") == "HTPCPlaybackPresentationSlot"
         ]
-        self.assertEqual(len(presentation), 1)
-        self.assertNotIn(
-            "modal_condition",
-            {
-                node.get("name")
-                for node in presentation[0].findall("param")
-            },
-            "modal mode must retain the target presentation unchanged",
-        )
+        self.assertEqual(len(presentation), 2)
+        for consumer in presentation:
+            self.assertNotIn(
+                "modal_condition",
+                {
+                    node.get("name")
+                    for node in consumer.findall("param")
+                },
+                "modal mode must retain the target presentation unchanged",
+            )
 
     def test_non_seekable_media_keeps_an_informational_unfocused_rail(self):
         timeline = self._control("9300")
@@ -693,7 +696,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                         )
         self.assertEqual(unresolved, [])
 
-    def test_timeline_is_a_visible_focus_target_with_one_owned_presentation(self):
+    def test_timeline_is_a_visible_focus_target_with_two_owned_slots(self):
         timeline = self._control("9300")
         self.assertEqual(timeline.get("type"), "button")
         self.assertEqual(
@@ -703,9 +706,16 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         playback_consumers = [
             node
             for node in self.surface.iter("include")
-            if node.get("content") == "HTPCPlaybackPresentationLayout"
+            if node.get("content") == "HTPCPlaybackPresentationSlot"
         ]
-        self.assertEqual(len(playback_consumers), 1)
+        self.assertEqual(len(playback_consumers), 2)
+        self.assertEqual(
+            tuple(
+                consumer.find("param[@name='slot']").get("value")
+                for consumer in playback_consumers
+            ),
+            PRESENTATION_SLOTS,
+        )
         chapter_hints = _controls_by_description(
             self.surface,
             "HTPC video OSD chapter hint",
@@ -791,7 +801,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             self.playback_root,
             TARGET_MARKER_DESCRIPTION,
         )
-        self.assertEqual(len(target_markers), 2)
+        self.assertEqual(len(target_markers), 1)
         for target_marker in target_markers:
             with self.subTest(
                 target_info=target_marker.findtext("info", default="")
@@ -1028,13 +1038,22 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         playback_consumers = [
             node
             for node in self.surface.iter("include")
-            if node.get("content") == "HTPCPlaybackPresentationLayout"
+            if node.get("content") == "HTPCPlaybackPresentationSlot"
         ]
-        self.assertEqual(len(playback_consumers), 1)
-        passed_parameters = {
-            node.get("name"): node.get("value")
-            for node in playback_consumers[0].findall("param")
-        }
+        self.assertEqual(len(playback_consumers), 2)
+        parameter_maps = [
+            {
+                node.get("name"): node.get("value")
+                for node in consumer.findall("param")
+            }
+            for consumer in playback_consumers
+        ]
+        self.assertEqual(
+            tuple(parameters.pop("slot") for parameters in parameter_maps),
+            PRESENTATION_SLOTS,
+        )
+        self.assertEqual(parameter_maps[0], parameter_maps[1])
+        passed_parameters = parameter_maps[0]
         for parameter in (
             "rail_left",
             "rail_top",
@@ -1092,7 +1111,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 self.playback_root,
                 description,
             )
-            self.assertEqual(len(controls), 2)
+            self.assertEqual(len(controls), 1)
             for control in controls:
                 self.assertIn("$PARAM[", ET.tostring(
                     control,
@@ -1216,9 +1235,20 @@ class PlaybackXmlContractTest(unittest.TestCase):
         cls.includes_root = ET.parse(INCLUDES_XML).getroot()
         cls.osd_root = ET.parse(OSD_XML).getroot()
 
-    def _slot_group(self, slot: str) -> ET.Element:
-        description = anchors.SLOT_DESCRIPTION.format(slot)
-        matches = _controls_by_description(self.playback_root, description)
+    def _slot_group(self) -> ET.Element:
+        matches = _controls_by_description(
+            self.playback_root,
+            anchors.SLOT_DESCRIPTION,
+        )
+        self.assertEqual(
+            len(matches),
+            1,
+            f"expected exactly one {anchors.SLOT_DESCRIPTION!r} control",
+        )
+        return matches[0]
+
+    def _one_slot_control(self, description: str) -> ET.Element:
+        matches = _controls_by_description(self._slot_group(), description)
         self.assertEqual(
             len(matches),
             1,
@@ -1226,18 +1256,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         return matches[0]
 
-    def _one_slot_control(
-        self, slot: str, description: str
-    ) -> ET.Element:
-        matches = _controls_by_description(self._slot_group(slot), description)
-        self.assertEqual(
-            len(matches),
-            1,
-            f"slot {slot}: expected exactly one {description!r} control",
-        )
-        return matches[0]
-
-    def test_local_playback_layout_has_one_owned_surface_consumer(self):
+    def test_local_playback_slot_has_two_direct_owned_surface_consumers(self):
         registrations = [
             node
             for node in self.includes_root.iter("include")
@@ -1252,38 +1271,46 @@ class PlaybackXmlContractTest(unittest.TestCase):
         ]
         self.assertEqual(
             {node.get("name") for node in definitions},
-            {"HTPCPlaybackPresentationLayout"},
+            {"HTPCPlaybackPresentationSlot"},
         )
-        parameterized_layout = next(
-            node
-            for node in definitions
-            if node.get("name") == "HTPCPlaybackPresentationLayout"
-        )
-        layout_defaults = {
+        slot_template = definitions[0]
+        slot_defaults = {
             node.get("name"): node.get("default")
-            for node in parameterized_layout.findall("param")
+            for node in slot_template.findall("param")
         }
         self.assertEqual(
-            layout_defaults["target_fill_color"],
-            "$INFO[Skin.String(BingieOSDProgressBarColor)]",
+            slot_defaults,
+            {
+                "slot": None,
+                "visible": "Player.HasVideo",
+                "rail_left": "384",
+                "rail_top": "964",
+                "rail_width": "1152",
+                "rail_height": "7",
+                "marker_top": "955",
+                "marker_height": "24",
+                "target_marker_top": "962",
+                "target_marker_height": "11",
+                "preview_left": "194",
+                "preview_top": "650",
+                "preview_width": "380",
+                "preview_height": "320",
+                "target_fill_color": (
+                    "$INFO[Skin.String(BingieOSDProgressBarColor)]"
+                ),
+                "preview_loading_label": "$LOCALIZE[31582]",
+                "preview_unavailable_label": "$LOCALIZE[31583]",
+                "preview_background_load": "true",
+                "ready_condition": (
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.service.ready))"
+                ),
+                "property_window": "Home",
+                "property_prefix": "htpc.seek",
+            },
+            "the slot template must preserve every former layout default",
         )
-        self.assertNotIn("stable_preview_card", layout_defaults)
-        self.assertEqual(
-            layout_defaults["preview_loading_label"],
-            "$LOCALIZE[31582]",
-        )
-        self.assertEqual(
-            layout_defaults["preview_unavailable_label"],
-            "$LOCALIZE[31583]",
-        )
-        self.assertEqual(layout_defaults["preview_background_load"], "true")
-        self.assertEqual(layout_defaults["preview_top"], "650")
-        self.assertEqual(
-            layout_defaults["ready_condition"],
-            "!String.IsEmpty(Window(Home).Property(htpc.service.ready))",
-        )
-        self.assertEqual(layout_defaults["property_window"], "Home")
-        self.assertEqual(layout_defaults["property_prefix"], "htpc.seek")
+        self.assertNotIn("stable_preview_card", slot_defaults)
         osd_defaults = {
             node.get("name"): node.get("default")
             for node in self.video_osd_surface.findall("param")
@@ -1291,30 +1318,19 @@ class PlaybackXmlContractTest(unittest.TestCase):
         for parameter in ("target_marker_top", "target_marker_height"):
             with self.subTest(parameter=parameter):
                 self.assertEqual(
-                    layout_defaults[parameter],
+                    slot_defaults[parameter],
                     osd_defaults[parameter],
                 )
 
-        wrapper_definitions = []
-        wrapper_consumers = []
-        layout_consumers = []
+        slot_consumers = []
         modern_consumers = []
         for source in sorted(XML_ROOT.glob("*.xml")):
             serialized = source.read_text(
                 encoding="utf-8-sig",
                 errors="replace",
             )
-            wrapper_definitions.extend(
-                source.name
-                for _match in re.finditer(
-                    r'<include\b[^>]*\bname=["\']'
-                    r'HTPCPlaybackPresentation["\'][^>]*>',
-                    serialized,
-                )
-            )
             for target, consumers in (
-                ("HTPCPlaybackPresentation", wrapper_consumers),
-                ("HTPCPlaybackPresentationLayout", layout_consumers),
+                ("HTPCPlaybackPresentationSlot", slot_consumers),
                 ("OSDButtonsModern", modern_consumers),
             ):
                 pattern = (
@@ -1330,54 +1346,60 @@ class PlaybackXmlContractTest(unittest.TestCase):
                     for _match in re.finditer(pattern, serialized)
                 )
 
-        self.assertEqual(wrapper_definitions, [])
-        self.assertEqual(wrapper_consumers, [])
         self.assertEqual(
-            layout_consumers,
-            [VIDEO_OSD_XML.name],
-            "only the owned video OSD may instantiate the playback layout",
+            slot_consumers,
+            [VIDEO_OSD_XML.name, VIDEO_OSD_XML.name],
+            "only the owned video OSD may instantiate the two slots",
         )
+        all_xml = "\n".join(
+            source.read_text(encoding="utf-8-sig", errors="replace")
+            for source in sorted(XML_ROOT.glob("*.xml"))
+        )
+        self.assertNotIn("HTPCPlaybackPresentationLayout", all_xml)
         self.assertEqual(
             modern_consumers,
             ["MusicOSD.xml"],
             "the inherited OSD factory is retained only for MusicOSD",
         )
 
-    def test_two_presentation_slots_are_mutually_exclusive(self):
-        all_slot_groups = [
-            control
-            for control in self.playback_root.iter("control")
-            if _description(control).startswith(
-                "HTPC playback presentation slot "
-            )
+        consumers = [
+            node
+            for node in self.video_osd_surface.iter("include")
+            if node.get("content") == "HTPCPlaybackPresentationSlot"
         ]
-        self.assertEqual(len(all_slot_groups), 2)
+        self.assertEqual(len(consumers), 2)
+        parameter_maps = [
+            {
+                parameter.get("name"): parameter.get("value")
+                for parameter in consumer.findall("param")
+            }
+            for consumer in consumers
+        ]
+        self.assertEqual(
+            tuple(parameters.pop("slot") for parameters in parameter_maps),
+            PRESENTATION_SLOTS,
+            "slot instances must retain deterministic A then B order",
+        )
+        self.assertEqual(parameter_maps[0], parameter_maps[1])
+        self.assertEqual(
+            set(parameter_maps[0]),
+            set(slot_defaults) - {"slot"},
+            "both direct instances must forward the complete former map",
+        )
 
-        for slot in anchors.SLOTS:
-            with self.subTest(slot=slot):
-                visible = _visible_text(self._slot_group(slot))
-                self.assertIn(LAYOUT_READY, visible)
-                self.assertIn(
-                    f"!String.IsEmpty({LAYOUT_VIEW_ACTIVE})",
-                    visible,
-                )
-                self.assertIn(
-                    f"String.IsEqual({LAYOUT_VIEW_SLOT},{slot})",
-                    visible,
-                )
-                other = "b" if slot == "a" else "a"
-                self.assertNotIn(
-                    f"String.IsEqual({LAYOUT_VIEW_SLOT},{other})",
-                    visible,
-                )
-
-    def test_layout_has_no_literal_binding_to_the_production_seek_namespace(self):
-        layout = next(
+    def test_slot_template_specializes_to_two_mutually_exclusive_namespaces(self):
+        visible = _visible_text(self._slot_group())
+        self.assertEqual(
+            visible,
+            f"{LAYOUT_READY} + !String.IsEmpty({LAYOUT_VIEW_ACTIVE}) + "
+            f"String.IsEqual({LAYOUT_VIEW_SLOT},{SLOT_PARAMETER}) + "
+            "$PARAM[visible]",
+        )
+        definition = next(
             node
             for node in self.playback_root.findall("include")
-            if node.get("name") == "HTPCPlaybackPresentationLayout"
-        )
-        definition = layout.find("definition")
+            if node.get("name") == "HTPCPlaybackPresentationSlot"
+        ).find("definition")
         self.assertIsNotNone(definition)
         serialized = ET.tostring(definition, encoding="unicode")
         self.assertNotIn(
@@ -1386,76 +1408,87 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertIn("$PARAM[property_window]", serialized)
         self.assertIn("$PARAM[property_prefix]", serialized)
+        self.assertNotIn(".a.", serialized)
+        self.assertNotIn(".b.", serialized)
+        for slot in PRESENTATION_SLOTS:
+            with self.subTest(slot=slot):
+                specialized = serialized.replace(SLOT_PARAMETER, slot)
+                self.assertIn(
+                    f"String.IsEqual({LAYOUT_VIEW_SLOT},{slot})",
+                    specialized,
+                )
+                for field in (
+                    "targetvalid",
+                    "targetfill",
+                    "targetmarker",
+                    "time",
+                    "delta",
+                    "prompt",
+                    "previewstatus",
+                    "previewpath",
+                    "previewanchor",
+                ):
+                    self.assertIn(f".{slot}.{field}", specialized)
 
     def test_target_fill_and_marker_are_ranges_controls(self):
         contracts = {
             TARGET_FILL_DESCRIPTION: "targetfill",
             TARGET_MARKER_DESCRIPTION: "targetmarker",
         }
-        for slot in anchors.SLOTS:
-            for description, field in contracts.items():
-                with self.subTest(slot=slot, description=description):
-                    control = self._one_slot_control(slot, description)
-                    self.assertEqual(control.get("type"), "ranges")
-                    self.assertEqual(
-                        control.findtext("info", default="").strip(),
-                        _slot_info(slot, field),
-                    )
+        for description, field in contracts.items():
+            with self.subTest(description=description):
+                control = self._one_slot_control(description)
+                self.assertEqual(control.get("type"), "ranges")
+                self.assertEqual(
+                    control.findtext("info", default="").strip(),
+                    _slot_info(field),
+                )
 
-    def test_target_marker_geometry_and_texture_are_slot_symmetric(self):
+    def test_target_marker_geometry_and_texture_are_canonical(self):
         marker_texture = "common/slider/slider_button_nofocus.png"
-        for slot in anchors.SLOTS:
-            with self.subTest(slot=slot):
-                marker = self._one_slot_control(
-                    slot,
-                    TARGET_MARKER_DESCRIPTION,
-                )
-                self.assertEqual(
-                    marker.findtext("posy"),
-                    "$PARAM[target_marker_top]",
-                )
-                self.assertEqual(
-                    marker.findtext("height"),
-                    "$PARAM[target_marker_height]",
-                )
-                self.assertEqual(
-                    marker.findtext("texturebg"),
-                    marker_texture,
-                )
-                self.assertEqual(
-                    marker.findtext("lefttexture"),
-                    marker_texture,
-                )
+        marker = self._one_slot_control(TARGET_MARKER_DESCRIPTION)
+        self.assertEqual(
+            marker.findtext("posy"),
+            "$PARAM[target_marker_top]",
+        )
+        self.assertEqual(
+            marker.findtext("height"),
+            "$PARAM[target_marker_height]",
+        )
+        self.assertEqual(
+            marker.findtext("texturebg"),
+            marker_texture,
+        )
+        self.assertEqual(
+            marker.findtext("lefttexture"),
+            marker_texture,
+        )
 
-    def test_marker_layers_preserve_native_order_in_each_slot(self):
+    def test_marker_layers_preserve_exact_native_order(self):
         expected = (
             TARGET_FILL_DESCRIPTION,
             CUT_MARKERS_DESCRIPTION,
             CHAPTER_MARKERS_DESCRIPTION,
             TARGET_MARKER_DESCRIPTION,
         )
-        for slot in anchors.SLOTS:
-            with self.subTest(slot=slot):
-                descriptions = tuple(
-                    _description(control)
-                    for control in self._slot_group(slot).findall("control")
-                    if _description(control) in expected
-                )
-                self.assertEqual(descriptions, expected)
-                cut = self._one_slot_control(slot, CUT_MARKERS_DESCRIPTION)
-                chapter = self._one_slot_control(
-                    slot, CHAPTER_MARKERS_DESCRIPTION
-                )
-                self.assertEqual(cut.get("type"), "ranges")
-                self.assertEqual(
-                    cut.findtext("info", default="").strip(),
-                    "Player.Cutlist",
-                )
-                self.assertEqual(chapter.get("type"), "ranges")
-                self.assertEqual(
-                    chapter.findtext("info", default="").strip(),
-                    "Player.Chapters",
-                )
+        descriptions = tuple(
+            _description(control)
+            for control in self._slot_group().findall("control")
+            if _description(control) in expected
+        )
+        self.assertEqual(descriptions, expected)
+        cut = self._one_slot_control(CUT_MARKERS_DESCRIPTION)
+        chapter = self._one_slot_control(CHAPTER_MARKERS_DESCRIPTION)
+        self.assertEqual(cut.get("type"), "ranges")
+        self.assertEqual(
+            cut.findtext("info", default="").strip(),
+            "Player.Cutlist",
+        )
+        self.assertEqual(chapter.get("type"), "ranges")
+        self.assertEqual(
+            chapter.findtext("info", default="").strip(),
+            "Player.Chapters",
+        )
 
     def test_no_target_window_property_is_bound_to_a_slider(self):
         violations = []
@@ -1627,17 +1660,28 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
 
     def test_preview_anchors_match_the_deterministic_generator(self):
-        for slot in anchors.SLOTS:
+        preview = self._one_slot_control(PREVIEW_DESCRIPTION)
+        rows = anchors.extract_anchor_rows(PLAYBACK_XML)
+        self.assertEqual(rows, anchors.anchor_rows())
+        self.assertEqual(rows[0], (0, 0))
+        self.assertEqual(rows[-1], (100, anchors.TIMELINE_WIDTH))
+        self.assertEqual(preview.get("type"), "group")
+        conditions = tuple(
+            animation.get("condition", "")
+            for animation in preview.findall("animation")
+        )
+        self.assertEqual(len(conditions), 101)
+        for slot in PRESENTATION_SLOTS:
             with self.subTest(slot=slot):
-                preview = self._one_slot_control(slot, PREVIEW_DESCRIPTION)
-                rows = anchors.extract_anchor_rows(PLAYBACK_XML, slot)
-                self.assertEqual(rows, anchors.anchor_rows())
-                self.assertEqual(rows[0], (0, 0))
-                self.assertEqual(rows[-1], (100, anchors.TIMELINE_WIDTH))
-                self.assertEqual(preview.get("type"), "group")
+                specialized = tuple(
+                    condition.replace(SLOT_PARAMETER, slot)
+                    for condition in conditions
+                )
+                self.assertTrue(
+                    all(f".{slot}.previewanchor" in value for value in specialized)
+                )
 
-    def test_preview_card_states_are_explicit_and_slot_symmetric(self):
-        normalized = []
+    def test_preview_card_states_are_explicit_and_canonical(self):
         forbidden_tags = {
             "onclick",
             "ondown",
@@ -1647,123 +1691,103 @@ class PlaybackXmlContractTest(unittest.TestCase):
             "onunfocus",
             "onup",
         }
-        for slot in anchors.SLOTS:
-            with self.subTest(slot=slot):
-                preview = self._one_slot_control(slot, PREVIEW_DESCRIPTION)
-                status = _slot_info(slot, "previewstatus")
-                path = _slot_info(slot, "previewpath")
-                expected_visibility = {
-                    PREVIEW_READY_DESCRIPTION: (
-                        f"String.IsEqual({status},ready) + "
-                        f"!String.IsEmpty({path})"
-                    ),
-                    PREVIEW_LOADING_DESCRIPTION: (
-                        f"String.IsEqual({status},loading)"
-                    ),
-                    PREVIEW_UNAVAILABLE_DESCRIPTION: (
-                        f"!String.IsEqual({status},none) + "
-                        f"!String.IsEqual({status},loading) + "
-                        f"[!String.IsEqual({status},ready) | "
-                        f"String.IsEmpty({path})]"
-                    ),
-                }
+        preview = self._one_slot_control(PREVIEW_DESCRIPTION)
+        status = _slot_info("previewstatus")
+        path = _slot_info("previewpath")
+        expected_visibility = {
+            PREVIEW_READY_DESCRIPTION: (
+                f"String.IsEqual({status},ready) + "
+                f"!String.IsEmpty({path})"
+            ),
+            PREVIEW_LOADING_DESCRIPTION: (
+                f"String.IsEqual({status},loading)"
+            ),
+            PREVIEW_UNAVAILABLE_DESCRIPTION: (
+                f"!String.IsEqual({status},none) + "
+                f"!String.IsEqual({status},loading) + "
+                f"[!String.IsEqual({status},ready) | "
+                f"String.IsEmpty({path})]"
+            ),
+        }
 
-                backplate = self._one_slot_control(
-                    slot,
-                    PREVIEW_BACKPLATE_DESCRIPTION,
-                )
-                self.assertEqual(backplate.get("type"), "image")
-                self.assertEqual(_visible_text(backplate), "")
-                self.assertEqual(backplate.findtext("posx"), "-10")
-                self.assertEqual(backplate.findtext("posy"), "-10")
-                self.assertEqual(backplate.findtext("width"), "400")
-                self.assertEqual(backplate.findtext("height"), "234")
-                texture = backplate.find("texture")
+        backplate = self._one_slot_control(
+            PREVIEW_BACKPLATE_DESCRIPTION,
+        )
+        self.assertEqual(backplate.get("type"), "image")
+        self.assertEqual(_visible_text(backplate), "")
+        self.assertEqual(backplate.findtext("posx"), "-10")
+        self.assertEqual(backplate.findtext("posy"), "-10")
+        self.assertEqual(backplate.findtext("width"), "400")
+        self.assertEqual(backplate.findtext("height"), "234")
+        texture = backplate.find("texture")
+        self.assertEqual(
+            (texture.text or "").strip(),
+            "diffuse/panel2.png",
+        )
+        self.assertEqual(texture.get("border"), "12")
+        self.assertEqual(texture.get("colordiffuse"), "ee080808")
+
+        ready = self._one_slot_control(PREVIEW_READY_DESCRIPTION)
+        loading = self._one_slot_control(PREVIEW_LOADING_DESCRIPTION)
+        unavailable = self._one_slot_control(
+            PREVIEW_UNAVAILABLE_DESCRIPTION,
+        )
+        states = (ready, loading, unavailable)
+        self.assertEqual(
+            tuple(control.get("type") for control in states),
+            ("group", "label", "label"),
+        )
+        for control in states:
+            with self.subTest(state=_description(control)):
                 self.assertEqual(
-                    (texture.text or "").strip(),
-                    "diffuse/panel2.png",
+                    _visible_text(control),
+                    expected_visibility[_description(control)],
                 )
-                self.assertEqual(texture.get("border"), "12")
-                self.assertEqual(texture.get("colordiffuse"), "ee080808")
+                for node in control.iter():
+                    self.assertIsNone(node.get("id"))
+                    self.assertNotIn(node.tag, forbidden_tags)
 
-                ready = self._one_slot_control(
-                    slot,
-                    PREVIEW_READY_DESCRIPTION,
-                )
-                loading = self._one_slot_control(
-                    slot,
-                    PREVIEW_LOADING_DESCRIPTION,
-                )
-                unavailable = self._one_slot_control(
-                    slot,
-                    PREVIEW_UNAVAILABLE_DESCRIPTION,
-                )
-                states = (ready, loading, unavailable)
-                self.assertEqual(
-                    tuple(control.get("type") for control in states),
-                    ("group", "label", "label"),
-                )
-                for control in states:
-                    with self.subTest(
-                        slot=slot,
-                        state=_description(control),
-                    ):
-                        self.assertEqual(
-                            _visible_text(control),
-                            expected_visibility[_description(control)],
-                        )
-                        for node in control.iter():
-                            self.assertIsNone(node.get("id"))
-                            self.assertNotIn(node.tag, forbidden_tags)
+        ready_images = [
+            control
+            for control in ready.findall("control")
+            if control.get("type") == "image"
+        ]
+        self.assertEqual(len(ready_images), 1)
+        ready_image = ready_images[0]
+        self.assertEqual(ready_image.findtext("width"), "380")
+        self.assertEqual(ready_image.findtext("height"), "214")
+        ready_texture = ready_image.find("texture")
+        self.assertEqual(
+            (ready_texture.text or "").strip(),
+            f"$INFO[{path}]",
+        )
+        self.assertEqual(
+            ready_texture.get("background"),
+            "$PARAM[preview_background_load]",
+        )
+        path_textures = [
+            texture
+            for texture in preview.iter("texture")
+            if path in (texture.text or "")
+        ]
+        self.assertEqual(path_textures, [ready_texture])
 
-                ready_images = [
-                    control
-                    for control in ready.findall("control")
-                    if control.get("type") == "image"
-                ]
-                self.assertEqual(len(ready_images), 1)
-                ready_image = ready_images[0]
-                self.assertEqual(ready_image.findtext("width"), "380")
-                self.assertEqual(ready_image.findtext("height"), "214")
-                ready_texture = ready_image.find("texture")
-                self.assertEqual(
-                    (ready_texture.text or "").strip(),
-                    f"$INFO[{path}]",
-                )
-                self.assertEqual(
-                    ready_texture.get("background"),
-                    "$PARAM[preview_background_load]",
-                )
-                path_textures = [
-                    texture
-                    for texture in preview.iter("texture")
-                    if path in (texture.text or "")
-                ]
-                self.assertEqual(path_textures, [ready_texture])
+        labels = {
+            loading: "$PARAM[preview_loading_label]",
+            unavailable: "$PARAM[preview_unavailable_label]",
+        }
+        for control, label in labels.items():
+            self.assertEqual(control.findtext("width"), "380")
+            self.assertEqual(control.findtext("height"), "214")
+            self.assertEqual(control.findtext("font"), "Reg22")
+            self.assertEqual(control.findtext("align"), "center")
+            self.assertEqual(control.findtext("aligny"), "center")
+            self.assertEqual(
+                control.findtext("textcolor"),
+                "b3ffffff",
+            )
+            self.assertEqual(control.findtext("label"), label)
 
-                labels = {
-                    loading: "$PARAM[preview_loading_label]",
-                    unavailable: "$PARAM[preview_unavailable_label]",
-                }
-                for control, label in labels.items():
-                    self.assertEqual(control.findtext("width"), "380")
-                    self.assertEqual(control.findtext("height"), "214")
-                    self.assertEqual(control.findtext("font"), "Reg22")
-                    self.assertEqual(control.findtext("align"), "center")
-                    self.assertEqual(control.findtext("aligny"), "center")
-                    self.assertEqual(
-                        control.findtext("textcolor"),
-                        "b3ffffff",
-                    )
-                    self.assertEqual(control.findtext("label"), label)
-
-                serialized = ET.tostring(
-                    preview,
-                    encoding="unicode",
-                ).replace(f".{slot}.", ".slot.")
-                normalized.append(serialized)
-
-        self.assertEqual(normalized[0], normalized[1])
         self.assertNotIn(
             "stable_preview_card",
             ET.tostring(self.playback_root, encoding="unicode"),

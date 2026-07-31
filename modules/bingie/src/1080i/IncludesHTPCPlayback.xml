@@ -3,11 +3,12 @@
   nix-htpc BINGIE playback presentation.
 
   The service publishes a complete inactive slot and flips htpc.seek.viewslot
-  only after every field is ready. The two groups below are deliberately
-  identical apart from their property namespace and slot condition.
+  only after every field is ready. One parameterized template renders the
+  selected A or B slot without duplicating presentation controls.
 -->
 <includes>
-	<include name="HTPCPlaybackPresentationLayout">
+	<include name="HTPCPlaybackPresentationSlot">
+		<param name="slot" />
 		<param name="visible" default="Player.HasVideo" />
 		<param name="rail_left" default="384" />
 		<param name="rail_top" default="964" />
@@ -30,8 +31,8 @@
 		<param name="property_prefix" default="htpc.seek" />
 		<definition>
 		<control type="group">
-			<description>HTPC playback presentation slot a</description>
-			<visible>$PARAM[ready_condition] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewactive)) + String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewslot),a) + $PARAM[visible]</visible>
+			<description>HTPC playback presentation slot $PARAM[slot]</description>
+			<visible>$PARAM[ready_condition] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewactive)) + String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewslot),$PARAM[slot]) + $PARAM[visible]</visible>
 			<control type="ranges">
 				<description>HTPC target progress fill</description>
 				<posx>$PARAM[rail_left]</posx>
@@ -42,8 +43,8 @@
 				<lefttexture/>
 				<midtexture colordiffuse="$PARAM[target_fill_color]">diffuse/panel2.png</midtexture>
 				<righttexture/>
-				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].a.targetfill)</info>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.targetvalid))</visible>
+				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetfill)</info>
+				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetvalid))</visible>
 			</control>
 			<control type="ranges">
 				<description>HTPC cut markers</description>
@@ -77,8 +78,8 @@
 				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
 				<midtexture/>
 				<righttexture/>
-				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].a.targetmarker)</info>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.targetvalid))</visible>
+				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetmarker)</info>
+				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetvalid))</visible>
 			</control>
 			<control type="group">
 				<description>HTPC cursor-following preview</description>
@@ -86,110 +87,110 @@
 				<posy>$PARAM[preview_top]</posy>
 				<width>$PARAM[preview_width]</width>
 				<height>$PARAM[preview_height]</height>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.targetvalid))</visible>
-				<!-- BEGIN GENERATED PREVIEW ANCHORS a -->
-				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),0)">Conditional</animation>
-				<animation effect="slide" end="12,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),1)">Conditional</animation>
-				<animation effect="slide" end="23,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),2)">Conditional</animation>
-				<animation effect="slide" end="35,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),3)">Conditional</animation>
-				<animation effect="slide" end="46,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),4)">Conditional</animation>
-				<animation effect="slide" end="58,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),5)">Conditional</animation>
-				<animation effect="slide" end="69,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),6)">Conditional</animation>
-				<animation effect="slide" end="81,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),7)">Conditional</animation>
-				<animation effect="slide" end="92,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),8)">Conditional</animation>
-				<animation effect="slide" end="104,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),9)">Conditional</animation>
-				<animation effect="slide" end="115,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),10)">Conditional</animation>
-				<animation effect="slide" end="127,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),11)">Conditional</animation>
-				<animation effect="slide" end="138,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),12)">Conditional</animation>
-				<animation effect="slide" end="150,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),13)">Conditional</animation>
-				<animation effect="slide" end="161,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),14)">Conditional</animation>
-				<animation effect="slide" end="173,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),15)">Conditional</animation>
-				<animation effect="slide" end="184,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),16)">Conditional</animation>
-				<animation effect="slide" end="196,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),17)">Conditional</animation>
-				<animation effect="slide" end="207,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),18)">Conditional</animation>
-				<animation effect="slide" end="219,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),19)">Conditional</animation>
-				<animation effect="slide" end="230,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),20)">Conditional</animation>
-				<animation effect="slide" end="242,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),21)">Conditional</animation>
-				<animation effect="slide" end="253,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),22)">Conditional</animation>
-				<animation effect="slide" end="265,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),23)">Conditional</animation>
-				<animation effect="slide" end="276,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),24)">Conditional</animation>
-				<animation effect="slide" end="288,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),25)">Conditional</animation>
-				<animation effect="slide" end="300,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),26)">Conditional</animation>
-				<animation effect="slide" end="311,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),27)">Conditional</animation>
-				<animation effect="slide" end="323,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),28)">Conditional</animation>
-				<animation effect="slide" end="334,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),29)">Conditional</animation>
-				<animation effect="slide" end="346,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),30)">Conditional</animation>
-				<animation effect="slide" end="357,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),31)">Conditional</animation>
-				<animation effect="slide" end="369,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),32)">Conditional</animation>
-				<animation effect="slide" end="380,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),33)">Conditional</animation>
-				<animation effect="slide" end="392,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),34)">Conditional</animation>
-				<animation effect="slide" end="403,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),35)">Conditional</animation>
-				<animation effect="slide" end="415,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),36)">Conditional</animation>
-				<animation effect="slide" end="426,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),37)">Conditional</animation>
-				<animation effect="slide" end="438,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),38)">Conditional</animation>
-				<animation effect="slide" end="449,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),39)">Conditional</animation>
-				<animation effect="slide" end="461,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),40)">Conditional</animation>
-				<animation effect="slide" end="472,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),41)">Conditional</animation>
-				<animation effect="slide" end="484,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),42)">Conditional</animation>
-				<animation effect="slide" end="495,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),43)">Conditional</animation>
-				<animation effect="slide" end="507,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),44)">Conditional</animation>
-				<animation effect="slide" end="518,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),45)">Conditional</animation>
-				<animation effect="slide" end="530,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),46)">Conditional</animation>
-				<animation effect="slide" end="541,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),47)">Conditional</animation>
-				<animation effect="slide" end="553,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),48)">Conditional</animation>
-				<animation effect="slide" end="564,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),49)">Conditional</animation>
-				<animation effect="slide" end="576,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),50)">Conditional</animation>
-				<animation effect="slide" end="588,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),51)">Conditional</animation>
-				<animation effect="slide" end="599,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),52)">Conditional</animation>
-				<animation effect="slide" end="611,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),53)">Conditional</animation>
-				<animation effect="slide" end="622,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),54)">Conditional</animation>
-				<animation effect="slide" end="634,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),55)">Conditional</animation>
-				<animation effect="slide" end="645,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),56)">Conditional</animation>
-				<animation effect="slide" end="657,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),57)">Conditional</animation>
-				<animation effect="slide" end="668,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),58)">Conditional</animation>
-				<animation effect="slide" end="680,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),59)">Conditional</animation>
-				<animation effect="slide" end="691,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),60)">Conditional</animation>
-				<animation effect="slide" end="703,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),61)">Conditional</animation>
-				<animation effect="slide" end="714,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),62)">Conditional</animation>
-				<animation effect="slide" end="726,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),63)">Conditional</animation>
-				<animation effect="slide" end="737,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),64)">Conditional</animation>
-				<animation effect="slide" end="749,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),65)">Conditional</animation>
-				<animation effect="slide" end="760,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),66)">Conditional</animation>
-				<animation effect="slide" end="772,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),67)">Conditional</animation>
-				<animation effect="slide" end="783,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),68)">Conditional</animation>
-				<animation effect="slide" end="795,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),69)">Conditional</animation>
-				<animation effect="slide" end="806,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),70)">Conditional</animation>
-				<animation effect="slide" end="818,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),71)">Conditional</animation>
-				<animation effect="slide" end="829,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),72)">Conditional</animation>
-				<animation effect="slide" end="841,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),73)">Conditional</animation>
-				<animation effect="slide" end="852,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),74)">Conditional</animation>
-				<animation effect="slide" end="864,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),75)">Conditional</animation>
-				<animation effect="slide" end="876,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),76)">Conditional</animation>
-				<animation effect="slide" end="887,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),77)">Conditional</animation>
-				<animation effect="slide" end="899,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),78)">Conditional</animation>
-				<animation effect="slide" end="910,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),79)">Conditional</animation>
-				<animation effect="slide" end="922,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),80)">Conditional</animation>
-				<animation effect="slide" end="933,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),81)">Conditional</animation>
-				<animation effect="slide" end="945,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),82)">Conditional</animation>
-				<animation effect="slide" end="956,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),83)">Conditional</animation>
-				<animation effect="slide" end="968,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),84)">Conditional</animation>
-				<animation effect="slide" end="979,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),85)">Conditional</animation>
-				<animation effect="slide" end="991,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),86)">Conditional</animation>
-				<animation effect="slide" end="1002,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),87)">Conditional</animation>
-				<animation effect="slide" end="1014,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),88)">Conditional</animation>
-				<animation effect="slide" end="1025,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),89)">Conditional</animation>
-				<animation effect="slide" end="1037,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),90)">Conditional</animation>
-				<animation effect="slide" end="1048,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),91)">Conditional</animation>
-				<animation effect="slide" end="1060,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),92)">Conditional</animation>
-				<animation effect="slide" end="1071,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),93)">Conditional</animation>
-				<animation effect="slide" end="1083,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),94)">Conditional</animation>
-				<animation effect="slide" end="1094,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),95)">Conditional</animation>
-				<animation effect="slide" end="1106,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),96)">Conditional</animation>
-				<animation effect="slide" end="1117,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),97)">Conditional</animation>
-				<animation effect="slide" end="1129,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),98)">Conditional</animation>
-				<animation effect="slide" end="1140,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),99)">Conditional</animation>
-				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),100)">Conditional</animation>
-				<!-- END GENERATED PREVIEW ANCHORS a -->
+				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetvalid))</visible>
+				<!-- BEGIN GENERATED PREVIEW ANCHORS -->
+				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),0)">Conditional</animation>
+				<animation effect="slide" end="12,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),1)">Conditional</animation>
+				<animation effect="slide" end="23,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),2)">Conditional</animation>
+				<animation effect="slide" end="35,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),3)">Conditional</animation>
+				<animation effect="slide" end="46,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),4)">Conditional</animation>
+				<animation effect="slide" end="58,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),5)">Conditional</animation>
+				<animation effect="slide" end="69,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),6)">Conditional</animation>
+				<animation effect="slide" end="81,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),7)">Conditional</animation>
+				<animation effect="slide" end="92,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),8)">Conditional</animation>
+				<animation effect="slide" end="104,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),9)">Conditional</animation>
+				<animation effect="slide" end="115,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),10)">Conditional</animation>
+				<animation effect="slide" end="127,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),11)">Conditional</animation>
+				<animation effect="slide" end="138,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),12)">Conditional</animation>
+				<animation effect="slide" end="150,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),13)">Conditional</animation>
+				<animation effect="slide" end="161,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),14)">Conditional</animation>
+				<animation effect="slide" end="173,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),15)">Conditional</animation>
+				<animation effect="slide" end="184,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),16)">Conditional</animation>
+				<animation effect="slide" end="196,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),17)">Conditional</animation>
+				<animation effect="slide" end="207,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),18)">Conditional</animation>
+				<animation effect="slide" end="219,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),19)">Conditional</animation>
+				<animation effect="slide" end="230,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),20)">Conditional</animation>
+				<animation effect="slide" end="242,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),21)">Conditional</animation>
+				<animation effect="slide" end="253,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),22)">Conditional</animation>
+				<animation effect="slide" end="265,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),23)">Conditional</animation>
+				<animation effect="slide" end="276,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),24)">Conditional</animation>
+				<animation effect="slide" end="288,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),25)">Conditional</animation>
+				<animation effect="slide" end="300,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),26)">Conditional</animation>
+				<animation effect="slide" end="311,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),27)">Conditional</animation>
+				<animation effect="slide" end="323,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),28)">Conditional</animation>
+				<animation effect="slide" end="334,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),29)">Conditional</animation>
+				<animation effect="slide" end="346,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),30)">Conditional</animation>
+				<animation effect="slide" end="357,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),31)">Conditional</animation>
+				<animation effect="slide" end="369,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),32)">Conditional</animation>
+				<animation effect="slide" end="380,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),33)">Conditional</animation>
+				<animation effect="slide" end="392,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),34)">Conditional</animation>
+				<animation effect="slide" end="403,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),35)">Conditional</animation>
+				<animation effect="slide" end="415,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),36)">Conditional</animation>
+				<animation effect="slide" end="426,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),37)">Conditional</animation>
+				<animation effect="slide" end="438,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),38)">Conditional</animation>
+				<animation effect="slide" end="449,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),39)">Conditional</animation>
+				<animation effect="slide" end="461,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),40)">Conditional</animation>
+				<animation effect="slide" end="472,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),41)">Conditional</animation>
+				<animation effect="slide" end="484,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),42)">Conditional</animation>
+				<animation effect="slide" end="495,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),43)">Conditional</animation>
+				<animation effect="slide" end="507,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),44)">Conditional</animation>
+				<animation effect="slide" end="518,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),45)">Conditional</animation>
+				<animation effect="slide" end="530,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),46)">Conditional</animation>
+				<animation effect="slide" end="541,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),47)">Conditional</animation>
+				<animation effect="slide" end="553,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),48)">Conditional</animation>
+				<animation effect="slide" end="564,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),49)">Conditional</animation>
+				<animation effect="slide" end="576,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),50)">Conditional</animation>
+				<animation effect="slide" end="588,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),51)">Conditional</animation>
+				<animation effect="slide" end="599,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),52)">Conditional</animation>
+				<animation effect="slide" end="611,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),53)">Conditional</animation>
+				<animation effect="slide" end="622,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),54)">Conditional</animation>
+				<animation effect="slide" end="634,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),55)">Conditional</animation>
+				<animation effect="slide" end="645,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),56)">Conditional</animation>
+				<animation effect="slide" end="657,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),57)">Conditional</animation>
+				<animation effect="slide" end="668,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),58)">Conditional</animation>
+				<animation effect="slide" end="680,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),59)">Conditional</animation>
+				<animation effect="slide" end="691,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),60)">Conditional</animation>
+				<animation effect="slide" end="703,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),61)">Conditional</animation>
+				<animation effect="slide" end="714,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),62)">Conditional</animation>
+				<animation effect="slide" end="726,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),63)">Conditional</animation>
+				<animation effect="slide" end="737,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),64)">Conditional</animation>
+				<animation effect="slide" end="749,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),65)">Conditional</animation>
+				<animation effect="slide" end="760,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),66)">Conditional</animation>
+				<animation effect="slide" end="772,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),67)">Conditional</animation>
+				<animation effect="slide" end="783,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),68)">Conditional</animation>
+				<animation effect="slide" end="795,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),69)">Conditional</animation>
+				<animation effect="slide" end="806,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),70)">Conditional</animation>
+				<animation effect="slide" end="818,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),71)">Conditional</animation>
+				<animation effect="slide" end="829,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),72)">Conditional</animation>
+				<animation effect="slide" end="841,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),73)">Conditional</animation>
+				<animation effect="slide" end="852,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),74)">Conditional</animation>
+				<animation effect="slide" end="864,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),75)">Conditional</animation>
+				<animation effect="slide" end="876,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),76)">Conditional</animation>
+				<animation effect="slide" end="887,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),77)">Conditional</animation>
+				<animation effect="slide" end="899,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),78)">Conditional</animation>
+				<animation effect="slide" end="910,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),79)">Conditional</animation>
+				<animation effect="slide" end="922,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),80)">Conditional</animation>
+				<animation effect="slide" end="933,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),81)">Conditional</animation>
+				<animation effect="slide" end="945,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),82)">Conditional</animation>
+				<animation effect="slide" end="956,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),83)">Conditional</animation>
+				<animation effect="slide" end="968,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),84)">Conditional</animation>
+				<animation effect="slide" end="979,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),85)">Conditional</animation>
+				<animation effect="slide" end="991,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),86)">Conditional</animation>
+				<animation effect="slide" end="1002,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),87)">Conditional</animation>
+				<animation effect="slide" end="1014,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),88)">Conditional</animation>
+				<animation effect="slide" end="1025,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),89)">Conditional</animation>
+				<animation effect="slide" end="1037,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),90)">Conditional</animation>
+				<animation effect="slide" end="1048,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),91)">Conditional</animation>
+				<animation effect="slide" end="1060,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),92)">Conditional</animation>
+				<animation effect="slide" end="1071,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),93)">Conditional</animation>
+				<animation effect="slide" end="1083,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),94)">Conditional</animation>
+				<animation effect="slide" end="1094,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),95)">Conditional</animation>
+				<animation effect="slide" end="1106,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),96)">Conditional</animation>
+				<animation effect="slide" end="1117,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),97)">Conditional</animation>
+				<animation effect="slide" end="1129,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),98)">Conditional</animation>
+				<animation effect="slide" end="1140,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),99)">Conditional</animation>
+				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),100)">Conditional</animation>
+				<!-- END GENERATED PREVIEW ANCHORS -->
 				<control type="image">
 					<description>HTPC trick-play preview backplate</description>
 					<posx>-10</posx>
@@ -200,11 +201,11 @@
 				</control>
 				<control type="group">
 					<description>HTPC trick-play ready state</description>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath))</visible>
+					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath))</visible>
 					<control type="image">
 						<width>380</width>
 						<height>214</height>
-						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath)]</texture>
+						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath)]</texture>
 						<aspectratio align="center" aligny="center">keep</aspectratio>
 					</control>
 				</control>
@@ -217,7 +218,7 @@
 					<aligny>center</aligny>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[preview_loading_label]</label>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),loading)</visible>
+					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),loading)</visible>
 				</control>
 				<control type="label">
 					<description>HTPC trick-play unavailable state</description>
@@ -228,7 +229,7 @@
 					<aligny>center</aligny>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[preview_unavailable_label]</label>
-					<visible>!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),none) + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),loading) + [!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),ready) | String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath))]</visible>
+					<visible>!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),none) + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),loading) + [!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),ready) | String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath))]</visible>
 				</control>
 				<control type="label">
 					<posy>224</posy>
@@ -238,8 +239,8 @@
 					<align>center</align>
 					<aligny>center</aligny>
 					<textcolor>ccffffff</textcolor>
-					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].a.prompt)]</label>
-					<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.prompt))</visible>
+					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].prompt)]</label>
+					<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].prompt))</visible>
 				</control>
 				<control type="image">
 					<posx>70</posx>
@@ -257,240 +258,7 @@
 					<align>center</align>
 					<aligny>center</aligny>
 					<textcolor>white</textcolor>
-					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].a.time)]  $INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].a.delta)]</label>
-				</control>
-			</control>
-		</control>
-
-		<control type="group">
-			<description>HTPC playback presentation slot b</description>
-			<visible>$PARAM[ready_condition] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewactive)) + String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].viewslot),b) + $PARAM[visible]</visible>
-			<control type="ranges">
-				<description>HTPC target progress fill</description>
-				<posx>$PARAM[rail_left]</posx>
-				<posy>$PARAM[rail_top]</posy>
-				<width>$PARAM[rail_width]</width>
-				<height>$PARAM[rail_height]</height>
-				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
-				<lefttexture/>
-				<midtexture colordiffuse="$PARAM[target_fill_color]">diffuse/panel2.png</midtexture>
-				<righttexture/>
-				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].b.targetfill)</info>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.targetvalid))</visible>
-			</control>
-			<control type="ranges">
-				<description>HTPC cut markers</description>
-				<posx>$PARAM[rail_left]</posx>
-				<posy>$PARAM[marker_top]</posy>
-				<width>$PARAM[rail_width]</width>
-				<height>$PARAM[marker_height]</height>
-				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
-				<midtexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</midtexture>
-				<info>Player.Cutlist</info>
-				<visible>Skin.HasSetting(ChapterMarks)</visible>
-			</control>
-			<control type="ranges">
-				<description>HTPC chapter markers</description>
-				<posx>$PARAM[rail_left]</posx>
-				<posy>$PARAM[marker_top]</posy>
-				<width>$PARAM[rail_width]</width>
-				<height>$PARAM[marker_height]</height>
-				<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
-				<righttexture colordiffuse="$INFO[Skin.String(BingieOSDTextColor)]">diffuse/osd_range.png</righttexture>
-				<info>Player.Chapters</info>
-				<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
-			</control>
-			<control type="ranges">
-				<description>HTPC target position marker</description>
-				<posx>$PARAM[rail_left]</posx>
-				<posy>$PARAM[target_marker_top]</posy>
-				<width>$PARAM[rail_width]</width>
-				<height>$PARAM[target_marker_height]</height>
-				<texturebg colordiffuse="00ffffff">common/slider/slider_button_nofocus.png</texturebg>
-				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
-				<midtexture/>
-				<righttexture/>
-				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].b.targetmarker)</info>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.targetvalid))</visible>
-			</control>
-			<control type="group">
-				<description>HTPC cursor-following preview</description>
-				<posx>$PARAM[preview_left]</posx>
-				<posy>$PARAM[preview_top]</posy>
-				<width>$PARAM[preview_width]</width>
-				<height>$PARAM[preview_height]</height>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.targetvalid))</visible>
-				<!-- BEGIN GENERATED PREVIEW ANCHORS b -->
-				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),0)">Conditional</animation>
-				<animation effect="slide" end="12,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),1)">Conditional</animation>
-				<animation effect="slide" end="23,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),2)">Conditional</animation>
-				<animation effect="slide" end="35,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),3)">Conditional</animation>
-				<animation effect="slide" end="46,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),4)">Conditional</animation>
-				<animation effect="slide" end="58,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),5)">Conditional</animation>
-				<animation effect="slide" end="69,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),6)">Conditional</animation>
-				<animation effect="slide" end="81,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),7)">Conditional</animation>
-				<animation effect="slide" end="92,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),8)">Conditional</animation>
-				<animation effect="slide" end="104,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),9)">Conditional</animation>
-				<animation effect="slide" end="115,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),10)">Conditional</animation>
-				<animation effect="slide" end="127,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),11)">Conditional</animation>
-				<animation effect="slide" end="138,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),12)">Conditional</animation>
-				<animation effect="slide" end="150,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),13)">Conditional</animation>
-				<animation effect="slide" end="161,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),14)">Conditional</animation>
-				<animation effect="slide" end="173,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),15)">Conditional</animation>
-				<animation effect="slide" end="184,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),16)">Conditional</animation>
-				<animation effect="slide" end="196,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),17)">Conditional</animation>
-				<animation effect="slide" end="207,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),18)">Conditional</animation>
-				<animation effect="slide" end="219,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),19)">Conditional</animation>
-				<animation effect="slide" end="230,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),20)">Conditional</animation>
-				<animation effect="slide" end="242,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),21)">Conditional</animation>
-				<animation effect="slide" end="253,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),22)">Conditional</animation>
-				<animation effect="slide" end="265,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),23)">Conditional</animation>
-				<animation effect="slide" end="276,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),24)">Conditional</animation>
-				<animation effect="slide" end="288,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),25)">Conditional</animation>
-				<animation effect="slide" end="300,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),26)">Conditional</animation>
-				<animation effect="slide" end="311,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),27)">Conditional</animation>
-				<animation effect="slide" end="323,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),28)">Conditional</animation>
-				<animation effect="slide" end="334,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),29)">Conditional</animation>
-				<animation effect="slide" end="346,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),30)">Conditional</animation>
-				<animation effect="slide" end="357,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),31)">Conditional</animation>
-				<animation effect="slide" end="369,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),32)">Conditional</animation>
-				<animation effect="slide" end="380,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),33)">Conditional</animation>
-				<animation effect="slide" end="392,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),34)">Conditional</animation>
-				<animation effect="slide" end="403,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),35)">Conditional</animation>
-				<animation effect="slide" end="415,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),36)">Conditional</animation>
-				<animation effect="slide" end="426,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),37)">Conditional</animation>
-				<animation effect="slide" end="438,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),38)">Conditional</animation>
-				<animation effect="slide" end="449,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),39)">Conditional</animation>
-				<animation effect="slide" end="461,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),40)">Conditional</animation>
-				<animation effect="slide" end="472,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),41)">Conditional</animation>
-				<animation effect="slide" end="484,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),42)">Conditional</animation>
-				<animation effect="slide" end="495,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),43)">Conditional</animation>
-				<animation effect="slide" end="507,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),44)">Conditional</animation>
-				<animation effect="slide" end="518,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),45)">Conditional</animation>
-				<animation effect="slide" end="530,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),46)">Conditional</animation>
-				<animation effect="slide" end="541,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),47)">Conditional</animation>
-				<animation effect="slide" end="553,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),48)">Conditional</animation>
-				<animation effect="slide" end="564,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),49)">Conditional</animation>
-				<animation effect="slide" end="576,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),50)">Conditional</animation>
-				<animation effect="slide" end="588,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),51)">Conditional</animation>
-				<animation effect="slide" end="599,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),52)">Conditional</animation>
-				<animation effect="slide" end="611,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),53)">Conditional</animation>
-				<animation effect="slide" end="622,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),54)">Conditional</animation>
-				<animation effect="slide" end="634,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),55)">Conditional</animation>
-				<animation effect="slide" end="645,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),56)">Conditional</animation>
-				<animation effect="slide" end="657,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),57)">Conditional</animation>
-				<animation effect="slide" end="668,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),58)">Conditional</animation>
-				<animation effect="slide" end="680,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),59)">Conditional</animation>
-				<animation effect="slide" end="691,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),60)">Conditional</animation>
-				<animation effect="slide" end="703,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),61)">Conditional</animation>
-				<animation effect="slide" end="714,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),62)">Conditional</animation>
-				<animation effect="slide" end="726,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),63)">Conditional</animation>
-				<animation effect="slide" end="737,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),64)">Conditional</animation>
-				<animation effect="slide" end="749,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),65)">Conditional</animation>
-				<animation effect="slide" end="760,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),66)">Conditional</animation>
-				<animation effect="slide" end="772,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),67)">Conditional</animation>
-				<animation effect="slide" end="783,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),68)">Conditional</animation>
-				<animation effect="slide" end="795,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),69)">Conditional</animation>
-				<animation effect="slide" end="806,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),70)">Conditional</animation>
-				<animation effect="slide" end="818,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),71)">Conditional</animation>
-				<animation effect="slide" end="829,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),72)">Conditional</animation>
-				<animation effect="slide" end="841,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),73)">Conditional</animation>
-				<animation effect="slide" end="852,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),74)">Conditional</animation>
-				<animation effect="slide" end="864,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),75)">Conditional</animation>
-				<animation effect="slide" end="876,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),76)">Conditional</animation>
-				<animation effect="slide" end="887,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),77)">Conditional</animation>
-				<animation effect="slide" end="899,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),78)">Conditional</animation>
-				<animation effect="slide" end="910,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),79)">Conditional</animation>
-				<animation effect="slide" end="922,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),80)">Conditional</animation>
-				<animation effect="slide" end="933,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),81)">Conditional</animation>
-				<animation effect="slide" end="945,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),82)">Conditional</animation>
-				<animation effect="slide" end="956,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),83)">Conditional</animation>
-				<animation effect="slide" end="968,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),84)">Conditional</animation>
-				<animation effect="slide" end="979,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),85)">Conditional</animation>
-				<animation effect="slide" end="991,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),86)">Conditional</animation>
-				<animation effect="slide" end="1002,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),87)">Conditional</animation>
-				<animation effect="slide" end="1014,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),88)">Conditional</animation>
-				<animation effect="slide" end="1025,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),89)">Conditional</animation>
-				<animation effect="slide" end="1037,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),90)">Conditional</animation>
-				<animation effect="slide" end="1048,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),91)">Conditional</animation>
-				<animation effect="slide" end="1060,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),92)">Conditional</animation>
-				<animation effect="slide" end="1071,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),93)">Conditional</animation>
-				<animation effect="slide" end="1083,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),94)">Conditional</animation>
-				<animation effect="slide" end="1094,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),95)">Conditional</animation>
-				<animation effect="slide" end="1106,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),96)">Conditional</animation>
-				<animation effect="slide" end="1117,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),97)">Conditional</animation>
-				<animation effect="slide" end="1129,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),98)">Conditional</animation>
-				<animation effect="slide" end="1140,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),99)">Conditional</animation>
-				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),100)">Conditional</animation>
-				<!-- END GENERATED PREVIEW ANCHORS b -->
-				<control type="image">
-					<description>HTPC trick-play preview backplate</description>
-					<posx>-10</posx>
-					<posy>-10</posy>
-					<width>400</width>
-					<height>234</height>
-					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
-				</control>
-				<control type="group">
-					<description>HTPC trick-play ready state</description>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath))</visible>
-					<control type="image">
-						<width>380</width>
-						<height>214</height>
-						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath)]</texture>
-						<aspectratio align="center" aligny="center">keep</aspectratio>
-					</control>
-				</control>
-				<control type="label">
-					<description>HTPC trick-play loading state</description>
-					<width>380</width>
-					<height>214</height>
-					<font>Reg22</font>
-					<align>center</align>
-					<aligny>center</aligny>
-					<textcolor>b3ffffff</textcolor>
-					<label>$PARAM[preview_loading_label]</label>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),loading)</visible>
-				</control>
-				<control type="label">
-					<description>HTPC trick-play unavailable state</description>
-					<width>380</width>
-					<height>214</height>
-					<font>Reg22</font>
-					<align>center</align>
-					<aligny>center</aligny>
-					<textcolor>b3ffffff</textcolor>
-					<label>$PARAM[preview_unavailable_label]</label>
-					<visible>!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),none) + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),loading) + [!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),ready) | String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath))]</visible>
-				</control>
-				<control type="label">
-					<posy>224</posy>
-					<width>380</width>
-					<height>32</height>
-					<font>Reg24</font>
-					<align>center</align>
-					<aligny>center</aligny>
-					<textcolor>ccffffff</textcolor>
-					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].b.prompt)]</label>
-					<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.prompt))</visible>
-				</control>
-				<control type="image">
-					<posx>70</posx>
-					<posy>262</posy>
-					<width>240</width>
-					<height>42</height>
-					<texture border="18" colordiffuse="ee080808">diffuse/panel2.png</texture>
-				</control>
-				<control type="label">
-					<posx>70</posx>
-					<posy>262</posy>
-					<width>240</width>
-					<height>42</height>
-					<font>Reg26</font>
-					<align>center</align>
-					<aligny>center</aligny>
-					<textcolor>white</textcolor>
-					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].b.time)]  $INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].b.delta)]</label>
+					<label>$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].time)]  $INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].delta)]</label>
 				</control>
 			</control>
 		</control>

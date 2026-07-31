@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -42,20 +44,18 @@ class PreviewAnchorGeneratorTest(unittest.TestCase):
             )
 
     def test_generation_is_byte_deterministic(self):
-        expected_hashes = {
-            "a": "8a1fe6b56ebf8569e5c73a3720bb459beba76bfdde11f70b68bf03f785bd3729",
-            "b": "f0dc6b020e9fa0871dafd55b8d9f2e3c9dc7348b43feb339b7480ec34f3c7726",
-        }
-        for slot in anchors.SLOTS:
-            with self.subTest(slot=slot):
-                first = anchors.render_animations(slot)
-                second = anchors.render_animations(slot)
-                self.assertEqual(first, second)
-                self.assertEqual(first.count("<animation "), 101)
-                self.assertEqual(
-                    hashlib.sha256(first.encode("utf-8")).hexdigest(),
-                    expected_hashes[slot],
-                )
+        first = anchors.render_animations()
+        second = anchors.render_animations()
+        self.assertEqual(first, second)
+        self.assertEqual(first.count("<animation "), 101)
+        self.assertEqual(
+            hashlib.sha256(first.encode("utf-8")).hexdigest(),
+            "1b337f6f5f455f021b734d71040bf3ae6a4e623814f3c9e25abf30fb304b22cc",
+        )
+        self.assertIn(
+            "$PARAM[property_prefix].$PARAM[slot].previewanchor",
+            first,
+        )
 
     def test_invalid_generator_inputs_fail_closed(self):
         for invalid in (-1, 101):
@@ -63,8 +63,62 @@ class PreviewAnchorGeneratorTest(unittest.TestCase):
                 anchors.anchor_offset(invalid)
         with self.assertRaises(ValueError):
             anchors.anchor_offset(50, 0)
-        with self.assertRaises(ValueError):
-            anchors.render_animations("not-a-slot")
+
+    def test_update_is_idempotent_and_rejects_ambiguous_markers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            xml_path = Path(directory) / "playback.xml"
+            source = (
+                "<includes>\n"
+                + anchors.GENERATED_BEGIN
+                + "\t\t\t\tstale\n"
+                + anchors.GENERATED_END
+                + "\n</includes>\n"
+            )
+            xml_path.write_text(source, encoding="utf-8")
+
+            anchors.update_file(xml_path)
+            first = xml_path.read_text(encoding="utf-8")
+            anchors.update_file(xml_path)
+            self.assertEqual(xml_path.read_text(encoding="utf-8"), first)
+            self.assertEqual(first.count("<animation "), 101)
+
+            xml_path.write_text(source + source, encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError,
+                "expected exactly one generated preview-anchor section",
+            ):
+                anchors.update_file(xml_path)
+
+    def test_check_and_update_share_fail_closed_marker_validation(self):
+        playback_xml = (
+            BINGIE_ROOT / "src" / "1080i" / "IncludesHTPCPlayback.xml"
+        )
+        source = playback_xml.read_text(encoding="utf-8")
+        invalid_sources = {
+            "missing": source.replace(anchors.GENERATED_BEGIN, ""),
+            "duplicate": source.replace(
+                anchors.GENERATED_BEGIN,
+                anchors.GENERATED_BEGIN + anchors.GENERATED_BEGIN,
+            ),
+            "reversed": source.replace(
+                anchors.GENERATED_BEGIN,
+                "__GENERATED_BEGIN__",
+            )
+            .replace(anchors.GENERATED_END, anchors.GENERATED_BEGIN)
+            .replace("__GENERATED_BEGIN__", anchors.GENERATED_END),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            xml_path = Path(directory) / "playback.xml"
+            for case, invalid_source in invalid_sources.items():
+                with self.subTest(case=case):
+                    xml_path.write_text(invalid_source, encoding="utf-8")
+                    check_error = anchors.check_file(xml_path)
+                    self.assertEqual(len(check_error), 1)
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        re.escape(check_error[0]),
+                    ):
+                        anchors.update_file(xml_path)
 
 
 if __name__ == "__main__":
