@@ -31,7 +31,7 @@
 		<param name="timeline_focus_rail_height" default="11" />
 		<param name="marker_top" default="955" />
 		<param name="marker_height" default="24" />
-		<param name="target_marker_top" default="957" />
+		<param name="target_marker_top" default="962" />
 		<param name="target_marker_height" default="11" />
 		<param name="timeline_hit_top" default="922" />
 		<param name="timeline_hit_height" default="80" />

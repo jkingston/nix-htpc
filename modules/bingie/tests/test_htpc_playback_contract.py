@@ -822,7 +822,20 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             int(parameters["timeline_focus_rail_top"])
             + int(parameters["timeline_focus_rail_height"]) / 2
         )
+        target_center = (
+            int(parameters["target_marker_top"])
+            + int(parameters["target_marker_height"]) / 2
+        )
         self.assertEqual(focus_center, normal_center)
+        self.assertEqual(target_center, normal_center)
+        self.assertEqual(
+            parameters["target_marker_top"],
+            parameters["timeline_focus_rail_top"],
+        )
+        self.assertEqual(
+            parameters["target_marker_height"],
+            parameters["timeline_focus_rail_height"],
+        )
         self.assertGreater(
             int(parameters["timeline_focus_rail_height"]),
             int(parameters["rail_height"]),
@@ -1003,12 +1016,18 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
 class PlaybackXmlContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        required = (PLAYBACK_XML, INCLUDES_XML, OSD_XML)
+        required = (PLAYBACK_XML, VIDEO_OSD_XML, INCLUDES_XML, OSD_XML)
         if not all(path.is_file() for path in required):
             raise unittest.SkipTest(
                 "planned modules/bingie/src fork is not present yet"
             )
         cls.playback_root = ET.parse(PLAYBACK_XML).getroot()
+        video_osd_root = ET.parse(VIDEO_OSD_XML).getroot()
+        cls.video_osd_surface = next(
+            node
+            for node in video_osd_root.findall("include")
+            if node.get("name") == "HTPCVideoOSD"
+        )
         cls.includes_root = ET.parse(INCLUDES_XML).getroot()
         cls.osd_root = ET.parse(OSD_XML).getroot()
 
@@ -1080,6 +1099,16 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(layout_defaults["property_window"], "Home")
         self.assertEqual(layout_defaults["property_prefix"], "htpc.seek")
+        osd_defaults = {
+            node.get("name"): node.get("default")
+            for node in self.video_osd_surface.findall("param")
+        }
+        for parameter in ("target_marker_top", "target_marker_height"):
+            with self.subTest(parameter=parameter):
+                self.assertEqual(
+                    layout_defaults[parameter],
+                    osd_defaults[parameter],
+                )
 
         wrapper_definitions = []
         wrapper_consumers = []
@@ -1187,6 +1216,31 @@ class PlaybackXmlContractTest(unittest.TestCase):
                         control.findtext("info", default="").strip(),
                         _slot_info(slot, field),
                     )
+
+    def test_target_marker_geometry_and_texture_are_slot_symmetric(self):
+        marker_texture = "common/slider/slider_button_nofocus.png"
+        for slot in anchors.SLOTS:
+            with self.subTest(slot=slot):
+                marker = self._one_slot_control(
+                    slot,
+                    TARGET_MARKER_DESCRIPTION,
+                )
+                self.assertEqual(
+                    marker.findtext("posy"),
+                    "$PARAM[target_marker_top]",
+                )
+                self.assertEqual(
+                    marker.findtext("height"),
+                    "$PARAM[target_marker_height]",
+                )
+                self.assertEqual(
+                    marker.findtext("texturebg"),
+                    marker_texture,
+                )
+                self.assertEqual(
+                    marker.findtext("lefttexture"),
+                    marker_texture,
+                )
 
     def test_marker_layers_preserve_native_order_in_each_slot(self):
         expected = (
