@@ -32,6 +32,8 @@
 		<param name="rail_top" default="964" />
 		<param name="rail_width" default="1152" />
 		<param name="rail_height" default="7" />
+		<param name="timeline_focus_rail_top" default="962" />
+		<param name="timeline_focus_rail_height" default="11" />
 		<param name="marker_top" default="955" />
 		<param name="marker_height" default="24" />
 		<param name="target_marker_top" default="957" />
@@ -290,6 +292,7 @@
 					<overlaytexture />
 					<info>$PARAM[buffer_progress]</info>
 					<reveal>true</reveal>
+					<visible>![$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[view_inactive_condition]]</visible>
 				</control>
 				<control type="progress">
 					<description>HTPC video OSD actual progress</description>
@@ -304,6 +307,39 @@
 					<overlaytexture />
 					<info>$PARAM[actual_progress]</info>
 					<reveal>true</reveal>
+					<visible>![$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[view_inactive_condition]]</visible>
+				</control>
+				<control type="group">
+					<description>HTPC video OSD focused timeline rail</description>
+					<visible>$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[view_inactive_condition]</visible>
+					<control type="progress">
+						<description>HTPC video OSD focused buffer</description>
+						<left>$PARAM[rail_left]</left>
+						<top>$PARAM[timeline_focus_rail_top]</top>
+						<width>$PARAM[rail_width]</width>
+						<height>$PARAM[timeline_focus_rail_height]</height>
+						<texturebg colordiffuse="59ffffff">diffuse/panel2.png</texturebg>
+						<lefttexture />
+						<midtexture colordiffuse="73ffffff">diffuse/panel2.png</midtexture>
+						<righttexture />
+						<overlaytexture />
+						<info>$PARAM[buffer_progress]</info>
+						<reveal>true</reveal>
+					</control>
+					<control type="progress">
+						<description>HTPC video OSD focused actual progress</description>
+						<left>$PARAM[rail_left]</left>
+						<top>$PARAM[timeline_focus_rail_top]</top>
+						<width>$PARAM[rail_width]</width>
+						<height>$PARAM[timeline_focus_rail_height]</height>
+						<texturebg colordiffuse="00ffffff">diffuse/panel2.png</texturebg>
+						<lefttexture />
+						<midtexture colordiffuse="$INFO[Skin.String(BingieOSDProgressBarColor)]">diffuse/panel2.png</midtexture>
+						<righttexture />
+						<overlaytexture />
+						<info>$PARAM[actual_progress]</info>
+						<reveal>true</reveal>
+					</control>
 				</control>
 				<include content="HTPCPlaybackPresentationLayout">
 					<param name="visible" value="$PARAM[visible]" />

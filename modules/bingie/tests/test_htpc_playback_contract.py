@@ -522,13 +522,45 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             for control in self.surface.iter("control")
             if control.get("type") == "progress"
         ]
-        self.assertEqual(len(progress_controls), 2)
-        for control in progress_controls:
+        base_progress = [
+            control
+            for control in progress_controls
+            if "focused" not in _description(control)
+        ]
+        self.assertEqual(len(base_progress), 2)
+        focused_visibility = (
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]"
+        )
+        for control in base_progress:
             with self.subTest(description=_description(control)):
-                self.assertNotIn(
-                    "$PARAM[seekable_condition]",
+                self.assertEqual(
                     _visible_text(control),
+                    f"![{focused_visibility}]",
                 )
+        focused_rail = _controls_by_description(
+            self.surface,
+            "HTPC video OSD focused timeline rail",
+        )
+        self.assertEqual(len(focused_rail), 1)
+        self.assertEqual(
+            _visible_text(focused_rail[0]),
+            focused_visibility,
+        )
+        forbidden_actions = {
+            "animation",
+            "onclick",
+            "ondown",
+            "onfocus",
+            "onleft",
+            "onright",
+            "onunfocus",
+            "onup",
+        }
+        for node in focused_rail[0].iter():
+            with self.subTest(tag=node.tag):
+                self.assertIsNone(node.get("id"))
+                self.assertNotIn(node.tag, forbidden_actions)
 
     def test_every_numeric_navigation_target_resolves_locally(self):
         control_ids = {
@@ -687,10 +719,12 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             _description(control)
             for control in self.surface.iter("control")
             if "Control.HasFocus(9300)" in _visible_text(control)
+            and not _visible_text(control).startswith("![")
         ]
         self.assertEqual(
             focus_visuals,
             [
+                "HTPC video OSD focused timeline rail",
                 "HTPC video OSD timeline focus cue",
             ],
         )
@@ -734,19 +768,16 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             (
                 "HTPC video OSD buffer",
                 "HTPC video OSD actual progress",
+                "HTPC video OSD focused buffer",
+                "HTPC video OSD focused actual progress",
             ),
         )
         for control in progress_controls:
             with self.subTest(description=_description(control)):
                 self.assertEqual(control.findtext("left"), "$PARAM[rail_left]")
-                self.assertEqual(control.findtext("top"), "$PARAM[rail_top]")
                 self.assertEqual(
                     control.findtext("width"),
                     "$PARAM[rail_width]",
-                )
-                self.assertEqual(
-                    control.findtext("height"),
-                    "$PARAM[rail_height]",
                 )
                 self.assertEqual(
                     control.findtext("reveal"),
@@ -754,16 +785,61 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     "progress textures must reveal their numeric percentage "
                     "instead of retaining the source texture width",
                 )
-        buffer, actual = progress_controls
-        self.assertEqual(
-            buffer.findtext("info"),
-            "$PARAM[buffer_progress]",
+        buffer, actual, focused_buffer, focused_actual = progress_controls
+        for control in (buffer, actual):
+            with self.subTest(description=_description(control)):
+                self.assertEqual(control.findtext("top"), "$PARAM[rail_top]")
+                self.assertEqual(
+                    control.findtext("height"),
+                    "$PARAM[rail_height]",
+                )
+        for control in (focused_buffer, focused_actual):
+            with self.subTest(description=_description(control)):
+                self.assertEqual(
+                    control.findtext("top"),
+                    "$PARAM[timeline_focus_rail_top]",
+                )
+                self.assertEqual(
+                    control.findtext("height"),
+                    "$PARAM[timeline_focus_rail_height]",
+                )
+        for control in (buffer, focused_buffer):
+            self.assertEqual(
+                control.findtext("info"),
+                "$PARAM[buffer_progress]",
+            )
+        for control in (actual, focused_actual):
+            self.assertEqual(
+                control.findtext("info"),
+                "$PARAM[actual_progress]",
+            )
+        focused_visibility = (
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]"
         )
-        self.assertEqual(
-            actual.findtext("info"),
-            "$PARAM[actual_progress]",
+        for control in (buffer, actual):
+            self.assertEqual(
+                _visible_text(control),
+                f"![{focused_visibility}]",
+            )
+
+        parameters = {
+            node.get("name"): node.get("default")
+            for node in self.surface.findall("param")
+        }
+        normal_center = (
+            int(parameters["rail_top"])
+            + int(parameters["rail_height"]) / 2
         )
-        self.assertEqual(_visible_text(actual), "")
+        focus_center = (
+            int(parameters["timeline_focus_rail_top"])
+            + int(parameters["timeline_focus_rail_height"]) / 2
+        )
+        self.assertEqual(focus_center, normal_center)
+        self.assertGreater(
+            int(parameters["timeline_focus_rail_height"]),
+            int(parameters["rail_height"]),
+        )
 
         playback_consumers = [
             node
