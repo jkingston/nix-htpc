@@ -31,26 +31,6 @@ CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS = (
     "targetseconds",
     "modal",
 )
-
-# These implementation-only fields are no longer published. Clear them for
-# one release so a service restart removes residue left by version 2.1.12.
-RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS = (
-    "state",
-    "mode",
-    "source",
-    "percent",
-    "previewbucket",
-    "time",
-    "delta",
-    "confirm",
-    "controllerpaused",
-    "wasplaying",
-    "playbackepoch",
-    "hold",
-    "holdreleased",
-    "previewready",
-    "previewpath",
-)
 CURRENT_SEEK_VIEW_PROPERTY_KEYS = (
     "actualmarker",
     "viewactive",
@@ -60,19 +40,8 @@ CURRENT_SEEK_VIEW_PROPERTY_KEYS = (
     for slot in ("a", "b")
     for field in CURRENT_VIEW_SLOT_FIELDS
 )
-RETIRED_SEEK_VIEW_PROPERTY_KEYS = tuple(
-    "%s.%s" % (slot, field)
-    for slot in ("a", "b")
-    for field in ("revision", "phase")
-)
 CURRENT_SEEK_PROPERTY_KEYS = (
     CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS + CURRENT_SEEK_VIEW_PROPERTY_KEYS
-)
-RETIRED_SEEK_PROPERTY_KEYS = (
-    RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS + RETIRED_SEEK_VIEW_PROPERTY_KEYS
-)
-CLEANUP_SEEK_PROPERTY_KEYS = (
-    CURRENT_SEEK_PROPERTY_KEYS + RETIRED_SEEK_PROPERTY_KEYS
 )
 
 # Jellyfin lane chapter contract. The producer publishes the sanitized manifest

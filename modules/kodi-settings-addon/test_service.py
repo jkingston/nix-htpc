@@ -116,7 +116,6 @@ from media_contract import (
     CHAPTERS_TOKEN,
     CHAPTER_AVAILABLE,
     CHAPTER_OPEN,
-    CLEANUP_SEEK_PROPERTY_KEYS,
     CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
     CURRENT_SEEK_PROPERTY_KEYS,
     CURRENT_SEEK_VIEW_PROPERTY_KEYS,
@@ -129,9 +128,6 @@ from media_contract import (
     PREVIEW_SAMPLE,
     PREVIEW_TARGET,
     PREVIEW_TOKEN,
-    RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS,
-    RETIRED_SEEK_PROPERTY_KEYS,
-    RETIRED_SEEK_VIEW_PROPERTY_KEYS,
     SERVICE_PROTOCOL,
     SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
@@ -1699,30 +1695,10 @@ class PresenterAndLeaseTest(unittest.TestCase):
         CONDITIONS.clear()
         WINDOWS.clear()
 
-    def test_current_and_retired_property_inventories_are_exact(self):
+    def test_current_property_inventory_is_exact(self):
         self.assertEqual(
             CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
             ("active", "generation", "targetseconds", "modal"),
-        )
-        self.assertEqual(
-            RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS,
-            (
-                "state",
-                "mode",
-                "source",
-                "percent",
-                "previewbucket",
-                "time",
-                "delta",
-                "confirm",
-                "controllerpaused",
-                "wasplaying",
-                "playbackepoch",
-                "hold",
-                "holdreleased",
-                "previewready",
-                "previewpath",
-            ),
         )
         self.assertEqual(
             CURRENT_VIEW_SLOT_FIELDS,
@@ -1738,20 +1714,11 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 "previewanchor",
             ),
         )
-        self.assertEqual(
-            RETIRED_SEEK_VIEW_PROPERTY_KEYS,
-            ("a.revision", "a.phase", "b.revision", "b.phase"),
-        )
-        self.assertTrue(
-            set(CURRENT_SEEK_PROPERTY_KEYS).isdisjoint(
-                RETIRED_SEEK_PROPERTY_KEYS
-            )
-        )
         self.assertEqual(len(CURRENT_SEEK_VIEW_PROPERTY_KEYS), 21)
-        self.assertEqual(len(RETIRED_SEEK_PROPERTY_KEYS), 19)
         self.assertEqual(
-            CLEANUP_SEEK_PROPERTY_KEYS,
-            CURRENT_SEEK_PROPERTY_KEYS + RETIRED_SEEK_PROPERTY_KEYS,
+            CURRENT_SEEK_PROPERTY_KEYS,
+            CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
+            + CURRENT_SEEK_VIEW_PROPERTY_KEYS,
         )
 
     def test_publisher_writes_only_four_current_controller_fields(self):
@@ -1789,13 +1756,6 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertEqual(window.getProperty("htpc.seek.active"), "true")
         self.assertEqual(window.getProperty("htpc.seek.generation"), "1")
         self.assertEqual(window.getProperty("htpc.seek.targetseconds"), "110")
-        self.assertTrue(
-            all(
-                not window.getProperty("htpc.seek." + key)
-                for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
-            )
-        )
-
         window.operations[:] = []
         snapshot["modal"] = False
         snapshot["percent"] = 100
@@ -2156,9 +2116,9 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "/tmp/frame.jpg",
         )
 
-    def test_cleanup_removes_current_and_retired_residue_exactly(self):
+    def test_cleanup_resets_every_current_property_exactly(self):
         window = FakeWindow()
-        all_keys = CLEANUP_SEEK_PROPERTY_KEYS
+        all_keys = CURRENT_SEEK_PROPERTY_KEYS
         window.properties.update(
             ("htpc.seek." + key, "stale") for key in all_keys
         )
@@ -2190,10 +2150,6 @@ class PresenterAndLeaseTest(unittest.TestCase):
             for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
         )
         window.properties.update(
-            ("htpc.seek." + key, "retired")
-            for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
-        )
-        window.properties.update(
             {
                 "htpc.seek.viewactive": "true",
                 "htpc.seek.viewslot": "a",
@@ -2210,12 +2166,6 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 ("clear", "htpc.seek." + key, "")
                 for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
             ],
-        )
-        self.assertTrue(
-            all(
-                window.getProperty("htpc.seek." + key) == "retired"
-                for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
-            )
         )
         self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")

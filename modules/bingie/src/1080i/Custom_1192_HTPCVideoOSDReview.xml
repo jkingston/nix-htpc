@@ -32,8 +32,6 @@
 	<onunload>ClearProperty(htpc.review.seek.modal,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewactive,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewslot,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.seek.a.revision,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.seek.a.phase,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.targetvalid,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.targetfill,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.targetmarker,Home)</onunload>
@@ -43,8 +41,6 @@
 	<onunload>ClearProperty(htpc.review.seek.a.previewstatus,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.previewpath,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.previewanchor,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.seek.b.revision,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.seek.b.phase,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.b.targetvalid,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.b.targetfill,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.b.targetmarker,Home)</onunload>

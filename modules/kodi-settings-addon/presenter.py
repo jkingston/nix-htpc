@@ -7,8 +7,8 @@ import xbmc
 import xbmcgui
 
 from media_contract import (
-    CLEANUP_SEEK_PROPERTY_KEYS,
     CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
+    CURRENT_SEEK_PROPERTY_KEYS,
     CURRENT_VIEW_SLOT_FIELDS,
     HOME_WINDOW_ID,
     SEEK_PREFIX,
@@ -177,7 +177,7 @@ class KodiPropertyPublisher(object):
             self.last["viewactive"] = value
 
     def clear(self):
-        for key in CLEANUP_SEEK_PROPERTY_KEYS:
+        for key in CURRENT_SEEK_PROPERTY_KEYS:
             self.window.clearProperty(SEEK_PREFIX + key)
         self.last = {}
         self.view_slot = None

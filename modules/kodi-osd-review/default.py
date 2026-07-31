@@ -8,7 +8,6 @@ import xbmc
 import xbmcgui
 
 from review_contract import (
-    CLEANUP_PROPERTY_KEYS,
     CURRENT_PROPERTY_KEYS,
     EXPECTED_FOCUS,
     HOME_WINDOW_ID,
@@ -35,7 +34,7 @@ def _is_bingie():
 
 def _clear(window):
     failures = []
-    for key in CLEANUP_PROPERTY_KEYS:
+    for key in CURRENT_PROPERTY_KEYS:
         try:
             window.clearProperty(key)
         except Exception as error:
@@ -65,7 +64,7 @@ def _close_owned_window():
 
 def _properties_are_empty(window):
     return all(
-        not window.getProperty(key) for key in CLEANUP_PROPERTY_KEYS
+        not window.getProperty(key) for key in CURRENT_PROPERTY_KEYS
     )
 
 

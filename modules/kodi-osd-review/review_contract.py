@@ -39,22 +39,9 @@ CURRENT_PROPERTY_NAMES = (
     "seek.b.previewpath",
     "seek.b.previewanchor",
 )
-RETIRED_PROPERTY_NAMES = (
-    "seek.a.revision",
-    "seek.a.phase",
-    "seek.b.revision",
-    "seek.b.phase",
-)
 CURRENT_PROPERTY_KEYS = tuple(
     PROPERTY_PREFIX + name for name in CURRENT_PROPERTY_NAMES
 )
-
-# Keep cleanup parity with the production migration for one fixture release;
-# these fields are never staged by revision 2 scenarios.
-RETIRED_PROPERTY_KEYS = tuple(
-    PROPERTY_PREFIX + name for name in RETIRED_PROPERTY_NAMES
-)
-CLEANUP_PROPERTY_KEYS = CURRENT_PROPERTY_KEYS + RETIRED_PROPERTY_KEYS
 
 SCENARIOS = (
     "transport-playing",
