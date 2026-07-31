@@ -249,6 +249,12 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     "!String.IsEmpty(Window(Home).Property("
                     "htpc.service.ready))"
                 ),
+                "modal_condition": (
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.service.ready)) + "
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.seek.modal))"
+                ),
                 "property_window": "Home",
                 "property_prefix": "htpc.seek",
                 "production_actions": "true",
@@ -369,6 +375,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             parameters["presentation_ready"],
             "!String.IsEmpty(Window(Home).Property(htpc.service.ready))",
         )
+        self.assertEqual(parameters["modal_condition"], "false")
         self.assertEqual(parameters["property_window"], "Home")
         self.assertEqual(parameters["property_prefix"], "htpc.seek")
         self.assertEqual(parameters["production_actions"], "true")
@@ -440,10 +447,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         inert = "$PARAM[inert_actions]"
         seekable = "$PARAM[seekable_condition]"
         not_seekable = "![$PARAM[seekable_condition]]"
-        modal = (
-            "!String.IsEmpty(Window(Home).Property(htpc.seek.modal))"
-        )
-        not_modal = "String.IsEmpty(Window(Home).Property(htpc.seek.modal))"
+        modal = "$PARAM[modal_condition]"
+        not_modal = "![$PARAM[modal_condition]]"
 
         def branches(control_id, action_name):
             return tuple(
@@ -493,6 +498,24 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             ),
         )
         self.assertEqual(
+            branches("9300", "onup"),
+            (
+                (
+                    f"{production} + {modal}",
+                    "noop",
+                ),
+                (
+                    f"{production} + {not_modal} + {ready}",
+                    "NotifyAll(htpc.seek,timeline-up)",
+                ),
+                (
+                    f"{production} + {not_modal} + {dead}",
+                    "9102",
+                ),
+                (inert, "9102"),
+            ),
+        )
+        self.assertEqual(
             branches("9300", "ondown"),
             (
                 (
@@ -513,6 +536,79 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
 
         serialized = ET.tostring(self.surface, encoding="unicode")
         self.assertNotIn("Action(Down", serialized)
+        self.assertNotIn(
+            "Window(Home).Property(htpc.seek.modal)",
+            serialized,
+            "the reusable OSD must consume its modal parameter rather than "
+            "couple navigation to production property names",
+        )
+
+    def test_modal_scrub_hides_only_unreachable_normal_chrome(self):
+        not_modal = "![$PARAM[modal_condition]]"
+        expected_visibility = {
+            "HTPC video OSD top gradient": not_modal,
+            "HTPC video OSD top actions": not_modal,
+            "HTPC video OSD focused top action label": not_modal,
+            "HTPC video OSD title": (
+                "$PARAM[view_inactive_condition] + " + not_modal
+            ),
+            "HTPC video OSD subtitle": (
+                "$PARAM[view_inactive_condition] + " + not_modal
+            ),
+            "HTPC play pause": not_modal,
+            "HTPC video OSD elapsed time": not_modal,
+            "HTPC video OSD remaining time": not_modal,
+            "HTPC video OSD chapter hint": (
+                "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+                "$PARAM[chapter_available_condition] + "
+                "$PARAM[view_inactive_condition] + " + not_modal
+            ),
+        }
+        for description, visibility in expected_visibility.items():
+            with self.subTest(description=description):
+                controls = _controls_by_description(
+                    self.surface,
+                    description,
+                )
+                self.assertEqual(len(controls), 1)
+                control = controls[0]
+                self.assertEqual(_visible_text(control), visibility)
+                animations = control.findall("animation")
+                self.assertEqual(
+                    tuple((node.text or "").strip() for node in animations),
+                    ("Visible", "Hidden"),
+                )
+                for animation in animations:
+                    self.assertEqual(animation.get("effect"), "fade")
+                    self.assertEqual(animation.get("time"), "120")
+                    self.assertIsNone(animation.get("condition"))
+
+        bottom_gradient = _controls_by_description(
+            self.surface,
+            "HTPC video OSD bottom gradient",
+        )
+        self.assertEqual(len(bottom_gradient), 1)
+        self.assertEqual(_visible_text(bottom_gradient[0]), "")
+
+        timeline = self._control("9300")
+        self.assertEqual(
+            _visible_text(timeline),
+            "$PARAM[seekable_condition]",
+        )
+        presentation = [
+            node
+            for node in self.surface.iter("include")
+            if node.get("content") == "HTPCPlaybackPresentationLayout"
+        ]
+        self.assertEqual(len(presentation), 1)
+        self.assertNotIn(
+            "modal_condition",
+            {
+                node.get("name")
+                for node in presentation[0].findall("param")
+            },
+            "modal mode must retain the target presentation unchanged",
+        )
 
     def test_non_seekable_media_keeps_an_informational_unfocused_rail(self):
         timeline = self._control("9300")
@@ -532,7 +628,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             _visible_text(chapter_hint),
             "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
-            "$PARAM[view_inactive_condition]",
+            "$PARAM[view_inactive_condition] + "
+            "![$PARAM[modal_condition]]",
         )
 
         progress_controls = [
@@ -618,7 +715,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             _visible_text(chapter_hints[0]),
             "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
-            "$PARAM[view_inactive_condition]",
+            "$PARAM[view_inactive_condition] + "
+            "![$PARAM[modal_condition]]",
         )
         self.assertEqual(
             _controls_by_description(
@@ -755,11 +853,11 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             _visible_text(hint),
             "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
-            "$PARAM[view_inactive_condition]",
+            "$PARAM[view_inactive_condition] + "
+            "![$PARAM[modal_condition]]",
         )
 
         forbidden_tags = {
-            "animation",
             "info",
             "onclick",
             "ondown",
@@ -1084,7 +1182,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             self.assertEqual(len(controls), 1)
             self.assertEqual(
                 _visible_text(controls[0]),
-                "$PARAM[view_inactive_condition]",
+                "$PARAM[view_inactive_condition] + "
+                "![$PARAM[modal_condition]]",
             )
         parameters = {
             node.get("name"): node.get("default")

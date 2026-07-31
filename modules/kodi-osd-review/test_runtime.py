@@ -205,6 +205,28 @@ class ReviewRuntimeTest(unittest.TestCase):
             harness.all_events.index(activate),
         )
 
+    def test_modal_fence_precedes_atomic_view_publication(self):
+        harness = RuntimeHarness()
+        self.assertTrue(
+            harness.runtime.run(["state=seek-forward-modal"])
+        )
+        modal = ("set", "htpc.review.seek.modal", "true")
+        select = ("set", "htpc.review.seek.viewslot", "a")
+        expose = ("set", "htpc.review.seek.viewactive", "true")
+        activate = ("builtin", "ActivateWindow(1192)")
+        self.assertLess(
+            harness.all_events.index(modal),
+            harness.all_events.index(select),
+        )
+        self.assertLess(
+            harness.all_events.index(select),
+            harness.all_events.index(expose),
+        )
+        self.assertLess(
+            harness.all_events.index(expose),
+            harness.all_events.index(activate),
+        )
+
     def test_playing_transport_keeps_paused_property_absent(self):
         harness = RuntimeHarness()
         self.assertTrue(harness.runtime.run(["state=transport-playing"]))

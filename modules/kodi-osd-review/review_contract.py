@@ -17,6 +17,7 @@ PROPERTY_NAMES = (
     "elapsed",
     "remaining",
     "seek.actualmarker",
+    "seek.modal",
     "seek.viewactive",
     "seek.viewslot",
     "seek.a.revision",
@@ -52,6 +53,7 @@ SCENARIOS = (
     "timeline-chapters",
     "seek-backward",
     "seek-forward",
+    "seek-forward-modal",
     "seek-forward-loading",
     "seek-forward-unavailable",
     "seek-forward-slot-b",
@@ -65,6 +67,7 @@ EXPECTED_FOCUS = {
     "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
+    "seek-forward-modal": "9300",
     "seek-forward-loading": "9300",
     "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
@@ -173,6 +176,9 @@ _SEEK = {
         "seek.b.previewanchor": "75",
     },
 }
+
+_SEEK["seek-forward-modal"] = dict(_SEEK["seek-forward"])
+_SEEK["seek-forward-modal"]["seek.modal"] = "true"
 
 
 class RequestError(ValueError):

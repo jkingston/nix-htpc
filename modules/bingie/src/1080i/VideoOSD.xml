@@ -18,6 +18,7 @@
 			<include content="HTPCVideoOSD">
 				<param name="visible" value="Player.HasVideo" />
 				<param name="presentation_ready" value="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
+				<param name="modal_condition" value="!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + !String.IsEmpty(Window(Home).Property(htpc.seek.modal))" />
 				<param name="property_window" value="Home" />
 				<param name="property_prefix" value="htpc.seek" />
 				<param name="production_actions" value="true" />

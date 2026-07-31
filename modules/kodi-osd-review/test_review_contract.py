@@ -122,6 +122,28 @@ class ReviewContractTest(unittest.TestCase):
                     slot_b["htpc.review.seek.b." + field],
                 )
 
+    def test_modal_forward_seek_differs_only_by_modal_fence(self):
+        nonmodal = scenario_properties("seek-forward")
+        modal = scenario_properties("seek-forward-modal")
+        self.assertNotIn("htpc.review.seek.modal", nonmodal)
+        self.assertEqual(modal["htpc.review.seek.modal"], "true")
+        ignored = {
+            "htpc.review.scenario",
+            "htpc.review.seek.modal",
+        }
+        self.assertEqual(
+            {
+                key: value
+                for key, value in nonmodal.items()
+                if key not in ignored
+            },
+            {
+                key: value
+                for key, value in modal.items()
+                if key not in ignored
+            },
+        )
+
     def test_forward_preview_states_change_only_status_and_path(self):
         ready = scenario_properties("seek-forward")
         states = {

@@ -14,6 +14,7 @@
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-chapters)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-backward)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward)">SetFocus(9300)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-modal)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-loading)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-unavailable)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-slot-b)">SetFocus(9300)</onload>
@@ -28,6 +29,7 @@
 	<onunload>ClearProperty(htpc.review.elapsed,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.remaining,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.actualmarker,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.modal,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewactive,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewslot,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.revision,Home)</onunload>
@@ -78,6 +80,7 @@
 			<param name="preview_loading_label" value="Loading preview…" />
 			<param name="preview_unavailable_label" value="Preview unavailable" />
 			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />
+			<param name="modal_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.seek.modal))" />
 			<!--
 			  Controls must exist for onload focus before the driver publishes
 			  its externally observable ready fence.
