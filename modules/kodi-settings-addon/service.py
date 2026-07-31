@@ -416,45 +416,62 @@ class SeekService(object):
         self.settings = ManagedSettings()
 
     def run(self):
-        # Revoke stale seek/view state before advertising this service lease.
+        # Revoke both sides of the previous process contract before doing any
+        # work. Readiness is advertised only after one complete playback cycle.
+        self.lease.stop()
         self.publisher.clear()
-        self.lease.refresh(force=True)
-        log("input router ready; managed settings scheduled")
+        first_ready = True
         while not self.monitor.waitForAbort(0.05):
-            self.lease.refresh()
             for event in self.monitor.drain():
                 event_type, name, payload, timestamp, _generation = event
                 try:
                     self._dispatch_event(event)
                 except Exception as error:
-                    self._recover(
-                        "%s event %s failed: %s"
-                        % (event_type, name, error)
+                    log(
+                        "%s event %s failed; stopping input router: %s"
+                        % (event_type, name, error),
+                        xbmc.LOGERROR,
                     )
+                    return
 
             try:
-                self.controller.tick()
-                snapshot = self.controller.snapshot()
-                player_snapshot = self.player.snapshot()
-                self.view.update(snapshot, player_snapshot)
-                preview_path = self.publisher.refresh_preview(snapshot)
-                self.view.offer_preview(
-                    preview_path,
-                    snapshot.get("generation"),
-                    snapshot.get("target_seconds"),
-                )
-                self.publisher.publish_view(self.view.snapshot())
-                self.presenter.update(snapshot)
-                self._tick_router()
-                self.chapters.validate()
-                self.chapters.sync_properties()
+                self._tick_playback()
+                if first_ready:
+                    self.lease.refresh(force=True)
+                    first_ready = False
+                    log("input router ready; managed settings scheduled")
+                else:
+                    self.lease.refresh()
             except Exception as error:
-                self._recover("controller/presenter tick failed: %s" % error)
+                log(
+                    "critical playback cycle failed; stopping input router: %s"
+                    % error,
+                    xbmc.LOGERROR,
+                )
+                return
 
             try:
                 self.settings.tick()
             except Exception as error:
                 log("managed settings retry failed: %s" % error, xbmc.LOGERROR)
+
+    def _tick_playback(self):
+        """Publish one complete playback-control cycle or raise."""
+        self.controller.tick()
+        snapshot = self.controller.snapshot()
+        player_snapshot = self.player.snapshot()
+        self.view.update(snapshot, player_snapshot)
+        preview_path = self.publisher.refresh_preview(snapshot)
+        self.view.offer_preview(
+            preview_path,
+            snapshot.get("generation"),
+            snapshot.get("target_seconds"),
+        )
+        self.publisher.publish_view(self.view.snapshot())
+        self.presenter.update(snapshot)
+        self._tick_router()
+        self.chapters.validate()
+        self.chapters.sync_properties()
 
     def _dispatch_event(self, event):
         event_type, name, payload, timestamp, generation = event
@@ -502,7 +519,15 @@ class SeekService(object):
         )
         # Preserve callback ordering at a media boundary, while ensuring one
         # failing observer cannot prevent the remaining state from clearing.
-        self._attempt(
+        failures = []
+
+        def attempt(label, action):
+            succeeded = self._attempt(label, action)
+            if not succeeded:
+                failures.append(label)
+            return succeeded
+
+        attempt(
             "player boundary watermark",
             lambda: self.view.update(
                 self.controller.snapshot(),
@@ -510,11 +535,11 @@ class SeekService(object):
                 timestamp,
             ),
         )
-        view_event_handled = self._attempt(
+        view_event_handled = attempt(
             "view player boundary",
             lambda: self.view.on_player_event(name, payload, timestamp),
         )
-        controller_event_handled = self._attempt(
+        controller_event_handled = attempt(
             "controller player boundary",
             lambda: self.controller.on_player_event(
                 name,
@@ -523,50 +548,34 @@ class SeekService(object):
             ),
         )
         if not view_event_handled:
-            self._attempt("view boundary fallback reset", self.view.reset)
+            attempt("view boundary fallback reset", self.view.reset)
         if not controller_event_handled:
-            self._attempt(
+            attempt(
                 "controller boundary fallback reset",
                 lambda: self.controller.reset(clear_handoff=True),
             )
-        self._attempt(
+        attempt(
             "input router playback boundary",
             lambda: self.router.on_playback_boundary(
                 timestamp,
                 input_watermark,
             ),
         )
-        self._attempt("presenter boundary reset", self.presenter.reset)
-        self._attempt("chapter boundary close", self.chapters.close)
-        self._attempt(
+        attempt("presenter boundary reset", self.presenter.reset)
+        attempt("chapter boundary close", self.chapters.close)
+        attempt(
             "chapter boundary property clear",
             self.chapters.clear_properties,
         )
-        self._attempt(
+        attempt(
             "publisher boundary clear",
             self.publisher.clear,
         )
-
-    def _recover(self, message):
-        log(message, xbmc.LOGERROR)
-        self._attempt("input router recovery reset", self.router.reset)
-        self._attempt("presenter recovery reset", self.presenter.reset)
-        self._attempt("chapter recovery close", self.chapters.close)
-        self._attempt(
-            "chapter recovery property clear",
-            self.chapters.clear_properties,
-        )
-        cancel_handled = self._attempt(
-            "controller recovery cancel",
-            self.controller.cancel,
-        )
-        if not cancel_handled:
-            self._attempt(
-                "controller recovery shutdown",
-                self.controller.shutdown,
+        if failures:
+            raise RuntimeError(
+                "player boundary cleanup failed: %s"
+                % ", ".join(failures)
             )
-        self._attempt("view recovery reset", self.view.reset)
-        self._attempt("publisher recovery clear", self.publisher.clear)
 
     def close(self):
         self._attempt("input router shutdown clear", self.router.clear)

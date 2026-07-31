@@ -980,6 +980,9 @@ class SeekController(object):
             self._request_resume("shutdown", now)
             return
         if self.state in (PAUSE_PENDING, CANCEL_WAIT_PAUSE) and self.was_playing:
+            # Kodi 21.3 Player.pause() blocks in ApplicationMessenger::SendMsg,
+            # so the logical pause is already applied when request_pause()
+            # returns; only Python callback attribution can arrive later.
             snapshot = self._read_snapshot()
             if self._snapshot_matches(snapshot) and snapshot.get("paused"):
                 self._retire_operation(self.pending_operation)

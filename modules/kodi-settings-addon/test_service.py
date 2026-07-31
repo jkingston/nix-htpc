@@ -139,6 +139,8 @@ from player_adapter import KodiPlayerAdapter
 from seek_controller import (
     HOLD_ONSET_MAX,
     HOLD_RELEASE_IDLE,
+    IDLE,
+    PAUSE_PENDING,
     SCRUB_ACTIVE,
     RESUME_PENDING,
     SeekController,
@@ -151,6 +153,7 @@ from service import (
     ServiceMonitor,
     get_setting,
     json_rpc_response,
+    main as service_main,
     set_setting,
 )
 
@@ -2865,6 +2868,381 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         )
 
 
+class SeekServiceRunTest(unittest.TestCase):
+    CRITICAL_STAGES = (
+        "controller.tick",
+        "controller.snapshot",
+        "player.snapshot",
+        "view.update",
+        "publisher.refresh_preview",
+        "view.offer_preview",
+        "view.snapshot",
+        "publisher.publish_view",
+        "presenter.update",
+        "router.tick",
+        "chapters.validate",
+        "chapters.sync_properties",
+        "lease.refresh",
+    )
+
+    @staticmethod
+    def _effect(trace, label, value=None, failure=None):
+        calls = [0]
+
+        def effect(*_args, **_kwargs):
+            calls[0] += 1
+            trace.append(label)
+            if failure == label or failure == (label, calls[0]):
+                raise RuntimeError(label)
+            return value
+
+        return effect
+
+    def _service(self, trace=None, failure=None):
+        trace = [] if trace is None else trace
+        service = SeekService.__new__(SeekService)
+        service.monitor = mock.Mock()
+        service.publisher = mock.Mock()
+        service.presenter = mock.Mock()
+        service.lease = mock.Mock()
+        service.player = mock.Mock()
+        service.controller = mock.Mock()
+        service.view = mock.Mock()
+        service.router = mock.Mock()
+        service.router.pending_transition_generation = None
+        service.chapters = mock.Mock()
+        service.settings = mock.Mock()
+
+        snapshot = {"generation": 7, "target_seconds": 120}
+        player_snapshot = {"playing": True}
+        view_snapshot = {"active": True}
+
+        service.lease.stop.side_effect = self._effect(
+            trace,
+            "lease.stop",
+            failure=failure,
+        )
+        service.publisher.clear.side_effect = self._effect(
+            trace,
+            "publisher.clear",
+            failure=failure,
+        )
+        service.controller.tick.side_effect = self._effect(
+            trace,
+            "controller.tick",
+            failure=failure,
+        )
+        service.controller.snapshot.side_effect = self._effect(
+            trace,
+            "controller.snapshot",
+            value=snapshot,
+            failure=failure,
+        )
+        service.player.snapshot.side_effect = self._effect(
+            trace,
+            "player.snapshot",
+            value=player_snapshot,
+            failure=failure,
+        )
+        service.view.update.side_effect = self._effect(
+            trace,
+            "view.update",
+            failure=failure,
+        )
+        service.publisher.refresh_preview.side_effect = self._effect(
+            trace,
+            "publisher.refresh_preview",
+            value="/tmp/preview.jpg",
+            failure=failure,
+        )
+        service.view.offer_preview.side_effect = self._effect(
+            trace,
+            "view.offer_preview",
+            failure=failure,
+        )
+        service.view.snapshot.side_effect = self._effect(
+            trace,
+            "view.snapshot",
+            value=view_snapshot,
+            failure=failure,
+        )
+        service.publisher.publish_view.side_effect = self._effect(
+            trace,
+            "publisher.publish_view",
+            failure=failure,
+        )
+        service.presenter.update.side_effect = self._effect(
+            trace,
+            "presenter.update",
+            failure=failure,
+        )
+        service.router.tick.side_effect = self._effect(
+            trace,
+            "router.tick",
+            failure=failure,
+        )
+        service.chapters.validate.side_effect = self._effect(
+            trace,
+            "chapters.validate",
+            failure=failure,
+        )
+        service.chapters.sync_properties.side_effect = self._effect(
+            trace,
+            "chapters.sync_properties",
+            failure=failure,
+        )
+        service.lease.refresh.side_effect = self._effect(
+            trace,
+            "lease.refresh",
+            failure=failure,
+        )
+        return service, trace
+
+    def test_startup_revokes_readiness_then_clears_without_advertising(self):
+        service, trace = self._service()
+        service.monitor.waitForAbort.return_value = True
+
+        with mock.patch("service.log"):
+            service.run()
+
+        self.assertEqual(trace, ["lease.stop", "publisher.clear"])
+        service.lease.refresh.assert_not_called()
+        service.controller.tick.assert_not_called()
+        service.settings.tick.assert_not_called()
+
+    def test_successful_cycles_publish_readiness_last_with_force_then_cadence(self):
+        service, trace = self._service()
+        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.drain.return_value = []
+        service.settings.tick.side_effect = self._effect(trace, "settings.tick")
+
+        with mock.patch("service.log"):
+            service.run()
+
+        cycle = list(self.CRITICAL_STAGES[:-1]) + [
+            "lease.refresh",
+            "settings.tick",
+        ]
+        self.assertEqual(
+            trace,
+            ["lease.stop", "publisher.clear"] + cycle + cycle,
+        )
+        self.assertEqual(
+            service.lease.refresh.call_args_list,
+            [mock.call(force=True), mock.call()],
+        )
+
+    def test_unexpected_input_dispatch_failure_stops_before_cycle_or_ready(self):
+        service, trace = self._service()
+        event = ("input", "right", {}, 1.0, 0)
+        service.monitor.waitForAbort.side_effect = [False, True]
+        service.monitor.drain.return_value = [event]
+        service._dispatch_event = mock.Mock(
+            side_effect=self._effect(
+                trace,
+                "input.dispatch",
+                failure="input.dispatch",
+            )
+        )
+        with mock.patch("service.log") as logger:
+            service.run()
+
+        self.assertEqual(
+            trace,
+            ["lease.stop", "publisher.clear", "input.dispatch"],
+        )
+        service.controller.cancel.assert_not_called()
+        service.controller.tick.assert_not_called()
+        service.lease.refresh.assert_not_called()
+        service.settings.tick.assert_not_called()
+        self.assertEqual(service.monitor.waitForAbort.call_count, 1)
+        self.assertIn("stopping input router", logger.call_args.args[0])
+        self.assertEqual(logger.call_args.args[1], fake_xbmc.LOGERROR)
+
+    def test_stale_input_generation_is_benign_and_cycle_becomes_ready(self):
+        service, _trace = self._service()
+        event = ("input", "right", {}, 1.0, 0)
+        service.monitor.waitForAbort.side_effect = [False, True]
+        service.monitor.drain.return_value = [event]
+        service._dispatch_event = mock.Mock(return_value=False)
+
+        with mock.patch("service.log"):
+            service.run()
+
+        service._dispatch_event.assert_called_once_with(event)
+        service.controller.tick.assert_called_once_with()
+        service.lease.refresh.assert_called_once_with(force=True)
+        service.settings.tick.assert_called_once_with()
+
+    def test_every_critical_stage_failure_stops_without_recovery_or_later_work(self):
+        startup = ["lease.stop", "publisher.clear"]
+        for failed_stage in self.CRITICAL_STAGES:
+            with self.subTest(stage=failed_stage):
+                service, trace = self._service(failure=failed_stage)
+                service.monitor.waitForAbort.side_effect = [False, True]
+                service.monitor.drain.return_value = []
+                with mock.patch("service.log") as logger:
+                    service.run()
+
+                failed_index = self.CRITICAL_STAGES.index(failed_stage)
+                self.assertEqual(
+                    trace,
+                    startup + list(self.CRITICAL_STAGES[: failed_index + 1]),
+                )
+                service.controller.cancel.assert_not_called()
+                service.settings.tick.assert_not_called()
+                self.assertEqual(service.monitor.waitForAbort.call_count, 1)
+                self.assertIn(
+                    "critical playback cycle failed",
+                    logger.call_args.args[0],
+                )
+                self.assertEqual(
+                    logger.call_args.args[1],
+                    fake_xbmc.LOGERROR,
+                )
+
+    def test_post_ready_critical_failures_close_without_refreshing_again(self):
+        startup = ["lease.stop", "publisher.clear"]
+        cycle = list(self.CRITICAL_STAGES) + ["settings.tick"]
+        for failed_stage in self.CRITICAL_STAGES:
+            with self.subTest(stage=failed_stage):
+                service, trace = self._service(
+                    failure=(failed_stage, 2),
+                )
+                service.monitor.waitForAbort.side_effect = [
+                    False,
+                    False,
+                    True,
+                ]
+                service.monitor.drain.return_value = []
+                service.settings.tick.side_effect = self._effect(
+                    trace,
+                    "settings.tick",
+                )
+
+                with mock.patch("service.log"):
+                    try:
+                        service.run()
+                    finally:
+                        service.close()
+
+                failed_index = self.CRITICAL_STAGES.index(failed_stage)
+                self.assertEqual(
+                    trace,
+                    startup
+                    + cycle
+                    + list(self.CRITICAL_STAGES[: failed_index + 1])
+                    + ["publisher.clear", "lease.stop"],
+                )
+                self.assertEqual(service.settings.tick.call_count, 1)
+                expected_refreshes = [mock.call(force=True)]
+                if failed_stage == "lease.refresh":
+                    expected_refreshes.append(mock.call())
+                self.assertEqual(
+                    service.lease.refresh.call_args_list,
+                    expected_refreshes,
+                )
+                service.router.clear.assert_called_once_with()
+                service.presenter.reset.assert_called_once_with()
+                service.controller.shutdown.assert_called_once_with()
+                service.view.reset.assert_called_once_with()
+                self.assertEqual(service.lease.stop.call_count, 2)
+
+    def test_boundary_failure_after_ready_stops_and_closes_without_new_work(self):
+        service, _trace = self._service()
+        boundary = ("player", "started", {}, 2.0, 1)
+        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.drain.side_effect = [[], [boundary]]
+        service.chapters.close.side_effect = RuntimeError("chapter close")
+
+        with mock.patch("service.log") as logger:
+            try:
+                service.run()
+            finally:
+                service.close()
+
+        self.assertEqual(
+            service.lease.refresh.call_args_list,
+            [mock.call(force=True)],
+        )
+        self.assertEqual(service.settings.tick.call_count, 1)
+        self.assertEqual(service.controller.tick.call_count, 1)
+        service.router.on_playback_boundary.assert_called_once_with(
+            2.0,
+            None,
+        )
+        self.assertEqual(service.presenter.reset.call_count, 2)
+        service.chapters.clear_properties.assert_called()
+        self.assertEqual(service.publisher.clear.call_count, 3)
+        service.controller.shutdown.assert_called_once_with()
+        service.view.reset.assert_called_once_with()
+        self.assertEqual(service.lease.stop.call_count, 2)
+        self.assertTrue(
+            any(
+                "player event started failed; stopping input router"
+                in call.args[0]
+                for call in logger.call_args_list
+            )
+        )
+
+    def test_managed_settings_failure_is_logged_and_next_cycle_remains_ready(self):
+        service, _trace = self._service()
+        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.drain.return_value = []
+        service.settings.tick.side_effect = [
+            RuntimeError("settings unavailable"),
+            None,
+        ]
+
+        with mock.patch("service.log") as logger:
+            service.run()
+
+        self.assertEqual(service.controller.tick.call_count, 2)
+        self.assertEqual(service.settings.tick.call_count, 2)
+        self.assertEqual(
+            service.lease.refresh.call_args_list,
+            [mock.call(force=True), mock.call()],
+        )
+        self.assertIn(
+            mock.call(
+                "managed settings retry failed: settings unavailable",
+                fake_xbmc.LOGERROR,
+            ),
+            logger.call_args_list,
+        )
+
+    def test_main_closes_service_exactly_once_when_run_returns(self):
+        monitor = mock.Mock()
+        service = mock.Mock()
+        with (
+            mock.patch("service.ServiceMonitor", return_value=monitor),
+            mock.patch("service.SeekService", return_value=service),
+            mock.patch("service.log"),
+        ):
+            service_main()
+
+        service.run.assert_called_once_with()
+        service.close.assert_called_once_with()
+
+    def test_main_closes_service_exactly_once_when_startup_raises(self):
+        monitor = mock.Mock()
+        service = mock.Mock()
+        service.run.side_effect = RuntimeError("startup lease failure")
+        with (
+            mock.patch("service.ServiceMonitor", return_value=monitor),
+            mock.patch("service.SeekService", return_value=service),
+            mock.patch("service.log"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "startup lease failure",
+            ):
+                service_main()
+
+        service.run.assert_called_once_with()
+        service.close.assert_called_once_with()
+
+
 class SeekServiceCleanupTest(unittest.TestCase):
     def setUp(self):
         self.service = SeekService.__new__(SeekService)
@@ -2914,25 +3292,6 @@ class SeekServiceCleanupTest(unittest.TestCase):
         self.service.presenter.reset.assert_not_called()
         self.service.chapters.close.assert_not_called()
 
-    def test_startup_clears_all_seek_state_before_readiness(self):
-        trace = []
-        self.service.publisher.clear.side_effect = self._record(
-            trace,
-            "publisher",
-        )
-        self.service.lease.refresh.side_effect = self._record(
-            trace,
-            "ready",
-        )
-        self.service.monitor = mock.Mock()
-        self.service.monitor.waitForAbort.return_value = True
-
-        with mock.patch("service.log"):
-            self.service.run()
-
-        self.assertEqual(trace, ["publisher", "ready"])
-        self.service.lease.refresh.assert_called_once_with(force=True)
-
     def test_every_player_boundary_runs_navigation_and_visual_cleanup(self):
         for name in ("started", "stopped", "ended"):
             with self.subTest(name=name):
@@ -2969,10 +3328,12 @@ class SeekServiceCleanupTest(unittest.TestCase):
         self.service.view.reset.side_effect = self._record(
             trace,
             "view-fallback",
+            fail=True,
         )
         self.service.controller.reset.side_effect = self._record(
             trace,
             "controller-fallback",
+            fail=True,
         )
         self.service.router.on_playback_boundary.side_effect = self._record(
             trace,
@@ -2999,7 +3360,20 @@ class SeekServiceCleanupTest(unittest.TestCase):
         )
 
         with mock.patch("service.log"):
-            self.service._handle_player_event("started", {}, 1.0)
+            with self.assertRaisesRegex(
+                RuntimeError,
+                (
+                    "player boundary cleanup failed: "
+                    "view player boundary, "
+                    "controller player boundary, "
+                    "view boundary fallback reset, "
+                    "controller boundary fallback reset, "
+                    "input router playback boundary, "
+                    "chapter boundary close, "
+                    "publisher boundary clear"
+                ),
+            ):
+                self.service._handle_player_event("started", {}, 1.0)
 
         self.assertEqual(
             trace,
@@ -3021,57 +3395,102 @@ class SeekServiceCleanupTest(unittest.TestCase):
         )
         self.service.publisher.clear.assert_called_once_with()
 
-    def test_recovery_isolates_failures_and_closes_chapter_state(self):
-        trace = []
-        self.service.router.reset.side_effect = self._record(
-            trace,
-            "router",
-            fail=True,
+    def test_each_boundary_attempt_is_health_gated_after_full_cleanup(self):
+        scenarios = (
+            ("watermark", ("watermark",)),
+            ("view-event", ("view-event",)),
+            ("controller-event", ("controller-event",)),
+            ("view-fallback", ("view-event", "view-fallback")),
+            (
+                "controller-fallback",
+                ("controller-event", "controller-fallback"),
+            ),
+            ("router", ("router",)),
+            ("presenter", ("presenter",)),
+            ("chapter-close", ("chapter-close",)),
+            ("chapter-properties", ("chapter-properties",)),
+            ("publisher", ("publisher",)),
         )
-        self.service.presenter.reset.side_effect = self._record(
-            trace,
-            "presenter",
-        )
-        self.service.chapters.close.side_effect = self._record(
-            trace,
-            "chapter-close",
-            fail=True,
-        )
-        self.service.chapters.clear_properties.side_effect = self._record(
-            trace,
-            "chapter-properties",
-        )
-        self.service.controller.cancel.side_effect = self._record(
-            trace,
-            "controller-cancel",
-            fail=True,
-        )
-        self.service.controller.shutdown.side_effect = self._record(
-            trace,
-            "controller-shutdown",
-        )
-        self.service.view.reset.side_effect = self._record(trace, "view")
-        self.service.publisher.clear.side_effect = self._record(
-            trace,
-            "publisher",
-        )
-
-        with mock.patch("service.log"):
-            self.service._recover("failed")
-
-        self.assertEqual(
-            trace,
-            [
-                "router",
-                "presenter",
-                "chapter-close",
+        failure_labels = {
+            "watermark": "player boundary watermark",
+            "view-event": "view player boundary",
+            "controller-event": "controller player boundary",
+            "view-fallback": "view boundary fallback reset",
+            "controller-fallback": "controller boundary fallback reset",
+            "router": "input router playback boundary",
+            "presenter": "presenter boundary reset",
+            "chapter-close": "chapter boundary close",
+            "chapter-properties": "chapter boundary property clear",
+            "publisher": "publisher boundary clear",
+        }
+        actions = (
+            (self.service.view.update, "watermark"),
+            (self.service.view.on_player_event, "view-event"),
+            (self.service.controller.on_player_event, "controller-event"),
+            (self.service.view.reset, "view-fallback"),
+            (self.service.controller.reset, "controller-fallback"),
+            (self.service.router.on_playback_boundary, "router"),
+            (self.service.presenter.reset, "presenter"),
+            (self.service.chapters.close, "chapter-close"),
+            (
+                self.service.chapters.clear_properties,
                 "chapter-properties",
-                "controller-cancel",
-                "controller-shutdown",
-                "view",
-                "publisher",
-            ],
+            ),
+            (self.service.publisher.clear, "publisher"),
         )
+        base_trace = [
+            "watermark",
+            "view-event",
+            "controller-event",
+            "router",
+            "presenter",
+            "chapter-close",
+            "chapter-properties",
+            "publisher",
+        ]
+
+        for scenario, failures in scenarios:
+            with self.subTest(stage=scenario):
+                trace = []
+                failing = set(failures)
+                for action, label in actions:
+                    action.reset_mock(side_effect=True)
+                    action.side_effect = self._record(
+                        trace,
+                        label,
+                        fail=label in failing,
+                    )
+
+                expected_trace = list(base_trace)
+                if "view-event" in failing:
+                    expected_trace.insert(3, "view-fallback")
+                if "controller-event" in failing:
+                    fallback_index = (
+                        4 if "view-event" in failing else 3
+                    )
+                    expected_trace.insert(
+                        fallback_index,
+                        "controller-fallback",
+                    )
+                expected_failures = [
+                    failure_labels[label] for label in failures
+                ]
+
+                with mock.patch("service.log"):
+                    with self.assertRaises(RuntimeError) as raised:
+                        self.service._handle_player_event(
+                            "started",
+                            {},
+                            1.0,
+                        )
+
+                self.assertEqual(trace, expected_trace)
+                self.assertEqual(
+                    str(raised.exception),
+                    "player boundary cleanup failed: %s"
+                    % ", ".join(expected_failures),
+                )
+                self.service.publisher.clear.assert_called_once_with()
 
     def test_close_attempts_every_safety_step_despite_failures(self):
         trace = []
@@ -3270,6 +3689,105 @@ class AdapterPublisher(object):
 
     def clear(self):
         pass
+
+
+class ServiceClosePlaybackSafetyTest(unittest.TestCase):
+    def setUp(self):
+        CONDITIONS.clear()
+        INFO_LABELS.clear()
+        CONDITIONS["Player.SeekEnabled"] = True
+        INFO_LABELS["Player.Filenameandpath"] = "/media/movie.mkv"
+        INFO_LABELS["VideoPlayer.DBID"] = ""
+        INFO_LABELS["VideoPlayer.Title"] = ""
+
+    @staticmethod
+    def _service(controller):
+        service = SeekService.__new__(SeekService)
+        service.router = mock.Mock()
+        service.presenter = mock.Mock()
+        service.chapters = mock.Mock()
+        service.controller = controller
+        service.view = mock.Mock()
+        service.publisher = mock.Mock()
+        service.lease = mock.Mock()
+        return service
+
+    @staticmethod
+    def _start_hold(controller):
+        for timestamp in (0.0, 0.40, 0.508, 0.616):
+            controller.timeline_step(1, timestamp)
+
+    def _stack(self, paused=False):
+        CONDITIONS["Player.Paused"] = bool(paused)
+        holder = {}
+        events = []
+
+        def event_sink(kind, payload):
+            events.append((kind, dict(payload)))
+            holder["controller"].on_player_event(kind, payload, 0.65)
+
+        adapter = AdapterDouble(event_sink=event_sink)
+        adapter.epoch = 4
+        controller = SeekController(adapter, AdapterPublisher())
+        holder["controller"] = controller
+        return adapter, controller, self._service(controller), events
+
+    def test_close_resumes_applied_pause_before_late_callback(self):
+        adapter, controller, service, events = self._stack()
+        self._start_hold(controller)
+        self.assertEqual(controller.state, PAUSE_PENDING)
+        self.assertTrue(CONDITIONS["Player.Paused"])
+
+        service.close()
+
+        self.assertEqual(controller.state, RESUME_PENDING)
+        self.assertEqual(adapter.pause_calls, 2)
+        self.assertFalse(CONDITIONS["Player.Paused"])
+        adapter.onPlayBackPaused()
+        self.assertIsNone(events[-1][1]["operation"])
+        self.assertEqual(controller.state, RESUME_PENDING)
+        self.assertIsNone(adapter.pending_pause)
+        service.lease.stop.assert_called_once_with()
+
+    def test_close_resumes_confirmed_controller_pause(self):
+        adapter, controller, service, _events = self._stack()
+        self._start_hold(controller)
+        adapter.onPlayBackPaused()
+        self.assertEqual(controller.state, SCRUB_ACTIVE)
+
+        service.close()
+
+        self.assertEqual(controller.state, RESUME_PENDING)
+        self.assertEqual(adapter.pause_calls, 2)
+        self.assertFalse(CONDITIONS["Player.Paused"])
+        service.lease.stop.assert_called_once_with()
+
+    def test_close_preserves_preexisting_user_pause(self):
+        adapter, controller, service, _events = self._stack(paused=True)
+        self._start_hold(controller)
+        self.assertEqual(controller.state, SCRUB_ACTIVE)
+        self.assertFalse(controller.was_playing)
+
+        service.close()
+
+        self.assertEqual(controller.state, IDLE)
+        self.assertEqual(adapter.pause_calls, 0)
+        self.assertTrue(CONDITIONS["Player.Paused"])
+        service.lease.stop.assert_called_once_with()
+
+    def test_close_does_not_resume_paused_replacement_media(self):
+        adapter, controller, service, _events = self._stack()
+        self._start_hold(controller)
+        self.assertTrue(CONDITIONS["Player.Paused"])
+        INFO_LABELS["Player.Filenameandpath"] = "/media/replacement.mkv"
+        adapter.epoch += 1
+
+        service.close()
+
+        self.assertEqual(controller.state, IDLE)
+        self.assertEqual(adapter.pause_calls, 1)
+        self.assertTrue(CONDITIONS["Player.Paused"])
+        service.lease.stop.assert_called_once_with()
 
 
 class PlayerAdapterAttributionTest(unittest.TestCase):

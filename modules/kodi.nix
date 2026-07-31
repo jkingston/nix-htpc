@@ -2,7 +2,7 @@
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
   kodiPackages = rpiPackages.kodi-gbm.packages;
-  kodiSettingsAddonVersion = "2.1.8";
+  kodiSettingsAddonVersion = "2.1.9";
   kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   simplejsonIdentity = {
