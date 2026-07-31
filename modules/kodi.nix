@@ -241,8 +241,14 @@ let
       test -f "${
         kodiWithAddons
       }/share/kodi/addons/script.bingie.helper/addon.xml"
-      test "$(cat ${bingieHelper}/nix-support/propagated-build-inputs)" = \
-        ${lib.escapeShellArg "${simplejson}"}
+      propagated_inputs=()
+      while IFS= read -r propagated_line || test -n "$propagated_line"; do
+        line_inputs=()
+        IFS=$' \t\n' read -r -a line_inputs <<< "$propagated_line"
+        propagated_inputs+=("''${line_inputs[@]}")
+      done < ${bingieHelper}/nix-support/propagated-build-inputs
+      test "''${#propagated_inputs[@]}" -eq 1
+      test "''${propagated_inputs[0]}" = ${lib.escapeShellArg "${simplejson}"}
       grep -Fq \
         ${
           lib.escapeShellArg
