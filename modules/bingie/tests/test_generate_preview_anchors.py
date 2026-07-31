@@ -18,6 +18,31 @@ sys.path.insert(0, str(TOOLS_ROOT))
 import generate_preview_anchors as anchors  # noqa: E402
 
 
+def _canonical_xml_source() -> str:
+    return "".join(
+        (
+            "<includes>\n",
+            '\t<include name="HTPCPlaybackPresentationSlot">\n',
+            "\t\t<definition>\n",
+            '\t\t\t<control type="group">\n',
+            f"\t\t\t\t<description>{anchors.SLOT_DESCRIPTION}</description>\n",
+            '\t\t\t\t<control type="group">\n',
+            (
+                f"\t\t\t\t\t<description>"
+                f"{anchors.PREVIEW_DESCRIPTION}</description>\n"
+            ),
+            anchors.GENERATED_BEGIN,
+            anchors.render_animations(),
+            anchors.GENERATED_END,
+            "\n\t\t\t\t</control>\n",
+            "\t\t\t</control>\n",
+            "\t\t</definition>\n",
+            "\t</include>\n",
+            "</includes>\n",
+        )
+    )
+
+
 class PreviewAnchorGeneratorTest(unittest.TestCase):
     def test_anchor_domain_is_complete_monotonic_and_has_exact_endpoints(self):
         rows = anchors.anchor_rows()
@@ -90,10 +115,12 @@ class PreviewAnchorGeneratorTest(unittest.TestCase):
                 anchors.update_file(xml_path)
 
     def test_check_and_update_share_fail_closed_marker_validation(self):
-        playback_xml = (
-            BINGIE_ROOT / "src" / "1080i" / "IncludesHTPCPlayback.xml"
-        )
-        source = playback_xml.read_text(encoding="utf-8")
+        source = _canonical_xml_source()
+        with tempfile.TemporaryDirectory() as directory:
+            canonical_path = Path(directory) / "canonical.xml"
+            canonical_path.write_text(source, encoding="utf-8")
+            self.assertEqual(anchors.check_file(canonical_path), ())
+
         invalid_sources = {
             "missing": source.replace(anchors.GENERATED_BEGIN, ""),
             "duplicate": source.replace(
