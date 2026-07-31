@@ -261,12 +261,16 @@ class ReconcilerTest(unittest.TestCase):
                     )
                 self.assertEqual(_snapshot(fixture.root), before)
 
-    def test_managed_mode_uses_separate_identity_and_has_four_closed_states(self):
-        for state in STATES:
-            with self.subTest(state=state), tempfile.TemporaryDirectory() as directory:
-                fixture = Fixture(Path(directory), (state, "neither"), managed=True)
+    def test_all_sixteen_managed_state_combinations(self):
+        for states in itertools.product(STATES, repeat=2):
+            with (
+                self.subTest(states=states),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                fixture = Fixture(Path(directory), states, managed=True)
                 before = _snapshot(fixture.root)
-                if state == "both":
+                before_addon_data = _snapshot(fixture.addon_data)
+                if "both" in states:
                     with self.assertRaisesRegex(ReconcileError, "both exist"):
                         reconcile(fixture.configuration, TEST_RUNTIME)
                     self.assertEqual(_snapshot(fixture.root), before)
@@ -274,11 +278,29 @@ class ReconcilerTest(unittest.TestCase):
 
                 moves = reconcile(fixture.configuration, TEST_RUNTIME)
 
-                self.assertEqual(len(moves), 1 if state == "active" else 0)
-                active = fixture.active_root / ADDONS[0][0]
-                backup = fixture.backup_root / ADDONS[0][0]
-                self.assertFalse(active.exists())
-                self.assertEqual(backup.exists(), state in {"active", "backup"})
+                self.assertEqual(
+                    [move.addon_id for move in moves],
+                    [
+                        addon_id
+                        for (addon_id, _version), state in zip(ADDONS, states)
+                        if state == "active"
+                    ],
+                )
+                self.assertTrue(
+                    all(move.operation == "backup" for move in moves)
+                )
+                for (addon_id, _version), state in zip(ADDONS, states):
+                    active = fixture.active_root / addon_id
+                    backup = fixture.backup_root / addon_id
+                    self.assertFalse(active.exists())
+                    self.assertEqual(
+                        backup.exists(),
+                        state in {"active", "backup"},
+                    )
+                self.assertEqual(
+                    _snapshot(fixture.addon_data),
+                    before_addon_data,
+                )
 
     def test_global_preflight_prevents_first_restore_when_second_is_invalid(self):
         with tempfile.TemporaryDirectory() as directory:

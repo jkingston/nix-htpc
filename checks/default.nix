@@ -25,8 +25,30 @@ let
     htpcConfiguration.systemd.units."cec-tv-wake.service";
   settingsWatchdog =
     htpcConfiguration.systemd.services.kodi-settings-watchdog;
+  kodiSettingsService =
+    htpcConfiguration.systemd.services.kodi-settings;
+  kodiSettingsServiceScriptText =
+    builtins.unsafeDiscardStringContext kodiSettingsService.script;
   kodiAddonReconciler =
     htpcConfiguration.system.build.kodiAddonReconciler;
+  kodiBingieDependenciesCheck =
+    htpcConfiguration.system.build.kodiBingieDependenciesCheck;
+  kodiBingieHelper =
+    htpcConfiguration.system.build.kodiBingieHelper;
+  kodiSimplejson =
+    htpcConfiguration.system.build.kodiSimplejson;
+  kodiWithAddons =
+    htpcConfiguration.system.build.kodiWithAddons;
+  expectedSimplejsonIdentity = {
+    manifest_sha256 =
+      "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
+    version = "3.19.1+matrix.1";
+  };
+  expectedBingieHelperIdentity = {
+    manifest_sha256 =
+      "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
+    version = "1.1.2";
+  };
   kodiAddonReconcilerConfiguration =
     kodiAddonReconciler.configuration;
   kodiAddonReconcilerCommand =
@@ -257,36 +279,38 @@ in
     assert kodiAddonReconciler.activeRoot == "/home/htpc/.kodi/addons";
     assert kodiAddonReconciler.backupRoot
       == "/var/lib/nix-htpc/kodi-addon-backups";
-    assert kodiAddonReconciler.managedAddons == [ ];
+    assert kodiAddonReconciler.managedAddons == [
+      kodiSimplejson
+      kodiBingieHelper
+    ];
     assert kodiAddonReconcilerConfiguration.schema_version == 1;
     assert kodiAddonReconcilerConfiguration.backup_uid == 0;
     assert kodiAddonReconcilerConfiguration.backup_gid == 0;
     assert kodiAddonReconcilerConfiguration.backup_mode == 448;
-    assert map (spec: spec.addon_id)
-      kodiAddonReconcilerConfiguration.specs == [
-        "script.module.simplejson"
-        "script.bingie.helper"
-      ];
-    assert map (spec: spec.managed)
-      kodiAddonReconcilerConfiguration.specs == [ null null ];
-    assert (builtins.elem {
-      addon_id = "script.module.simplejson";
-      managed = null;
-      userdata = {
-        manifest_sha256 =
-          "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
-        version = "3.19.1+matrix.1";
-      };
-    } kodiAddonReconcilerConfiguration.specs);
-    assert (builtins.elem {
-      addon_id = "script.bingie.helper";
-      managed = null;
-      userdata = {
-        manifest_sha256 =
-          "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
-        version = "1.1.2";
-      };
-    } kodiAddonReconcilerConfiguration.specs);
+    assert kodiAddonReconcilerConfiguration.specs == [
+      {
+        addon_id = "script.module.simplejson";
+        managed = {
+          addon_path =
+            "${kodiSimplejson}/share/kodi/addons/script.module.simplejson";
+          manifest_path =
+            "${kodiSimplejson}/share/kodi/addons/script.module.simplejson/addon.xml";
+          identity = expectedSimplejsonIdentity;
+        };
+        userdata = expectedSimplejsonIdentity;
+      }
+      {
+        addon_id = "script.bingie.helper";
+        managed = {
+          addon_path =
+            "${kodiBingieHelper}/share/kodi/addons/script.bingie.helper";
+          manifest_path =
+            "${kodiBingieHelper}/share/kodi/addons/script.bingie.helper/addon.xml";
+          identity = expectedBingieHelperIdentity;
+        };
+        userdata = expectedBingieHelperIdentity;
+      }
+    ];
     assert builtins.length greetdPreStartParts == 2;
     assert !(lib.hasInfix "source_skin=" (builtins.head greetdPreStartParts));
     assert !(lib.hasInfix "rsync" (builtins.head greetdPreStartParts));
@@ -306,6 +330,88 @@ in
       python3 -B -m unittest -v test_reconciler.py
       touch "$out"
     '';
+
+  kodi-bingie-dependencies =
+    assert kodiSimplejson.version == "3.19.1+matrix.1";
+    assert kodiSimplejson.namespace == "script.module.simplejson";
+    assert kodiSimplejson.pythonPath == "lib";
+    assert kodiBingieHelper.version == "1.1.2";
+    assert kodiBingieHelper.namespace == "script.bingie.helper";
+    assert kodiBingieHelper.manifestIdentity == {
+      inherit (expectedBingieHelperIdentity) version;
+      manifestSha256 =
+        expectedBingieHelperIdentity.manifest_sha256;
+    };
+    assert kodiBingieHelper.provenance == {
+      owner = "matke-84";
+      repo = "script.bingie.helper";
+      rev = "4599ecada369d823843bcf36cb55e9cd67db137a";
+      sourceHash =
+        "sha256-3FRQLYSUp4lNMBruMUP+sDFIN/pD20iariHHGxni7QQ=";
+    };
+    assert kodiBingieHelper.requiredKodiAddons == [ kodiSimplejson ];
+    assert map (addon: addon.namespace) kodiWithAddons.kodiAddonRoots == [
+      "plugin.video.jellyfin"
+      "service.htpc.settings"
+      "script.htpc.osd-review"
+      "script.module.simplejson"
+      "script.bingie.helper"
+    ];
+    assert builtins.elem kodiBingieHelper kodiWithAddons.kodiRuntimeAddons;
+    assert builtins.elem kodiSimplejson kodiWithAddons.kodiRuntimeAddons;
+    assert kodiWithAddons.managedAddonEnableSpecs == [
+      {
+        addonId = "script.module.simplejson";
+        version = "3.19.1+matrix.1";
+      }
+      {
+        addonId = "script.bingie.helper";
+        version = "1.1.2";
+      }
+      {
+        addonId = "service.htpc.settings";
+        version = "2.1.8";
+      }
+      {
+        addonId = "script.htpc.osd-review";
+        version = "0.1.0";
+      }
+    ];
+    assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
+      enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
+      enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
+      enable_managed_addon service.htpc.settings 2.1.8 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
+      enable_managed_addon script.htpc.osd-review 0.1.0 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
+    '') kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "\"properties\":[\"broken\",\"enabled\",\"installed\",\"path\",\"version\"]"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.addonid == $addon_id)"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.version == $expected_version)"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.enabled == true)"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.installed == true)"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.broken == false)"
+      kodiSettingsServiceScriptText;
+    assert lib.hasInfix
+      "and (.result.addon.path == $expected_path)"
+      kodiSettingsServiceScriptText;
+    assert htpcConfiguration.services.greetd.settings.default_session.command
+      == "${kodiWithAddons}/bin/kodi-standalone";
+    if pkgs.stdenv.hostPlatform.isLinux then
+      kodiBingieDependenciesCheck
+    else
+      pkgs.runCommand "kodi-bingie-dependencies-evaluation-check" { } ''
+        touch "$out"
+      '';
 
   kodi-osd-review = pkgs.runCommand "kodi-osd-review-tests" {
     nativeBuildInputs = [

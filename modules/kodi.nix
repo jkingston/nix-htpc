@@ -1,41 +1,71 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
+  kodiPackages = rpiPackages.kodi-gbm.packages;
   kodiSettingsAddonVersion = "2.1.8";
   kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
+  simplejsonIdentity = {
+    version = "3.19.1+matrix.1";
+    manifestSha256 =
+      "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
+  };
+  bingieHelperIdentity = {
+    version = "1.1.2";
+    manifestSha256 =
+      "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
+  };
+  managedAddonEnableSpecs = [
+    {
+      addonId = "script.module.simplejson";
+      version = simplejsonIdentity.version;
+    }
+    {
+      addonId = "script.bingie.helper";
+      version = bingieHelperIdentity.version;
+    }
+    {
+      addonId = "service.htpc.settings";
+      version = kodiSettingsAddonVersion;
+    }
+    {
+      addonId = "script.htpc.osd-review";
+      version = kodiOsdReviewAddonVersion;
+    }
+  ];
   kodiScreenshotEvidence = import ./kodi-screenshot-evidence/package.nix {
     inherit lib pkgs;
     screenshotPath = kodiScreenshotPath;
+  };
+  simplejson = kodiPackages.simplejson;
+  bingieHelper = import ./bingie-helper {
+    inherit kodiPackages lib pkgs;
   };
   kodiAddonReconciler = import ./kodi-addon-reconciler {
     inherit lib pkgs;
     addonSpecs = [
       {
         addonId = "script.module.simplejson";
-        userdata = {
-          version = "3.19.1+matrix.1";
-          manifestSha256 =
-            "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
+        userdata = simplejsonIdentity;
+        managed = {
+          addon = simplejson;
+          identity = simplejsonIdentity;
         };
-        managed = null;
       }
       {
         addonId = "script.bingie.helper";
-        userdata = {
-          version = "1.1.2";
-          manifestSha256 =
-            "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
+        userdata = bingieHelperIdentity;
+        managed = {
+          addon = bingieHelper;
+          identity = bingieHelperIdentity;
         };
-        managed = null;
       }
     ];
   };
   bingieMod = import ./bingie {
-    inherit pkgs;
-    kodiPackages = rpiPackages.kodi-gbm.packages;
+    inherit kodiPackages pkgs;
   };
-  kodiSettingsAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
+  kodiSettingsAddon = kodiPackages.buildKodiAddon {
     pname = "htpc-settings";
     namespace = "service.htpc.settings";
     version = kodiSettingsAddonVersion;
@@ -100,7 +130,7 @@ let
     inherit lib pkgs;
     addonVersion = kodiSettingsAddonVersion;
   };
-  kodiOsdReviewAddon = rpiPackages.kodi-gbm.packages.buildKodiAddon {
+  kodiOsdReviewAddon = kodiPackages.buildKodiAddon {
     pname = "htpc-osd-review";
     namespace = "script.htpc.osd-review";
     version = kodiOsdReviewAddonVersion;
@@ -137,13 +167,91 @@ let
     '';
   };
   jellyfinHtpc = import ./jellyfin {
-    kodiPackages = rpiPackages.kodi-gbm.packages;
+    inherit kodiPackages;
   };
-  kodiWithAddons = rpiPackages.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
+  baseKodiAddonRoots = [
     jellyfinHtpc
     kodiSettingsAddon
     kodiOsdReviewAddon
-  ]);
+  ];
+  kodiAddonRoots =
+    baseKodiAddonRoots ++ kodiAddonReconciler.managedAddons;
+  kodiRuntimeAddons = kodiPackages.requiredKodiAddons kodiAddonRoots;
+  kodiWithAddons = (rpiPackages.kodi-gbm.withPackages (_: kodiAddonRoots))
+    .overrideAttrs (oldAttrs: {
+      passthru = (oldAttrs.passthru or { }) // {
+        inherit
+          kodiAddonRoots
+          kodiRuntimeAddons
+          managedAddonEnableSpecs
+          ;
+      };
+    });
+  kodiBingieDependenciesCheck =
+    assert simplejson.version == simplejsonIdentity.version;
+    assert bingieHelper.manifestIdentity == bingieHelperIdentity;
+    assert bingieHelper.requiredKodiAddons == [ simplejson ];
+    assert kodiAddonReconciler.managedAddons == [
+      simplejson
+      bingieHelper
+    ];
+    assert lib.drop (builtins.length baseKodiAddonRoots) kodiAddonRoots
+      == kodiAddonReconciler.managedAddons;
+    assert builtins.elem bingieHelper kodiRuntimeAddons;
+    assert builtins.elem simplejson kodiRuntimeAddons;
+    pkgs.runCommand "kodi-bingie-dependencies-check" {
+      nativeBuildInputs = [
+        pkgs.coreutils
+        pkgs.libxml2
+      ];
+    } ''
+      simplejson_manifest=${
+        simplejson
+      }/share/kodi/addons/script.module.simplejson/addon.xml
+      helper_manifest=${
+        bingieHelper
+      }/share/kodi/addons/script.bingie.helper/addon.xml
+
+      check_manifest() {
+        manifest="$1"
+        addon_id="$2"
+        version="$3"
+        sha256="$4"
+        test "$(sha256sum "$manifest" | cut -d ' ' -f 1)" = "$sha256"
+        test "$(xmllint --xpath 'string(/addon/@id)' "$manifest")" = \
+          "$addon_id"
+        test "$(xmllint --xpath 'string(/addon/@version)' "$manifest")" = \
+          "$version"
+      }
+
+      check_manifest \
+        "$simplejson_manifest" \
+        script.module.simplejson \
+        ${lib.escapeShellArg simplejsonIdentity.version} \
+        ${lib.escapeShellArg simplejsonIdentity.manifestSha256}
+      check_manifest \
+        "$helper_manifest" \
+        script.bingie.helper \
+        ${lib.escapeShellArg bingieHelperIdentity.version} \
+        ${lib.escapeShellArg bingieHelperIdentity.manifestSha256}
+
+      test -f "${
+        kodiWithAddons
+      }/share/kodi/addons/script.module.simplejson/addon.xml"
+      test -f "${
+        kodiWithAddons
+      }/share/kodi/addons/script.bingie.helper/addon.xml"
+      test "$(cat ${bingieHelper}/nix-support/propagated-build-inputs)" = \
+        ${lib.escapeShellArg "${simplejson}"}
+      grep -Fq \
+        ${
+          lib.escapeShellArg
+            "${simplejson}/share/kodi/addons/script.module.simplejson/lib"
+        } \
+        ${kodiWithAddons}/bin/kodi
+
+      touch "$out"
+    '';
 in
 {
   environment.systemPackages = [
@@ -152,6 +260,11 @@ in
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
   system.build.kodiAddonReconciler = kodiAddonReconciler;
+  system.build.kodiBingieDependenciesCheck =
+    kodiBingieDependenciesCheck;
+  system.build.kodiBingieHelper = bingieHelper;
+  system.build.kodiSimplejson = simplejson;
+  system.build.kodiWithAddons = kodiWithAddons;
   system.build.kodiOsdReviewAddon = kodiOsdReviewAddon;
   system.build.kodiSettingsWatchdog = kodiSettingsWatchdog;
 
@@ -267,8 +380,10 @@ in
     script = ''
       enable_managed_addon() {
         addon_id="$1"
+        expected_version="$2"
+        expected_path="$3"
         for ((attempt = 0; attempt < 60; attempt++)); do
-          response="$(
+          set_response="$(
             ${pkgs.coreutils}/bin/printf \
               '{"jsonrpc":"2.0","method":"Addons.SetAddonEnabled","params":{"addonid":"%s","enabled":true},"id":1}\n' \
               "$addon_id" \
@@ -276,19 +391,68 @@ in
               || true
           )"
 
-          case "$response" in
-            *'"result":"OK"'*) return 0 ;;
-          esac
+          if ${pkgs.coreutils}/bin/printf '%s' "$set_response" \
+            | ${pkgs.jq}/bin/jq -e \
+              '
+                (type == "object")
+                and (.jsonrpc == "2.0")
+                and (.id == 1)
+                and (has("error") | not)
+                and (.result == "OK")
+              ' >/dev/null
+          then
+            details_response="$(
+              ${pkgs.coreutils}/bin/printf \
+                '{"jsonrpc":"2.0","method":"Addons.GetAddonDetails","params":{"addonid":"%s","properties":["broken","enabled","installed","path","version"]},"id":2}\n' \
+                "$addon_id" \
+                | ${pkgs.netcat-openbsd}/bin/nc -N -w 1 127.0.0.1 9090 \
+                || true
+            )"
+
+            if ${pkgs.coreutils}/bin/printf '%s' "$details_response" \
+              | ${pkgs.jq}/bin/jq -e \
+                --arg addon_id "$addon_id" \
+                --arg expected_version "$expected_version" \
+                --arg expected_path "$expected_path" \
+                '
+                  (type == "object")
+                  and (.jsonrpc == "2.0")
+                  and (.id == 2)
+                  and (has("error") | not)
+                  and (.result | type == "object")
+                  and (.result.addon | type == "object")
+                  and (.result.addon.addonid == $addon_id)
+                  and (.result.addon.version == $expected_version)
+                  and (.result.addon.enabled == true)
+                  and (.result.addon.installed == true)
+                  and (.result.addon.broken == false)
+                  and (.result.addon.path == $expected_path)
+                ' >/dev/null
+            then
+              return 0
+            fi
+          fi
 
           sleep 1
         done
 
-        echo "Kodi did not enable $addon_id within 60 seconds" >&2
+        echo \
+          "Kodi did not enable $addon_id $expected_version at $expected_path within 60 seconds" \
+          >&2
         return 1
       }
 
-      enable_managed_addon service.htpc.settings
-      enable_managed_addon script.htpc.osd-review
+      ${
+        lib.concatMapStringsSep "\n" (
+          spec:
+          "enable_managed_addon ${
+            lib.escapeShellArg spec.addonId
+          } ${lib.escapeShellArg spec.version} ${
+            lib.escapeShellArg
+              "${kodiWithAddons}/share/kodi/addons/${spec.addonId}/"
+          }"
+        ) managedAddonEnableSpecs
+      }
     '';
 
     serviceConfig = {
