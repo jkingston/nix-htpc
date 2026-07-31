@@ -23,6 +23,7 @@ EXPECTED_FOCUS = {
     "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
+    "seek-forward-slot-b": "9300",
     "top-stop": "9101",
 }
 EXPECTED_CLEANUP = {
@@ -48,6 +49,17 @@ EXPECTED_CLEANUP = {
     "htpc.review.seek.a.previewstatus",
     "htpc.review.seek.a.previewpath",
     "htpc.review.seek.a.previewanchor",
+    "htpc.review.seek.b.revision",
+    "htpc.review.seek.b.phase",
+    "htpc.review.seek.b.targetvalid",
+    "htpc.review.seek.b.targetfill",
+    "htpc.review.seek.b.targetmarker",
+    "htpc.review.seek.b.time",
+    "htpc.review.seek.b.delta",
+    "htpc.review.seek.b.prompt",
+    "htpc.review.seek.b.previewstatus",
+    "htpc.review.seek.b.previewpath",
+    "htpc.review.seek.b.previewanchor",
 }
 
 

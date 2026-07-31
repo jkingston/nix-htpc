@@ -89,6 +89,30 @@ class ReviewContractTest(unittest.TestCase):
         self.assertNotIn("htpc.review.bufferprogress", backward)
         self.assertNotIn("htpc.review.bufferprogress", forward)
 
+    def test_forward_seek_is_identical_across_atomic_slots(self):
+        slot_a = scenario_properties("seek-forward")
+        slot_b = scenario_properties("seek-forward-slot-b")
+        self.assertEqual(slot_a["htpc.review.seek.viewslot"], "a")
+        self.assertEqual(slot_b["htpc.review.seek.viewslot"], "b")
+        for field in (
+            "revision",
+            "phase",
+            "targetvalid",
+            "targetfill",
+            "targetmarker",
+            "time",
+            "delta",
+            "prompt",
+            "previewstatus",
+            "previewpath",
+            "previewanchor",
+        ):
+            with self.subTest(field=field):
+                self.assertEqual(
+                    slot_a["htpc.review.seek.a." + field],
+                    slot_b["htpc.review.seek.b." + field],
+                )
+
     def test_non_seek_scenarios_publish_no_seek_view(self):
         for scenario in (
             "transport-paused",
@@ -141,9 +165,14 @@ class ReviewContractTest(unittest.TestCase):
         self.assertEqual(focus, EXPECTED_FOCUS)
 
     def test_preview_paths_resolve_inside_the_packaged_skin(self):
-        for scenario in ("seek-backward", "seek-forward"):
+        scenarios = (
+            ("seek-backward", "a"),
+            ("seek-forward", "a"),
+            ("seek-forward-slot-b", "b"),
+        )
+        for scenario, slot in scenarios:
             uri = scenario_properties(scenario)[
-                "htpc.review.seek.a.previewpath"
+                "htpc.review.seek." + slot + ".previewpath"
             ]
             prefix = "special://skin/"
             self.assertTrue(uri.startswith(prefix))

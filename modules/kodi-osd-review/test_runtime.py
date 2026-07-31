@@ -132,6 +132,7 @@ class RuntimeHarness:
                 "timeline-chapters": "9300",
                 "seek-backward": "9300",
                 "seek-forward": "9300",
+                "seek-forward-slot-b": "9300",
                 "top-stop": "9101",
             }
             self.current_focus = focus[scenario]
@@ -185,6 +186,32 @@ class ReviewRuntimeTest(unittest.TestCase):
         self.assertEqual(
             harness.window.events[-len(PROPERTY_KEYS) :],
             [("clear", key) for key in PROPERTY_KEYS],
+        )
+
+    def test_slot_b_frame_is_complete_before_atomic_publication(self):
+        harness = RuntimeHarness()
+        self.assertTrue(
+            harness.runtime.run(["state=seek-forward-slot-b"])
+        )
+        preview = (
+            "set",
+            "htpc.review.seek.b.previewanchor",
+            "75",
+        )
+        select = ("set", "htpc.review.seek.viewslot", "b")
+        expose = ("set", "htpc.review.seek.viewactive", "true")
+        activate = ("builtin", "ActivateWindow(1192)")
+        self.assertLess(
+            harness.all_events.index(preview),
+            harness.all_events.index(select),
+        )
+        self.assertLess(
+            harness.all_events.index(select),
+            harness.all_events.index(expose),
+        )
+        self.assertLess(
+            harness.all_events.index(expose),
+            harness.all_events.index(activate),
         )
 
     def test_open_refuses_an_existing_review_without_mutation(self):

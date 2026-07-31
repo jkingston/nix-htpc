@@ -30,6 +30,17 @@ PROPERTY_NAMES = (
     "seek.a.previewstatus",
     "seek.a.previewpath",
     "seek.a.previewanchor",
+    "seek.b.revision",
+    "seek.b.phase",
+    "seek.b.targetvalid",
+    "seek.b.targetfill",
+    "seek.b.targetmarker",
+    "seek.b.time",
+    "seek.b.delta",
+    "seek.b.prompt",
+    "seek.b.previewstatus",
+    "seek.b.previewpath",
+    "seek.b.previewanchor",
 )
 PROPERTY_KEYS = tuple(PROPERTY_PREFIX + name for name in PROPERTY_NAMES)
 
@@ -39,6 +50,7 @@ SCENARIOS = (
     "timeline-chapters",
     "seek-backward",
     "seek-forward",
+    "seek-forward-slot-b",
     "top-stop",
 )
 EXPECTED_FOCUS = {
@@ -47,6 +59,7 @@ EXPECTED_FOCUS = {
     "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
+    "seek-forward-slot-b": "9300",
     "top-stop": "9101",
 }
 
@@ -107,6 +120,23 @@ _SEEK = {
             "special://skin/resources/review/seek-75.png"
         ),
         "seek.a.previewanchor": "75",
+    },
+    "seek-forward-slot-b": {
+        "seek.viewactive": "true",
+        "seek.viewslot": "b",
+        "seek.b.revision": "1",
+        "seek.b.phase": "ready",
+        "seek.b.targetvalid": "true",
+        "seek.b.targetfill": "0.0000,75.0000",
+        "seek.b.targetmarker": "75.0000,75.0000",
+        "seek.b.time": "1:15:00",
+        "seek.b.delta": "+35:00",
+        "seek.b.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
+        "seek.b.previewstatus": "ready",
+        "seek.b.previewpath": (
+            "special://skin/resources/review/seek-75.png"
+        ),
+        "seek.b.previewanchor": "75",
     },
 }
 

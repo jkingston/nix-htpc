@@ -12,6 +12,7 @@
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-chapters)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-backward)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward)">SetFocus(9300)</onload>
+	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-slot-b)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),top-stop)">SetFocus(9101)</onload>
 
 	<onunload>ClearProperty(htpc.review.ready,Home)</onunload>
@@ -36,6 +37,17 @@
 	<onunload>ClearProperty(htpc.review.seek.a.previewstatus,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.previewpath,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.previewanchor,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.revision,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.phase,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.targetvalid,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.targetfill,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.targetmarker,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.time,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.delta,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.prompt,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.previewstatus,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.previewpath,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.b.previewanchor,Home)</onunload>
 
 	<controls>
 		<control type="image">
