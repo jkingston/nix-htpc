@@ -116,6 +116,11 @@ from media_contract import (
     CHAPTERS_TOKEN,
     CHAPTER_AVAILABLE,
     CHAPTER_OPEN,
+    CLEANUP_SEEK_PROPERTY_KEYS,
+    CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
+    CURRENT_SEEK_PROPERTY_KEYS,
+    CURRENT_SEEK_VIEW_PROPERTY_KEYS,
+    CURRENT_VIEW_SLOT_FIELDS,
     PREVIEW_FRAME,
     PREVIEW_GENERATION,
     PREVIEW_PATH,
@@ -124,7 +129,11 @@ from media_contract import (
     PREVIEW_SAMPLE,
     PREVIEW_TARGET,
     PREVIEW_TOKEN,
+    RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS,
+    RETIRED_SEEK_PROPERTY_KEYS,
+    RETIRED_SEEK_VIEW_PROPERTY_KEYS,
     SERVICE_PROTOCOL,
+    SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
     chapter_contract_available,
     parse_chapter_payload,
@@ -1690,7 +1699,62 @@ class PresenterAndLeaseTest(unittest.TestCase):
         CONDITIONS.clear()
         WINDOWS.clear()
 
-    def test_publisher_exposes_modal_only_for_transaction_snapshot(self):
+    def test_current_and_retired_property_inventories_are_exact(self):
+        self.assertEqual(
+            CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
+            ("active", "generation", "targetseconds", "modal"),
+        )
+        self.assertEqual(
+            RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS,
+            (
+                "state",
+                "mode",
+                "source",
+                "percent",
+                "previewbucket",
+                "time",
+                "delta",
+                "confirm",
+                "controllerpaused",
+                "wasplaying",
+                "playbackepoch",
+                "hold",
+                "holdreleased",
+                "previewready",
+                "previewpath",
+            ),
+        )
+        self.assertEqual(
+            CURRENT_VIEW_SLOT_FIELDS,
+            (
+                "targetvalid",
+                "targetfill",
+                "targetmarker",
+                "time",
+                "delta",
+                "prompt",
+                "previewstatus",
+                "previewpath",
+                "previewanchor",
+            ),
+        )
+        self.assertEqual(
+            RETIRED_SEEK_VIEW_PROPERTY_KEYS,
+            ("a.revision", "a.phase", "b.revision", "b.phase"),
+        )
+        self.assertTrue(
+            set(CURRENT_SEEK_PROPERTY_KEYS).isdisjoint(
+                RETIRED_SEEK_PROPERTY_KEYS
+            )
+        )
+        self.assertEqual(len(CURRENT_SEEK_VIEW_PROPERTY_KEYS), 21)
+        self.assertEqual(len(RETIRED_SEEK_PROPERTY_KEYS), 19)
+        self.assertEqual(
+            CLEANUP_SEEK_PROPERTY_KEYS,
+            CURRENT_SEEK_PROPERTY_KEYS + RETIRED_SEEK_PROPERTY_KEYS,
+        )
+
+    def test_publisher_writes_only_four_current_controller_fields(self):
         window = FakeWindow()
         publisher = KodiPropertyPublisher(window)
         snapshot = {
@@ -1712,16 +1776,75 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "hold_released": False,
         }
         publisher.publish(snapshot)
+        self.assertEqual(
+            window.operations,
+            [
+                ("set", "htpc.seek.active", "true"),
+                ("set", "htpc.seek.generation", "1"),
+                ("set", "htpc.seek.targetseconds", "110"),
+                ("set", "htpc.seek.modal", "true"),
+            ],
+        )
         self.assertEqual(window.getProperty("htpc.seek.modal"), "true")
-        self.assertEqual(window.getProperty("htpc.seek.mode"), "scrub")
-        self.assertEqual(window.getProperty("htpc.seek.percent"), "10.0000")
-        self.assertEqual(window.getProperty("htpc.seek.previewbucket"), "2")
+        self.assertEqual(window.getProperty("htpc.seek.active"), "true")
+        self.assertEqual(window.getProperty("htpc.seek.generation"), "1")
+        self.assertEqual(window.getProperty("htpc.seek.targetseconds"), "110")
+        self.assertTrue(
+            all(
+                not window.getProperty("htpc.seek." + key)
+                for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
+            )
+        )
 
+        window.operations[:] = []
         snapshot["modal"] = False
         snapshot["percent"] = 100
         publisher.publish(snapshot)
         self.assertEqual(window.getProperty("htpc.seek.modal"), "")
-        self.assertEqual(window.getProperty("htpc.seek.previewbucket"), "20")
+        self.assertEqual(
+            window.operations,
+            [("clear", "htpc.seek.modal", "")],
+        )
+
+        window.operations[:] = []
+        snapshot["target_seconds"] = 125
+        publisher.publish(snapshot)
+        self.assertEqual(
+            window.operations,
+            [("set", "htpc.seek.targetseconds", "125")],
+        )
+
+    def test_preview_validation_does_not_republish_controller_properties(self):
+        window = FakeWindow()
+        token = {
+            "schema": 1,
+            "playback": "playback-one",
+            "seek_generation": 7,
+            "target_seconds": 110,
+            "sample_seconds": 100,
+            "frame_index": 10,
+            "revision": 4,
+        }
+        window.properties.update(
+            {
+                PREVIEW_PATH: "/tmp/frame-10.jpg",
+                PREVIEW_TOKEN: json.dumps(token),
+                PREVIEW_PLAYBACK: "playback-one",
+                PREVIEW_GENERATION: "7",
+                PREVIEW_TARGET: "110",
+                PREVIEW_SAMPLE: "100",
+                PREVIEW_FRAME: "10",
+                PREVIEW_REVISION: "4",
+            }
+        )
+        publisher = KodiPropertyPublisher(window)
+        path = publisher.refresh_preview(
+            {"active": True, "generation": 7, "target_seconds": 110}
+        )
+        self.assertEqual(path, "/tmp/frame-10.jpg")
+        self.assertEqual(window.operations, [])
+        self.assertEqual(window.getProperty("htpc.seek.previewready"), "")
+        self.assertEqual(window.getProperty("htpc.seek.previewpath"), "")
 
     def test_view_publisher_commits_complete_inactive_slot_then_flips(self):
         window = FakeWindow()
@@ -1742,6 +1865,19 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "preview_path": "/tmp/frame.jpg",
         }
         publisher.publish_view(view)
+        self.assertEqual(len(window.operations), 12)
+        self.assertTrue(
+            all(
+                operation[1]
+                not in {
+                    "htpc.seek.a.revision",
+                    "htpc.seek.a.phase",
+                    "htpc.seek.b.revision",
+                    "htpc.seek.b.phase",
+                }
+                for operation in window.operations
+            )
+        )
         self.assertEqual(
             window.getProperty("htpc.seek.actualmarker"),
             "10.00,10.00",
@@ -1779,9 +1915,18 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertLess(selector, active)
 
         window.operations[:] = []
-        changed = dict(view)
-        changed.update(
+        internal_only = dict(
+            view,
             target_revision=2,
+            phase="settling",
+        )
+        publisher.publish_view(internal_only)
+        self.assertEqual(window.operations, [])
+        self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")
+
+        changed = dict(internal_only)
+        changed.update(
+            target_revision=3,
             target_percent=67.5,
             time="11:15",
             delta="+9:35",
@@ -2011,6 +2156,73 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "/tmp/frame.jpg",
         )
 
+    def test_cleanup_removes_current_and_retired_residue_exactly(self):
+        window = FakeWindow()
+        all_keys = CLEANUP_SEEK_PROPERTY_KEYS
+        window.properties.update(
+            ("htpc.seek." + key, "stale") for key in all_keys
+        )
+        publisher = KodiPropertyPublisher(window)
+
+        publisher.clear()
+
+        self.assertEqual(
+            window.operations,
+            [
+                ("clear", "htpc.seek." + key, "")
+                for key in all_keys
+            ],
+        )
+        self.assertTrue(
+            all(
+                not window.getProperty("htpc.seek." + key)
+                for key in all_keys
+            )
+        )
+        self.assertEqual(publisher.last, {})
+        self.assertIsNone(publisher.view_slot)
+        self.assertIsNone(publisher.view_signature)
+
+    def test_controller_cleanup_is_four_operations_and_keeps_view(self):
+        window = FakeWindow()
+        window.properties.update(
+            ("htpc.seek." + key, "current")
+            for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
+        )
+        window.properties.update(
+            ("htpc.seek." + key, "retired")
+            for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
+        )
+        window.properties.update(
+            {
+                "htpc.seek.viewactive": "true",
+                "htpc.seek.viewslot": "a",
+                "htpc.seek.a.targetvalid": "true",
+            }
+        )
+        publisher = KodiPropertyPublisher(window)
+
+        publisher.clear_controller()
+
+        self.assertEqual(
+            window.operations,
+            [
+                ("clear", "htpc.seek." + key, "")
+                for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
+            ],
+        )
+        self.assertTrue(
+            all(
+                window.getProperty("htpc.seek." + key) == "retired"
+                for key in RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS
+            )
+        )
+        self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
+        self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")
+        self.assertEqual(
+            window.getProperty("htpc.seek.a.targetvalid"), "true"
+        )
+
     def test_lease_rearms_before_crash_expiry_and_clears_on_stop(self):
         self.assertEqual(SERVICE_READY, "htpc.service.ready")
         self.assertEqual(SERVICE_PROTOCOL, "htpc.service.protocol")
@@ -2023,8 +2235,9 @@ class PresenterAndLeaseTest(unittest.TestCase):
             builtin=builtins.append,
         )
         lease.refresh(force=True)
+        self.assertEqual(SERVICE_PROTOCOL_VERSION, "2")
         self.assertEqual(window.getProperty(SERVICE_READY), "true")
-        self.assertTrue(window.getProperty(SERVICE_PROTOCOL))
+        self.assertEqual(window.getProperty(SERVICE_PROTOCOL), "2")
         self.assertIn("00:02", builtins[-1])
         count = len(builtins)
         now[0] = 0.74

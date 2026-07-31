@@ -139,7 +139,7 @@ class PlaybackViewModelTest(unittest.TestCase):
             )
             self.assertTrue(snapshot["active"])
             self.assertEqual(snapshot["target_seconds"], 110)
-            self.assertEqual(snapshot["targetmarker"], "11.0000,11.0000")
+            self.assertEqual(snapshot["target_percent"], 11.0)
 
         settled = view.update(
             controller(state=IDLE, target=0),
@@ -175,7 +175,7 @@ class PlaybackViewModelTest(unittest.TestCase):
             0.11,
         )
         self.assertEqual(handoff["phase"], "settling")
-        self.assertEqual(handoff["targetmarker"], "11.0000,11.0000")
+        self.assertEqual(handoff["target_percent"], 11.0)
         self.assertTrue(view.offer_preview("", 1, 0))
         retained = view.snapshot()
         self.assertEqual(retained["preview_status"], "ready")
@@ -781,20 +781,17 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertFalse(invalid["active"])
         self.assertFalse(invalid["target_valid"])
-        self.assertEqual(invalid["targetfill"], "0.0000,0.0000")
-        self.assertEqual(invalid["targetmarker"], "0.0000,0.0000")
+        self.assertEqual(invalid["target_percent"], 0.0)
 
         infinite = view.update(controller(target=float("inf")), player(), 0.05)
         self.assertFalse(infinite["active"])
         self.assertFalse(infinite["target_valid"])
 
         low = view.update(controller(target=-50), player(), 0.1)
-        self.assertEqual(low["targetfill"], "0.0000,0.0000")
-        self.assertEqual(low["targetmarker"], "0.0000,0.0000")
+        self.assertEqual(low["target_percent"], 0.0)
 
         high = view.update(controller(target=5000), player(), 0.2)
-        self.assertEqual(high["targetfill"], "0.0000,100.0000")
-        self.assertEqual(high["targetmarker"], "100.0000,100.0000")
+        self.assertEqual(high["target_percent"], 100.0)
 
     def test_unattributed_callback_and_settle_timeout_are_safe(self):
         view = PlaybackViewModel()

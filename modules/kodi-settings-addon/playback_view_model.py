@@ -496,7 +496,6 @@ class PlaybackViewModel(object):
             if self.target_valid and self.target is not None
             else ""
         )
-        formatted_target = "%.4f" % target_percent
         return {
             "active": self.active,
             "phase": self.phase,
@@ -509,9 +508,6 @@ class PlaybackViewModel(object):
             "target_valid": self.target_valid,
             "target_seconds": self.target if self.target_valid else None,
             "target_percent": target_percent,
-            "targetfill": "0.0000,%s" % formatted_target,
-            "targetmarker": "%s,%s"
-            % (formatted_target, formatted_target),
             "time": target_time,
             "delta": delta,
             "prompt": self.prompt,

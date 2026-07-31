@@ -7,11 +7,11 @@ import xbmc
 import xbmcgui
 
 from media_contract import (
+    CLEANUP_SEEK_PROPERTY_KEYS,
+    CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS,
+    CURRENT_VIEW_SLOT_FIELDS,
     HOME_WINDOW_ID,
-    SEEK_CONTROLLER_PROPERTY_KEYS,
     SEEK_PREFIX,
-    SEEK_PROPERTY_KEYS,
-    VIEW_SLOT_FIELDS,
     SERVICE_PROTOCOL,
     SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
@@ -38,29 +38,11 @@ class KodiPropertyPublisher(object):
         self.view_signature = None
 
     def publish(self, snapshot):
-        percent = max(0.0, min(100.0, float(snapshot["percent"])))
         values = {
             "active": "true" if snapshot["active"] else "",
             "generation": str(snapshot["generation"]),
-            "state": snapshot["state"],
-            "mode": snapshot.get("mode", ""),
-            "source": snapshot["source"],
             "targetseconds": str(snapshot["target_seconds"]),
-            "percent": "%.4f" % percent,
-            # Skin-owned 5% buckets let the preview follow the cursor without
-            # retaining xbmcgui.Control pointers across OSD reconstruction.
-            "previewbucket": str(int((percent + 2.5) // 5.0)),
-            "time": snapshot["time"],
-            "delta": snapshot["delta"],
-            "confirm": "true" if snapshot["confirm"] else "",
             "modal": "true" if snapshot.get("modal") else "",
-            "controllerpaused": (
-                "true" if snapshot.get("controller_paused") else ""
-            ),
-            "wasplaying": "true" if snapshot.get("was_playing") else "",
-            "playbackepoch": str(snapshot.get("playback_epoch", "")),
-            "hold": "true" if snapshot.get("hold") else "",
-            "holdreleased": "true" if snapshot.get("hold_released") else "",
         }
         for key, value in values.items():
             if self.last.get(key) == value:
@@ -86,20 +68,7 @@ class KodiPropertyPublisher(object):
             (key, self.window.getProperty(key))
             for key in keys
         )
-        path = validated_preview(properties, snapshot)
-        values = {
-            "previewready": "true" if path else "",
-            "previewpath": path,
-        }
-        for key, value in values.items():
-            if self.last.get(key) == value:
-                continue
-            if value:
-                self.window.setProperty(SEEK_PREFIX + key, value)
-            else:
-                self.window.clearProperty(SEEK_PREFIX + key)
-            self.last[key] = value
-        return path
+        return validated_preview(properties, snapshot)
 
     @staticmethod
     def _safe_percent(value):
@@ -155,8 +124,6 @@ class KodiPropertyPublisher(object):
             self.last["viewactive"] = ""
 
         values = (
-            ("revision", str(view.get("target_revision", 0))),
-            ("phase", str(view.get("phase", "idle"))),
             ("targetvalid", "true" if view.get("target_valid") else ""),
             ("targetfill", "0.0000,%s" % formatted),
             ("targetmarker", "%s,%s" % (formatted, formatted)),
@@ -178,7 +145,7 @@ class KodiPropertyPublisher(object):
                 str(int(math.floor(percent + 0.5))),
             ),
         )
-        if tuple(field for field, _value in values) != VIEW_SLOT_FIELDS:
+        if tuple(field for field, _value in values) != CURRENT_VIEW_SLOT_FIELDS:
             raise RuntimeError("incomplete playback view slot")
         signature = (active, values)
         if signature == self.view_signature:
@@ -210,7 +177,7 @@ class KodiPropertyPublisher(object):
             self.last["viewactive"] = value
 
     def clear(self):
-        for key in SEEK_PROPERTY_KEYS:
+        for key in CLEANUP_SEEK_PROPERTY_KEYS:
             self.window.clearProperty(SEEK_PREFIX + key)
         self.last = {}
         self.view_slot = None
@@ -218,7 +185,7 @@ class KodiPropertyPublisher(object):
 
     def clear_controller(self):
         """Clear the transaction contract without tearing the latched view."""
-        for key in SEEK_CONTROLLER_PROPERTY_KEYS:
+        for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS:
             self.window.clearProperty(SEEK_PREFIX + key)
             self.last.pop(key, None)
 

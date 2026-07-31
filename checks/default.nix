@@ -29,6 +29,8 @@ let
     htpcConfiguration.systemd.services.kodi-settings;
   kodiSettingsServiceScriptText =
     builtins.unsafeDiscardStringContext kodiSettingsService.script;
+  greetdRestartTriggers =
+    htpcConfiguration.systemd.services.greetd.restartTriggers;
   kodiAddonReconciler =
     htpcConfiguration.system.build.kodiAddonReconciler;
   kodiBingieDependenciesCheck =
@@ -39,6 +41,10 @@ let
     htpcConfiguration.system.build.kodiSimplejson;
   kodiWithAddons =
     htpcConfiguration.system.build.kodiWithAddons;
+  kodiSettingsAddon =
+    htpcConfiguration.system.build.kodiSettingsAddon;
+  kodiOsdReviewAddon =
+    htpcConfiguration.system.build.kodiOsdReviewAddon;
   kodiCore = kodiWithAddons.kodiCore;
   kodiTcpServerRaceBackport =
     kodiWithAddons.kodiTcpServerRaceBackport;
@@ -365,6 +371,12 @@ in
     ];
     assert builtins.elem kodiBingieHelper kodiWithAddons.kodiRuntimeAddons;
     assert builtins.elem kodiSimplejson kodiWithAddons.kodiRuntimeAddons;
+    assert kodiSettingsAddon.namespace == "service.htpc.settings";
+    assert kodiSettingsAddon.version == "2.1.13";
+    assert kodiOsdReviewAddon.namespace == "script.htpc.osd-review";
+    assert kodiOsdReviewAddon.version == "0.1.1";
+    assert builtins.elem kodiSettingsAddon greetdRestartTriggers;
+    assert builtins.elem kodiOsdReviewAddon greetdRestartTriggers;
     assert kodiWithAddons.managedAddonEnableSpecs == [
       {
         addonId = "script.module.simplejson";
@@ -376,18 +388,18 @@ in
       }
       {
         addonId = "service.htpc.settings";
-        version = "2.1.12";
+        version = "2.1.13";
       }
       {
         addonId = "script.htpc.osd-review";
-        version = "0.1.0";
+        version = "0.1.1";
       }
     ];
     assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
       enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
       enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
-      enable_managed_addon service.htpc.settings 2.1.12 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
-      enable_managed_addon script.htpc.osd-review 0.1.0 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
+      enable_managed_addon service.htpc.settings 2.1.13 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
+      enable_managed_addon script.htpc.osd-review 0.1.1 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
     '') kodiSettingsServiceScriptText;
     assert lib.hasInfix
       "\"properties\":[\"broken\",\"enabled\",\"installed\",\"path\",\"version\"]"

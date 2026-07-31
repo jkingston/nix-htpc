@@ -14,9 +14,7 @@ CHAPTER_AVAILABLE = "htpc.chapter.available"
 CHAPTER_OPEN = "htpc.chapter.open"
 
 SEEK_PREFIX = "htpc.seek."
-VIEW_SLOT_FIELDS = (
-    "revision",
-    "phase",
+CURRENT_VIEW_SLOT_FIELDS = (
     "targetvalid",
     "targetfill",
     "targetmarker",
@@ -27,19 +25,24 @@ VIEW_SLOT_FIELDS = (
     "previewpath",
     "previewanchor",
 )
-SEEK_CONTROLLER_PROPERTY_KEYS = (
+CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS = (
     "active",
     "generation",
+    "targetseconds",
+    "modal",
+)
+
+# These implementation-only fields are no longer published. Clear them for
+# one release so a service restart removes residue left by version 2.1.12.
+RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS = (
     "state",
     "mode",
     "source",
-    "targetseconds",
     "percent",
     "previewbucket",
     "time",
     "delta",
     "confirm",
-    "modal",
     "controllerpaused",
     "wasplaying",
     "playbackepoch",
@@ -48,16 +51,29 @@ SEEK_CONTROLLER_PROPERTY_KEYS = (
     "previewready",
     "previewpath",
 )
-SEEK_VIEW_PROPERTY_KEYS = (
+CURRENT_SEEK_VIEW_PROPERTY_KEYS = (
     "actualmarker",
     "viewactive",
     "viewslot",
 ) + tuple(
     "%s.%s" % (slot, field)
     for slot in ("a", "b")
-    for field in VIEW_SLOT_FIELDS
+    for field in CURRENT_VIEW_SLOT_FIELDS
 )
-SEEK_PROPERTY_KEYS = SEEK_CONTROLLER_PROPERTY_KEYS + SEEK_VIEW_PROPERTY_KEYS
+RETIRED_SEEK_VIEW_PROPERTY_KEYS = tuple(
+    "%s.%s" % (slot, field)
+    for slot in ("a", "b")
+    for field in ("revision", "phase")
+)
+CURRENT_SEEK_PROPERTY_KEYS = (
+    CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS + CURRENT_SEEK_VIEW_PROPERTY_KEYS
+)
+RETIRED_SEEK_PROPERTY_KEYS = (
+    RETIRED_SEEK_CONTROLLER_PROPERTY_KEYS + RETIRED_SEEK_VIEW_PROPERTY_KEYS
+)
+CLEANUP_SEEK_PROPERTY_KEYS = (
+    CURRENT_SEEK_PROPERTY_KEYS + RETIRED_SEEK_PROPERTY_KEYS
+)
 
 # Jellyfin lane chapter contract. The producer publishes the sanitized manifest
 # first, its commit token next, and AVAILABLE last.

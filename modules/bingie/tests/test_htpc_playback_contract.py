@@ -27,6 +27,7 @@ INCLUDES_XML = XML_ROOT / "Includes.xml"
 OSD_XML = XML_ROOT / "IncludesOSD.xml"
 VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
 PASSIVE_SEEK_HUD_XML = XML_ROOT / "DialogSeekBar.xml"
+AUTO_CLOSE_OSD_XML = XML_ROOT / "Custom_1158_AutoCloseOSD.xml"
 EN_GB_STRINGS = (
     SKIN_ROOT
     / "language"
@@ -1964,8 +1965,31 @@ class ProducerSafetyContractTest(unittest.TestCase):
                 self.assertIn(
                     f'"{property_name}"',
                     contract,
-                    "renderer properties must be cleared with SEEK_PROPERTY_KEYS",
+                    "renderer properties must be in CURRENT_SEEK_PROPERTY_KEYS",
                 )
+
+    def test_production_skin_does_not_consume_retired_seek_properties(self):
+        production_sources = (
+            PLAYBACK_XML,
+            VIDEO_OSD_XML,
+            VIDEO_OSD_WINDOW_XML,
+            OSD_XML,
+            PASSIVE_SEEK_HUD_XML,
+            AUTO_CLOSE_OSD_XML,
+        )
+        source = "\n".join(
+            path.read_text(encoding="utf-8-sig", errors="strict")
+            for path in production_sources
+        )
+        forbidden = (
+            r"htpc\.seek\.(?:a|b)\.(?:revision|phase)\b",
+            r"htpc\.seek\.preview(?:ready|path)\b",
+            r"\$PARAM\[property_prefix\]\.\$PARAM\[slot\]\."
+            r"(?:revision|phase)\b",
+        )
+        for pattern in forbidden:
+            with self.subTest(pattern=pattern):
+                self.assertIsNone(re.search(pattern, source))
 
     def test_presenter_targets_only_owned_video_osd_focus_ids(self):
         source = PRESENTER.read_text(encoding="utf-8")

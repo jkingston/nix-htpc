@@ -7,8 +7,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from review_contract import (
+    CLEANUP_PROPERTY_KEYS,
+    CURRENT_PROPERTY_KEYS,
     EXPECTED_FOCUS,
-    PROPERTY_KEYS,
+    RETIRED_PROPERTY_KEYS,
     SCENARIOS,
     RequestError,
     parse_request,
@@ -65,7 +67,7 @@ class ReviewContractTest(unittest.TestCase):
                     values["htpc.review.scenario"],
                     scenario,
                 )
-                self.assertTrue(set(values).issubset(PROPERTY_KEYS))
+                self.assertTrue(set(values).issubset(CURRENT_PROPERTY_KEYS))
                 self.assertTrue(
                     all(key.startswith("htpc.review.") for key in values)
                 )
@@ -104,8 +106,6 @@ class ReviewContractTest(unittest.TestCase):
         self.assertEqual(slot_a["htpc.review.seek.viewslot"], "a")
         self.assertEqual(slot_b["htpc.review.seek.viewslot"], "b")
         for field in (
-            "revision",
-            "phase",
             "targetvalid",
             "targetfill",
             "targetmarker",
@@ -255,7 +255,7 @@ class ReviewContractTest(unittest.TestCase):
                 if key != "htpc.review.scenario"
             },
         )
-        self.assertNotIn("htpc.review.focuscue", PROPERTY_KEYS)
+        self.assertNotIn("htpc.review.focuscue", CURRENT_PROPERTY_KEYS)
 
         root = ET.parse(REVIEW_WINDOW).getroot()
         include = next(
@@ -287,7 +287,7 @@ class ReviewContractTest(unittest.TestCase):
             )
             self.assertIsNotNone(match, action.text)
             cleared.append(match.group(1))
-        self.assertEqual(set(cleared), set(PROPERTY_KEYS))
+        self.assertEqual(set(cleared), set(CLEANUP_PROPERTY_KEYS))
 
         focus = {}
         for action in root.findall("onload"):
@@ -300,6 +300,26 @@ class ReviewContractTest(unittest.TestCase):
             self.assertIsNotNone(control, action.text)
             focus[scenario.group(1)] = control.group(1)
         self.assertEqual(focus, EXPECTED_FOCUS)
+
+    def test_fixture_revision_two_matches_current_and_retired_property_sets(
+        self,
+    ):
+        self.assertEqual(
+            RETIRED_PROPERTY_KEYS,
+            (
+                "htpc.review.seek.a.revision",
+                "htpc.review.seek.a.phase",
+                "htpc.review.seek.b.revision",
+                "htpc.review.seek.b.phase",
+            ),
+        )
+        self.assertTrue(
+            set(CURRENT_PROPERTY_KEYS).isdisjoint(RETIRED_PROPERTY_KEYS)
+        )
+        for scenario in SCENARIOS:
+            values = scenario_properties(scenario)
+            self.assertEqual(values["htpc.review.revision"], "2")
+            self.assertTrue(set(values).isdisjoint(RETIRED_PROPERTY_KEYS))
 
     def test_preview_paths_resolve_inside_the_packaged_skin(self):
         scenarios = (

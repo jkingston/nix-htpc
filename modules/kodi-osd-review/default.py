@@ -8,9 +8,10 @@ import xbmc
 import xbmcgui
 
 from review_contract import (
+    CLEANUP_PROPERTY_KEYS,
+    CURRENT_PROPERTY_KEYS,
     EXPECTED_FOCUS,
     HOME_WINDOW_ID,
-    PROPERTY_KEYS,
     PROPERTY_PREFIX,
     RequestError,
     parse_request,
@@ -34,7 +35,7 @@ def _is_bingie():
 
 def _clear(window):
     failures = []
-    for key in PROPERTY_KEYS:
+    for key in CLEANUP_PROPERTY_KEYS:
         try:
             window.clearProperty(key)
         except Exception as error:
@@ -63,12 +64,14 @@ def _close_owned_window():
 
 
 def _properties_are_empty(window):
-    return all(not window.getProperty(key) for key in PROPERTY_KEYS)
+    return all(
+        not window.getProperty(key) for key in CLEANUP_PROPERTY_KEYS
+    )
 
 
 def _stage(window, scenario):
     values = scenario_properties(scenario)
-    for key in PROPERTY_KEYS:
+    for key in CURRENT_PROPERTY_KEYS:
         if key in (
             PROPERTY_PREFIX + "ready",
             PROPERTY_PREFIX + "seek.viewslot",

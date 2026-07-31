@@ -6,7 +6,7 @@ import types
 import unittest
 from pathlib import Path
 
-from review_contract import EXPECTED_FOCUS, PROPERTY_KEYS
+from review_contract import CLEANUP_PROPERTY_KEYS, EXPECTED_FOCUS
 
 
 ROOT = Path(__file__).resolve().parent
@@ -175,8 +175,8 @@ class ReviewRuntimeTest(unittest.TestCase):
             harness.all_events.index(ready_event),
         )
         self.assertEqual(
-            harness.window.events[-len(PROPERTY_KEYS) :],
-            [("clear", key) for key in PROPERTY_KEYS],
+            harness.window.events[-len(CLEANUP_PROPERTY_KEYS) :],
+            [("clear", key) for key in CLEANUP_PROPERTY_KEYS],
         )
 
     def test_slot_b_frame_is_complete_before_atomic_publication(self):
@@ -252,14 +252,16 @@ class ReviewRuntimeTest(unittest.TestCase):
 
     def test_close_clears_every_property_and_does_not_open(self):
         harness = RuntimeHarness(review_active=True)
-        harness.window.values = {key: "stale" for key in PROPERTY_KEYS}
+        harness.window.values = {
+            key: "stale" for key in CLEANUP_PROPERTY_KEYS
+        }
         self.assertTrue(harness.runtime.run(["command=close"]))
         self.assertEqual(harness.builtins, ["Dialog.Close(1192,true)"])
         self.assertEqual(harness.window.values, {})
         self.assertEqual(
             harness.window.events,
             [("clear", "htpc.review.ready")]
-            + [("clear", key) for key in PROPERTY_KEYS],
+            + [("clear", key) for key in CLEANUP_PROPERTY_KEYS],
         )
 
     def test_active_media_refuses_without_ui_or_property_mutation(self):
@@ -316,8 +318,8 @@ class ReviewRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(harness.window.values, {})
         self.assertEqual(
-            harness.window.events[-len(PROPERTY_KEYS) :],
-            [("clear", key) for key in PROPERTY_KEYS],
+            harness.window.events[-len(CLEANUP_PROPERTY_KEYS) :],
+            [("clear", key) for key in CLEANUP_PROPERTY_KEYS],
         )
 
     def test_ready_state_drift_aborts_and_cleans(self):
@@ -338,7 +340,9 @@ class ReviewRuntimeTest(unittest.TestCase):
             review_active=True,
             builtin_failure="Dialog.Close(1192,true)",
         )
-        harness.window.values = {key: "stale" for key in PROPERTY_KEYS}
+        harness.window.values = {
+            key: "stale" for key in CLEANUP_PROPERTY_KEYS
+        }
         self.assertFalse(harness.runtime.run(["command=close"]))
         self.assertEqual(
             harness.builtins,

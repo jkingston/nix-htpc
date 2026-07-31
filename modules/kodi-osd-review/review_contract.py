@@ -7,7 +7,7 @@ HOME_WINDOW_ID = 10000
 REVIEW_WINDOW_ID = 1192
 PROPERTY_PREFIX = "htpc.review."
 
-PROPERTY_NAMES = (
+CURRENT_PROPERTY_NAMES = (
     "ready",
     "scenario",
     "revision",
@@ -20,8 +20,6 @@ PROPERTY_NAMES = (
     "seek.modal",
     "seek.viewactive",
     "seek.viewslot",
-    "seek.a.revision",
-    "seek.a.phase",
     "seek.a.targetvalid",
     "seek.a.targetfill",
     "seek.a.targetmarker",
@@ -31,8 +29,6 @@ PROPERTY_NAMES = (
     "seek.a.previewstatus",
     "seek.a.previewpath",
     "seek.a.previewanchor",
-    "seek.b.revision",
-    "seek.b.phase",
     "seek.b.targetvalid",
     "seek.b.targetfill",
     "seek.b.targetmarker",
@@ -43,7 +39,22 @@ PROPERTY_NAMES = (
     "seek.b.previewpath",
     "seek.b.previewanchor",
 )
-PROPERTY_KEYS = tuple(PROPERTY_PREFIX + name for name in PROPERTY_NAMES)
+RETIRED_PROPERTY_NAMES = (
+    "seek.a.revision",
+    "seek.a.phase",
+    "seek.b.revision",
+    "seek.b.phase",
+)
+CURRENT_PROPERTY_KEYS = tuple(
+    PROPERTY_PREFIX + name for name in CURRENT_PROPERTY_NAMES
+)
+
+# Keep cleanup parity with the production migration for one fixture release;
+# these fields are never staged by revision 2 scenarios.
+RETIRED_PROPERTY_KEYS = tuple(
+    PROPERTY_PREFIX + name for name in RETIRED_PROPERTY_NAMES
+)
+CLEANUP_PROPERTY_KEYS = CURRENT_PROPERTY_KEYS + RETIRED_PROPERTY_KEYS
 
 SCENARIOS = (
     "transport-playing",
@@ -75,7 +86,7 @@ EXPECTED_FOCUS = {
 }
 
 _COMMON = {
-    "revision": "1",
+    "revision": "2",
     "paused": "true",
     "title": "Headless OSD Review",
     "subtitle": "Deterministic fixture",
@@ -97,8 +108,6 @@ _SEEK = {
     "seek-backward": {
         "seek.viewactive": "true",
         "seek.viewslot": "a",
-        "seek.a.revision": "1",
-        "seek.a.phase": "ready",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,25.0000",
         "seek.a.targetmarker": "25.0000,25.0000",
@@ -114,8 +123,6 @@ _SEEK = {
     "seek-forward": {
         "seek.viewactive": "true",
         "seek.viewslot": "a",
-        "seek.a.revision": "1",
-        "seek.a.phase": "ready",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
         "seek.a.targetmarker": "75.0000,75.0000",
@@ -131,8 +138,6 @@ _SEEK = {
     "seek-forward-loading": {
         "seek.viewactive": "true",
         "seek.viewslot": "a",
-        "seek.a.revision": "1",
-        "seek.a.phase": "ready",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
         "seek.a.targetmarker": "75.0000,75.0000",
@@ -146,8 +151,6 @@ _SEEK = {
     "seek-forward-unavailable": {
         "seek.viewactive": "true",
         "seek.viewslot": "a",
-        "seek.a.revision": "1",
-        "seek.a.phase": "ready",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
         "seek.a.targetmarker": "75.0000,75.0000",
@@ -161,8 +164,6 @@ _SEEK = {
     "seek-forward-slot-b": {
         "seek.viewactive": "true",
         "seek.viewslot": "b",
-        "seek.b.revision": "1",
-        "seek.b.phase": "ready",
         "seek.b.targetvalid": "true",
         "seek.b.targetfill": "0.0000,75.0000",
         "seek.b.targetmarker": "75.0000,75.0000",
