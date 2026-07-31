@@ -108,6 +108,8 @@ kodiPackages.buildKodiAddon {
     test -f "$addon_dir/resources/htpc/osd/stop-focused.svg"
     test -f "$addon_dir/resources/htpc/osd/stop.png"
     test -f "$addon_dir/resources/htpc/osd/stop-focused.png"
+    test -f "$addon_dir/resources/htpc/osd/timeline-marker.svg"
+    test -f "$addon_dir/resources/htpc/osd/timeline-marker.png"
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"

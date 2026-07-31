@@ -75,8 +75,8 @@
 				<posy>$PARAM[target_marker_top]</posy>
 				<width>$PARAM[rail_width]</width>
 				<height>$PARAM[target_marker_height]</height>
-				<texturebg colordiffuse="00ffffff">common/slider/slider_button_nofocus.png</texturebg>
-				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
+				<texturebg colordiffuse="00ffffff">special://skin/resources/htpc/osd/timeline-marker.png</texturebg>
+				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">special://skin/resources/htpc/osd/timeline-marker.png</lefttexture>
 				<midtexture/>
 				<righttexture/>
 				<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetmarker)</info>

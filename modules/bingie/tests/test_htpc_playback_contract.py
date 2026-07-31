@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import struct
 import sys
 import unittest
 import xml.etree.ElementTree as ET
@@ -40,6 +42,7 @@ SETTINGS_ROOT = Path(
 PRESENTER = SETTINGS_ROOT / "presenter.py"
 MEDIA_CONTRACT = SETTINGS_ROOT / "media_contract.py"
 UPSTREAM_ASSETS = BINGIE_ROOT / "upstream-assets.nix"
+OSD_ASSETS = SKIN_ROOT / "resources" / "htpc" / "osd"
 
 sys.path.insert(0, str(TOOLS_ROOT))
 
@@ -66,6 +69,9 @@ LAYOUT_VIEW_SLOT = (
 )
 PRESENTATION_SLOTS = ("a", "b")
 SLOT_PARAMETER = "$PARAM[slot]"
+TIMELINE_MARKER_TEXTURE = (
+    "special://skin/resources/htpc/osd/timeline-marker.png"
+)
 
 
 def _slot_info(field: str) -> str:
@@ -91,6 +97,15 @@ def _visible_text(control: ET.Element) -> str:
     return " ".join(
         (node.text or "").strip() for node in control.findall("visible")
     )
+
+
+def _png_contract(path: Path) -> tuple[int, int, int, int]:
+    with path.open("rb") as source:
+        header = source.read(26)
+    if len(header) != 26 or header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path} is not a PNG")
+    width, height = struct.unpack(">II", header[16:24])
+    return width, height, header[24], header[25]
 
 
 def _literal_texture_paths(root: ET.Element):
@@ -1469,7 +1484,6 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 )
 
     def test_target_marker_geometry_and_texture_are_canonical(self):
-        marker_texture = "common/slider/slider_button_nofocus.png"
         marker = self._one_slot_control(TARGET_MARKER_DESCRIPTION)
         self.assertEqual(
             marker.findtext("posy"),
@@ -1481,11 +1495,58 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(
             marker.findtext("texturebg"),
-            marker_texture,
+            TIMELINE_MARKER_TEXTURE,
         )
         self.assertEqual(
             marker.findtext("lefttexture"),
-            marker_texture,
+            TIMELINE_MARKER_TEXTURE,
+        )
+
+    def test_timeline_marker_asset_is_square_and_matches_control_height(self):
+        slot_template = next(
+            node
+            for node in self.playback_root.findall("include")
+            if node.get("name") == "HTPCPlaybackPresentationSlot"
+        )
+        defaults = {
+            node.get("name"): node.get("default")
+            for node in slot_template.findall("param")
+        }
+        diameter = int(defaults["target_marker_height"])
+        marker_png = OSD_ASSETS / "timeline-marker.png"
+        marker_svg = OSD_ASSETS / "timeline-marker.svg"
+
+        self.assertEqual(diameter, 11)
+        self.assertEqual(
+            _png_contract(marker_png),
+            (diameter, diameter, 8, 6),
+            "the runtime marker must be an 8-bit square RGBA texture whose "
+            "intrinsic width equals the ranges control height",
+        )
+        self.assertEqual(
+            hashlib.sha256(marker_png.read_bytes()).hexdigest(),
+            "cb02f3c388eead254f6822e9da6cdbf7"
+            "6e4dd36c7bfa9896738f39f3867ca471",
+        )
+
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        source = ET.parse(marker_svg).getroot()
+        self.assertEqual(source.get("width"), str(diameter))
+        self.assertEqual(source.get("height"), str(diameter))
+        self.assertEqual(source.get("viewBox"), "0 0 11 11")
+        disc = source.find("svg:circle", namespace)
+        self.assertIsNotNone(disc)
+        self.assertEqual(
+            {
+                attribute: disc.get(attribute)
+                for attribute in ("cx", "cy", "r", "fill")
+            },
+            {
+                "cx": "5.5",
+                "cy": "5.5",
+                "r": "5.25",
+                "fill": "#ffffff",
+            },
         )
 
     def test_marker_layers_preserve_exact_native_order(self):
