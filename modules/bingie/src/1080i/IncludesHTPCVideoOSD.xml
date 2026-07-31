@@ -68,7 +68,7 @@
 		<param name="actual_progress" default="Player.Progress" />
 		<param name="seekable_condition" default="Player.SeekEnabled + !VideoPlayer.Content(livetv) + !VideoPlayer.HasMenu" />
 		<param name="paused_condition" default="Player.Paused | Player.Forwarding | Player.Rewinding" />
-		<param name="view_inactive_condition" default="String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))" />
+		<param name="view_inactive_condition" default="[String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))]" />
 		<param name="presentation_ready" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
 		<param name="modal_condition" default="false" />
 		<param name="property_window" default="Home" />
@@ -455,7 +455,7 @@
 					<aligny>center</aligny>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[timeline_chapter_hint_label]</label>
-					<visible>$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[chapter_available_condition] + $PARAM[view_inactive_condition] + ![$PARAM[modal_condition]]</visible>
+					<visible>$PARAM[presentation_ready] + $PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[chapter_available_condition] + $PARAM[view_inactive_condition] + ![$PARAM[modal_condition]]</visible>
 					<animation effect="fade" time="120">Visible</animation>
 					<animation effect="fade" time="120">Hidden</animation>
 				</control>

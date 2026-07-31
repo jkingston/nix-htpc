@@ -288,6 +288,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             focus_actions,
             [
                 (
+                    "String.IsEmpty(Window(Home).Property("
+                    "htpc.service.ready)) | "
                     "![Player.SeekEnabled + !VideoPlayer.Content(livetv) + "
                     "!VideoPlayer.HasMenu] | [String.IsEmpty(Window(Home).Property("
                     "htpc.seek.active)) + String.IsEmpty(Window(Home)."
@@ -295,6 +297,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     "SetFocus(9201)",
                 ),
                 (
+                    "!String.IsEmpty(Window(Home).Property("
+                    "htpc.service.ready)) + "
                     "[Player.SeekEnabled + !VideoPlayer.Content(livetv) + "
                     "!VideoPlayer.HasMenu] + [!String.IsEmpty(Window(Home).Property("
                     "htpc.seek.active)) | !String.IsEmpty(Window(Home)."
@@ -371,7 +375,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         )
         self.assertEqual(
             parameters["view_inactive_condition"],
-            "String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))",
+            "[String.IsEmpty(Window(Home).Property(htpc.service.ready)) | "
+            "String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))]",
         )
         self.assertEqual(
             parameters["presentation_ready"],
@@ -561,7 +566,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             "HTPC video OSD elapsed time": not_modal,
             "HTPC video OSD remaining time": not_modal,
             "HTPC video OSD chapter hint": (
-                "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+                "$PARAM[presentation_ready] + $PARAM[seekable_condition] + "
+                "Control.HasFocus(9300) + "
                 "$PARAM[chapter_available_condition] + "
                 "$PARAM[view_inactive_condition] + " + not_modal
             ),
@@ -629,7 +635,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         )[0]
         self.assertEqual(
             _visible_text(chapter_hint),
-            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[presentation_ready] + $PARAM[seekable_condition] + "
+            "Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
             "$PARAM[view_inactive_condition] + "
             "![$PARAM[modal_condition]]",
@@ -723,7 +730,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(len(chapter_hints), 1)
         self.assertEqual(
             _visible_text(chapter_hints[0]),
-            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[presentation_ready] + $PARAM[seekable_condition] + "
+            "Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
             "$PARAM[view_inactive_condition] + "
             "![$PARAM[modal_condition]]",
@@ -861,7 +869,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         )
         self.assertEqual(
             _visible_text(hint),
-            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[presentation_ready] + $PARAM[seekable_condition] + "
+            "Control.HasFocus(9300) + "
             "$PARAM[chapter_available_condition] + "
             "$PARAM[view_inactive_condition] + "
             "![$PARAM[modal_condition]]",
