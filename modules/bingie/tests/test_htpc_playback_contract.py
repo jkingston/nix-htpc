@@ -51,6 +51,10 @@ TARGET_MARKER_DESCRIPTION = "HTPC target position marker"
 CUT_MARKERS_DESCRIPTION = "HTPC cut markers"
 CHAPTER_MARKERS_DESCRIPTION = "HTPC chapter markers"
 PREVIEW_DESCRIPTION = anchors.PREVIEW_DESCRIPTION
+PREVIEW_BACKPLATE_DESCRIPTION = "HTPC trick-play preview backplate"
+PREVIEW_READY_DESCRIPTION = "HTPC trick-play ready state"
+PREVIEW_LOADING_DESCRIPTION = "HTPC trick-play loading state"
+PREVIEW_UNAVAILABLE_DESCRIPTION = "HTPC trick-play unavailable state"
 LAYOUT_READY = "$PARAM[ready_condition]"
 LAYOUT_VIEW_ACTIVE = (
     "Window($PARAM[property_window])."
@@ -348,6 +352,14 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             parameters["chapter_available_condition"],
             "!String.IsEmpty(Window(Home).Property("
             "htpc.chapter.available))",
+        )
+        self.assertEqual(
+            parameters["preview_loading_label"],
+            "$LOCALIZE[31582]",
+        )
+        self.assertEqual(
+            parameters["preview_unavailable_label"],
+            "$LOCALIZE[31583]",
         )
         self.assertEqual(
             parameters["view_inactive_condition"],
@@ -846,7 +858,15 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     f"$PARAM[{parameter}]",
                 )
         self.assertEqual(passed_parameters["target_fill_color"], "80ffffff")
-        self.assertEqual(passed_parameters["stable_preview_card"], "true")
+        self.assertNotIn("stable_preview_card", passed_parameters)
+        self.assertEqual(
+            passed_parameters["preview_loading_label"],
+            "$PARAM[preview_loading_label]",
+        )
+        self.assertEqual(
+            passed_parameters["preview_unavailable_label"],
+            "$PARAM[preview_unavailable_label]",
+        )
         self.assertEqual(
             passed_parameters["preview_background_load"],
             "$PARAM[preview_background_load]",
@@ -1043,7 +1063,15 @@ class PlaybackXmlContractTest(unittest.TestCase):
             layout_defaults["target_fill_color"],
             "$INFO[Skin.String(BingieOSDProgressBarColor)]",
         )
-        self.assertEqual(layout_defaults["stable_preview_card"], "false")
+        self.assertNotIn("stable_preview_card", layout_defaults)
+        self.assertEqual(
+            layout_defaults["preview_loading_label"],
+            "$LOCALIZE[31582]",
+        )
+        self.assertEqual(
+            layout_defaults["preview_unavailable_label"],
+            "$LOCALIZE[31583]",
+        )
         self.assertEqual(layout_defaults["preview_background_load"], "true")
         self.assertEqual(layout_defaults["preview_top"], "650")
         self.assertEqual(
@@ -1363,19 +1391,174 @@ class PlaybackXmlContractTest(unittest.TestCase):
         for slot in anchors.SLOTS:
             with self.subTest(slot=slot):
                 preview = self._one_slot_control(slot, PREVIEW_DESCRIPTION)
-                stable_card = self._one_slot_control(
-                    slot,
-                    "HTPC stable preview card",
-                )
-                self.assertIn(
-                    "$PARAM[stable_preview_card]",
-                    _visible_text(stable_card),
-                )
                 rows = anchors.extract_anchor_rows(PLAYBACK_XML, slot)
                 self.assertEqual(rows, anchors.anchor_rows())
                 self.assertEqual(rows[0], (0, 0))
                 self.assertEqual(rows[-1], (100, anchors.TIMELINE_WIDTH))
                 self.assertEqual(preview.get("type"), "group")
+
+    def test_preview_card_states_are_explicit_and_slot_symmetric(self):
+        normalized = []
+        forbidden_tags = {
+            "onclick",
+            "ondown",
+            "onfocus",
+            "onleft",
+            "onright",
+            "onunfocus",
+            "onup",
+        }
+        for slot in anchors.SLOTS:
+            with self.subTest(slot=slot):
+                preview = self._one_slot_control(slot, PREVIEW_DESCRIPTION)
+                status = _slot_info(slot, "previewstatus")
+                path = _slot_info(slot, "previewpath")
+                expected_visibility = {
+                    PREVIEW_READY_DESCRIPTION: (
+                        f"String.IsEqual({status},ready) + "
+                        f"!String.IsEmpty({path})"
+                    ),
+                    PREVIEW_LOADING_DESCRIPTION: (
+                        f"String.IsEqual({status},loading)"
+                    ),
+                    PREVIEW_UNAVAILABLE_DESCRIPTION: (
+                        f"!String.IsEqual({status},none) + "
+                        f"!String.IsEqual({status},loading) + "
+                        f"[!String.IsEqual({status},ready) | "
+                        f"String.IsEmpty({path})]"
+                    ),
+                }
+
+                backplate = self._one_slot_control(
+                    slot,
+                    PREVIEW_BACKPLATE_DESCRIPTION,
+                )
+                self.assertEqual(backplate.get("type"), "image")
+                self.assertEqual(_visible_text(backplate), "")
+                self.assertEqual(backplate.findtext("posx"), "-10")
+                self.assertEqual(backplate.findtext("posy"), "-10")
+                self.assertEqual(backplate.findtext("width"), "400")
+                self.assertEqual(backplate.findtext("height"), "234")
+                texture = backplate.find("texture")
+                self.assertEqual(
+                    (texture.text or "").strip(),
+                    "diffuse/panel2.png",
+                )
+                self.assertEqual(texture.get("border"), "12")
+                self.assertEqual(texture.get("colordiffuse"), "ee080808")
+
+                ready = self._one_slot_control(
+                    slot,
+                    PREVIEW_READY_DESCRIPTION,
+                )
+                loading = self._one_slot_control(
+                    slot,
+                    PREVIEW_LOADING_DESCRIPTION,
+                )
+                unavailable = self._one_slot_control(
+                    slot,
+                    PREVIEW_UNAVAILABLE_DESCRIPTION,
+                )
+                states = (ready, loading, unavailable)
+                self.assertEqual(
+                    tuple(control.get("type") for control in states),
+                    ("group", "label", "label"),
+                )
+                for control in states:
+                    with self.subTest(
+                        slot=slot,
+                        state=_description(control),
+                    ):
+                        self.assertEqual(
+                            _visible_text(control),
+                            expected_visibility[_description(control)],
+                        )
+                        for node in control.iter():
+                            self.assertIsNone(node.get("id"))
+                            self.assertNotIn(node.tag, forbidden_tags)
+
+                ready_images = [
+                    control
+                    for control in ready.findall("control")
+                    if control.get("type") == "image"
+                ]
+                self.assertEqual(len(ready_images), 1)
+                ready_image = ready_images[0]
+                self.assertEqual(ready_image.findtext("width"), "380")
+                self.assertEqual(ready_image.findtext("height"), "214")
+                ready_texture = ready_image.find("texture")
+                self.assertEqual(
+                    (ready_texture.text or "").strip(),
+                    f"$INFO[{path}]",
+                )
+                self.assertEqual(
+                    ready_texture.get("background"),
+                    "$PARAM[preview_background_load]",
+                )
+                path_textures = [
+                    texture
+                    for texture in preview.iter("texture")
+                    if path in (texture.text or "")
+                ]
+                self.assertEqual(path_textures, [ready_texture])
+
+                labels = {
+                    loading: "$PARAM[preview_loading_label]",
+                    unavailable: "$PARAM[preview_unavailable_label]",
+                }
+                for control, label in labels.items():
+                    self.assertEqual(control.findtext("width"), "380")
+                    self.assertEqual(control.findtext("height"), "214")
+                    self.assertEqual(control.findtext("font"), "Reg22")
+                    self.assertEqual(control.findtext("align"), "center")
+                    self.assertEqual(control.findtext("aligny"), "center")
+                    self.assertEqual(
+                        control.findtext("textcolor"),
+                        "b3ffffff",
+                    )
+                    self.assertEqual(control.findtext("label"), label)
+
+                serialized = ET.tostring(
+                    preview,
+                    encoding="unicode",
+                ).replace(f".{slot}.", ".slot.")
+                normalized.append(serialized)
+
+        self.assertEqual(normalized[0], normalized[1])
+        self.assertNotIn(
+            "stable_preview_card",
+            ET.tostring(self.playback_root, encoding="unicode"),
+        )
+        strings = EN_GB_STRINGS.read_text(encoding="utf-8")
+        localized = {}
+        for string_id in ("31582", "31583"):
+            match = re.search(
+                rf'msgctxt "#{string_id}"\s+msgid "([^"]+)"',
+                strings,
+            )
+            self.assertIsNotNone(match)
+            localized[string_id] = match.group(1)
+        self.assertEqual(localized["31582"], "Loading preview…")
+        self.assertEqual(localized["31583"], "Preview unavailable")
+
+        review_root = ET.parse(VIDEO_OSD_REVIEW_XML).getroot()
+        review_include = next(
+            node
+            for node in review_root.iter("include")
+            if node.get("content") == "HTPCVideoOSD"
+        )
+        review_parameters = {
+            node.get("name"): node.get("value")
+            for node in review_include.findall("param")
+        }
+        self.assertEqual(
+            review_parameters["preview_loading_label"],
+            localized["31582"],
+        )
+        self.assertEqual(
+            review_parameters["preview_unavailable_label"],
+            localized["31583"],
+        )
 
     def test_no_diagnostic_controls_or_properties_ship(self):
         serialized = ET.tostring(

@@ -2382,3 +2382,13 @@ msgstr ""
 msgctxt "#31581"
 msgid "↑  Chapters"
 msgstr ""
+
+#. Trick-play preview state while an exact frame is pending
+msgctxt "#31582"
+msgid "Loading preview…"
+msgstr ""
+
+#. Trick-play preview state when no exact frame can be shown
+msgctxt "#31583"
+msgid "Preview unavailable"
+msgstr ""

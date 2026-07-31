@@ -48,6 +48,8 @@
 		<param name="preview_top" default="634" />
 		<param name="preview_width" default="380" />
 		<param name="preview_height" default="320" />
+		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
+		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
 		<param name="timeline_chapter_hint_left" default="1320" />
 		<param name="timeline_chapter_hint_top" default="914" />
 		<param name="timeline_chapter_hint_width" default="216" />
@@ -351,8 +353,9 @@
 					<param name="preview_top" value="$PARAM[preview_top]" />
 					<param name="preview_width" value="$PARAM[preview_width]" />
 					<param name="preview_height" value="$PARAM[preview_height]" />
+					<param name="preview_loading_label" value="$PARAM[preview_loading_label]" />
+					<param name="preview_unavailable_label" value="$PARAM[preview_unavailable_label]" />
 					<param name="target_fill_color" value="80ffffff" />
-					<param name="stable_preview_card" value="true" />
 					<param name="preview_background_load" value="$PARAM[preview_background_load]" />
 					<param name="ready_condition" value="$PARAM[presentation_ready]" />
 					<param name="property_window" value="$PARAM[property_window]" />

@@ -22,7 +22,8 @@
 		<param name="preview_width" default="380" />
 		<param name="preview_height" default="320" />
 		<param name="target_fill_color" default="$INFO[Skin.String(BingieOSDProgressBarColor)]" />
-		<param name="stable_preview_card" default="false" />
+		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
+		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
 		<param name="preview_background_load" default="true" />
 		<param name="ready_condition" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
 		<param name="property_window" default="Home" />
@@ -190,29 +191,44 @@
 				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewanchor),100)">Conditional</animation>
 				<!-- END GENERATED PREVIEW ANCHORS a -->
 				<control type="image">
-					<description>HTPC stable preview card</description>
+					<description>HTPC trick-play preview backplate</description>
 					<posx>-10</posx>
 					<posy>-10</posy>
 					<width>400</width>
 					<height>234</height>
 					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
-					<visible>$PARAM[stable_preview_card] + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),ready)</visible>
 				</control>
 				<control type="group">
+					<description>HTPC trick-play ready state</description>
 					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath))</visible>
-					<control type="image">
-						<posx>-10</posx>
-						<posy>-10</posy>
-						<width>400</width>
-						<height>234</height>
-						<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
-					</control>
 					<control type="image">
 						<width>380</width>
 						<height>214</height>
 						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath)]</texture>
 						<aspectratio align="center" aligny="center">keep</aspectratio>
 					</control>
+				</control>
+				<control type="label">
+					<description>HTPC trick-play loading state</description>
+					<width>380</width>
+					<height>214</height>
+					<font>Reg22</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[preview_loading_label]</label>
+					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),loading)</visible>
+				</control>
+				<control type="label">
+					<description>HTPC trick-play unavailable state</description>
+					<width>380</width>
+					<height>214</height>
+					<font>Reg22</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[preview_unavailable_label]</label>
+					<visible>!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),none) + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),loading) + [!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewstatus),ready) | String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].a.previewpath))]</visible>
 				</control>
 				<control type="label">
 					<posy>224</posy>
@@ -408,29 +424,44 @@
 				<animation effect="slide" end="1152,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewanchor),100)">Conditional</animation>
 				<!-- END GENERATED PREVIEW ANCHORS b -->
 				<control type="image">
-					<description>HTPC stable preview card</description>
+					<description>HTPC trick-play preview backplate</description>
 					<posx>-10</posx>
 					<posy>-10</posy>
 					<width>400</width>
 					<height>234</height>
 					<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
-					<visible>$PARAM[stable_preview_card] + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),ready)</visible>
 				</control>
 				<control type="group">
+					<description>HTPC trick-play ready state</description>
 					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath))</visible>
-					<control type="image">
-						<posx>-10</posx>
-						<posy>-10</posy>
-						<width>400</width>
-						<height>234</height>
-						<texture border="12" colordiffuse="ee080808">diffuse/panel2.png</texture>
-					</control>
 					<control type="image">
 						<width>380</width>
 						<height>214</height>
 						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath)]</texture>
 						<aspectratio align="center" aligny="center">keep</aspectratio>
 					</control>
+				</control>
+				<control type="label">
+					<description>HTPC trick-play loading state</description>
+					<width>380</width>
+					<height>214</height>
+					<font>Reg22</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[preview_loading_label]</label>
+					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),loading)</visible>
+				</control>
+				<control type="label">
+					<description>HTPC trick-play unavailable state</description>
+					<width>380</width>
+					<height>214</height>
+					<font>Reg22</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[preview_unavailable_label]</label>
+					<visible>!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),none) + !String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),loading) + [!String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewstatus),ready) | String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].b.previewpath))]</visible>
 				</control>
 				<control type="label">
 					<posy>224</posy>

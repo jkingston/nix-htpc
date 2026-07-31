@@ -27,6 +27,8 @@ EXPECTED_FOCUS = {
     "timeline-chapters": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
+    "seek-forward-loading": "9300",
+    "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
     "top-stop": "9101",
 }
@@ -178,6 +180,14 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(
             parameters["timeline_chapter_hint_label"],
             "↑  Chapters",
+        )
+        self.assertEqual(
+            parameters["preview_loading_label"],
+            "Loading preview…",
+        )
+        self.assertEqual(
+            parameters["preview_unavailable_label"],
+            "Preview unavailable",
         )
         self.assertEqual(
             parameters["presentation_ready"],

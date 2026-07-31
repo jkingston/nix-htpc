@@ -6,7 +6,7 @@ import types
 import unittest
 from pathlib import Path
 
-from review_contract import PROPERTY_KEYS
+from review_contract import EXPECTED_FOCUS, PROPERTY_KEYS
 
 
 ROOT = Path(__file__).resolve().parent
@@ -126,18 +126,7 @@ class RuntimeHarness:
             self.current_window = 10000
             self.current_dialog = 11192
             scenario = self.window.values["htpc.review.scenario"]
-            focus = {
-                "transport-playing": "9201",
-                "transport-paused": "9201",
-                "timeline-playing": "9300",
-                "timeline-idle": "9300",
-                "timeline-chapters": "9300",
-                "seek-backward": "9300",
-                "seek-forward": "9300",
-                "seek-forward-slot-b": "9300",
-                "top-stop": "9101",
-            }
-            self.current_focus = focus[scenario]
+            self.current_focus = EXPECTED_FOCUS[scenario]
         else:
             raise AssertionError("unexpected builtin: " + command)
 

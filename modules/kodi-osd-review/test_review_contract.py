@@ -113,6 +113,47 @@ class ReviewContractTest(unittest.TestCase):
                     slot_b["htpc.review.seek.b." + field],
                 )
 
+    def test_forward_preview_states_change_only_status_and_path(self):
+        ready = scenario_properties("seek-forward")
+        states = {
+            "seek-forward-loading": "loading",
+            "seek-forward-unavailable": "unavailable",
+        }
+        ignored = {
+            "htpc.review.scenario",
+            "htpc.review.seek.a.previewstatus",
+            "htpc.review.seek.a.previewpath",
+        }
+        baseline = {
+            key: value
+            for key, value in ready.items()
+            if key not in ignored
+        }
+        self.assertEqual(
+            ready["htpc.review.seek.a.previewstatus"],
+            "ready",
+        )
+        self.assertTrue(ready["htpc.review.seek.a.previewpath"])
+        for scenario, status in states.items():
+            with self.subTest(scenario=scenario):
+                values = scenario_properties(scenario)
+                self.assertEqual(
+                    values["htpc.review.seek.a.previewstatus"],
+                    status,
+                )
+                self.assertEqual(
+                    values["htpc.review.seek.a.previewpath"],
+                    "",
+                )
+                self.assertEqual(
+                    {
+                        key: value
+                        for key, value in values.items()
+                        if key not in ignored
+                    },
+                    baseline,
+                )
+
     def test_non_seek_scenarios_publish_no_seek_view(self):
         for scenario in (
             "transport-playing",
