@@ -7,11 +7,6 @@
   identical apart from their property namespace and slot condition.
 -->
 <includes>
-	<include name="HTPCPlaybackPresentation">
-		<!-- Compatibility wrapper for the currently live inherited OSD. -->
-		<include content="HTPCPlaybackPresentationLayout" />
-	</include>
-
 	<include name="HTPCPlaybackPresentationLayout">
 		<param name="visible" default="Player.HasVideo" />
 		<param name="rail_left" default="384" />

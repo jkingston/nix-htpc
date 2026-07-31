@@ -962,7 +962,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         return matches[0]
 
-    def test_local_playback_include_is_registered_once(self):
+    def test_local_playback_layout_has_one_owned_surface_consumer(self):
         registrations = [
             node
             for node in self.includes_root.iter("include")
@@ -977,23 +977,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         ]
         self.assertEqual(
             {node.get("name") for node in definitions},
-            {
-                "HTPCPlaybackPresentation",
-                "HTPCPlaybackPresentationLayout",
-            },
-        )
-        compatibility_wrapper = next(
-            node
-            for node in definitions
-            if node.get("name") == "HTPCPlaybackPresentation"
-        )
-        wrapper_targets = [
-            node.get("content")
-            for node in compatibility_wrapper.findall(".//include")
-        ]
-        self.assertEqual(
-            wrapper_targets,
-            ["HTPCPlaybackPresentationLayout"],
+            {"HTPCPlaybackPresentationLayout"},
         )
         parameterized_layout = next(
             node
@@ -1017,15 +1001,53 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(layout_defaults["property_window"], "Home")
         self.assertEqual(layout_defaults["property_prefix"], "htpc.seek")
-        consumers = [
-            node
-            for node in self.osd_root.iter("include")
-            if (node.text or "").strip() == "HTPCPlaybackPresentation"
-        ]
+
+        wrapper_definitions = []
+        wrapper_consumers = []
+        layout_consumers = []
+        modern_consumers = []
+        for source in sorted(XML_ROOT.glob("*.xml")):
+            serialized = source.read_text(
+                encoding="utf-8-sig",
+                errors="replace",
+            )
+            wrapper_definitions.extend(
+                source.name
+                for _match in re.finditer(
+                    r'<include\b[^>]*\bname=["\']'
+                    r'HTPCPlaybackPresentation["\'][^>]*>',
+                    serialized,
+                )
+            )
+            for target, consumers in (
+                ("HTPCPlaybackPresentation", wrapper_consumers),
+                ("HTPCPlaybackPresentationLayout", layout_consumers),
+                ("OSDButtonsModern", modern_consumers),
+            ):
+                pattern = (
+                    r'<include\b[^>]*\bcontent=["\']'
+                    + re.escape(target)
+                    + r'["\'][^>]*>'
+                    + r"|<include\b(?![^>]*\bname=)[^>]*>\s*"
+                    + re.escape(target)
+                    + r"\s*</include>"
+                )
+                consumers.extend(
+                    source.name
+                    for _match in re.finditer(pattern, serialized)
+                )
+
+        self.assertEqual(wrapper_definitions, [])
+        self.assertEqual(wrapper_consumers, [])
         self.assertEqual(
-            len(consumers),
-            1,
-            "the inherited OSD must retain exactly one compatibility consumer",
+            layout_consumers,
+            [VIDEO_OSD_XML.name],
+            "only the owned video OSD may instantiate the playback layout",
+        )
+        self.assertEqual(
+            modern_consumers,
+            ["MusicOSD.xml"],
+            "the inherited OSD factory is retained only for MusicOSD",
         )
 
     def test_two_presentation_slots_are_mutually_exclusive(self):
