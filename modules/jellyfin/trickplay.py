@@ -201,11 +201,12 @@ class OutputSlots(object):
 
 
 class LatestRequestSlot(object):
-    """Condition-backed queue with one replaceable pending request."""
+    """One replaceable job plus the newest metadata for its work identity."""
 
     def __init__(self):
         self._condition = threading.Condition(threading.RLock())
         self._pending = None
+        self._latest = None
         self._latest_key = None
         self._closed = False
 
@@ -218,6 +219,7 @@ class LatestRequestSlot(object):
         with self._condition:
             if self._closed:
                 return False
+            self._latest = request
             self._latest_key = request["key"]
             self._pending = request
             self._condition.notify_all()
@@ -225,6 +227,7 @@ class LatestRequestSlot(object):
 
     def clear(self):
         with self._condition:
+            self._latest = None
             self._latest_key = None
             self._pending = None
             self._condition.notify_all()
@@ -232,12 +235,29 @@ class LatestRequestSlot(object):
     def close(self):
         with self._condition:
             self._closed = True
+            self._latest = None
+            self._latest_key = None
             self._pending = None
             self._condition.notify_all()
 
     def is_latest(self, key):
         with self._condition:
             return not self._closed and self._latest_key == key
+
+    def latest_for(self, key):
+        """Return the newest request for one still-current work identity."""
+        with self._condition:
+            if self._closed or self._latest_key != key:
+                return None
+            return self._latest
+
+    def discard_pending(self, request):
+        """Drop only the pending request already satisfied by publication."""
+        with self._condition:
+            if self._pending is not request:
+                return False
+            self._pending = None
+            return True
 
     def take(self, abort):
         with self._condition:
@@ -528,11 +548,13 @@ def make_preview_request(
         "frame_index": int(frame),
         "revision": int(revision),
     }
+    # Cursor targets sharing a sampled frame are one decode job. The complete
+    # target stays in the token and request so publication can still commit the
+    # exact newest cursor position.
     key = (
         payload["playback"],
         payload["revision"],
         payload["seek_generation"],
-        target_text,
         payload["sample_seconds"],
         payload["frame_index"],
     )
@@ -771,7 +793,7 @@ class TrickplayPreviewManager(object):
     def _process_preview_request(self, state, request, abort):
         attempts = len(PREVIEW_RETRY_BACKOFFS) + 1
         for attempt in range(attempts):
-            if not self._request_is_current(state, request, abort):
+            if self._latest_current_request(state, request, abort) is None:
                 return False
             try:
                 source_path = self._resolve_frame_path(
@@ -793,44 +815,63 @@ class TrickplayPreviewManager(object):
                     return False
                 continue
 
-            if not self._request_is_current(state, request, abort):
+            if self._latest_current_request(state, request, abort) is None:
                 return False
-            if not self._publish_preview(state, request, source_path, abort):
+            published = self._publish_preview(
+                state,
+                request,
+                source_path,
+                abort,
+            )
+            if published is None:
                 return False
-            self._queue_one_neighbor(state, request)
+            state["request_slot"].discard_pending(published)
+            self._queue_one_neighbor(state, published)
             return True
         return False
 
-    def _request_is_current(self, state, request, abort):
-        return (
-            not abort.is_set()
-            and request["token"]["playback"] == state["playback_token"]
-            and request["token"]["revision"] == state["revision"]
-            and state["request_slot"].is_latest(request["key"])
-            and _property_true(window(SEEK_ACTIVE))
-            and window(SEEK_GENERATION) == request["token"]["seek_generation"]
-            and window(SEEK_TARGET) == request["target_text"]
-        )
+    def _latest_current_request(self, state, request, abort):
+        """Rebind same-frame work to the exact newest cursor target."""
+        if (
+            abort.is_set()
+            or request["token"]["playback"] != state["playback_token"]
+            or request["token"]["revision"] != state["revision"]
+        ):
+            return None
+
+        latest = state["request_slot"].latest_for(request["key"])
+        if latest is None:
+            return None
+        token = latest["token"]
+        if (
+            token["playback"] != state["playback_token"]
+            or token["revision"] != state["revision"]
+            or latest["frame"] != request["frame"]
+            or not _property_true(window(SEEK_ACTIVE))
+            or window(SEEK_GENERATION) != token["seek_generation"]
+            or window(SEEK_TARGET) != latest["target_text"]
+        ):
+            return None
+        return latest
 
     def _publish_preview(self, state, request, source_path, abort):
+        """Commit this sampled frame for the exact latest matching target."""
         staged_path = state["output_slots"].stage(source_path)
-        if not self._request_is_current(state, request, abort):
-            return False
-
-        chapter = chapter_entry_for_time(
-            state["chapters"],
-            request["target_seconds"],
-        )
-        chapter_label = chapter["label"] if chapter is not None else ""
-        payload = request["token"]
-        token_json = json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
         with self._property_lock:
-            if not self._request_is_current(state, request, abort):
-                return False
+            latest = self._latest_current_request(state, request, abort)
+            if latest is None:
+                return None
+            chapter = chapter_entry_for_time(
+                state["chapters"],
+                latest["target_seconds"],
+            )
+            chapter_label = chapter["label"] if chapter is not None else ""
+            payload = latest["token"]
+            token_json = json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
             # The new immutable slot is installed first while the old target
             # keeps legacy skins from exposing it. The complete token and exact
             # target are the final commit markers.
@@ -846,12 +887,19 @@ class TrickplayPreviewManager(object):
             else:
                 window(PREVIEW_CHAPTER, clear=True)
             window(PREVIEW_TOKEN, token_json)
-            window(PREVIEW_TARGET, request["target_text"])
-        return True
+            window(PREVIEW_TARGET, latest["target_text"])
+        return latest
 
     def _clear_preview_if_current(self, state, request, abort):
-        if self._request_is_current(state, request, abort):
+        with self._property_lock:
+            if self._latest_current_request(state, request, abort) is None:
+                return False
             self._clear_preview_properties(state)
+            # A newer target can share this sampled frame while the failed
+            # request is in flight. Only the failed request itself is owned
+            # here; leave a newer pending version for the worker to retry.
+            state["request_slot"].discard_pending(request)
+            return True
 
     def _queue_one_neighbor(self, state, request):
         info = state["info"]
