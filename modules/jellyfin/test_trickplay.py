@@ -15,6 +15,7 @@ def load_module():
     helper = types.ModuleType("jellyfin_kodi.helper")
     helper.LazyLogger = lambda _name: types.SimpleNamespace(
         debug=lambda *_args: None,
+        info=lambda *_args: None,
         warning=lambda *_args: None,
     )
     helper.window = lambda *_args, **_kwargs: None
@@ -72,12 +73,26 @@ class PropertyStore(object):
 class TrickplayTest(unittest.TestCase):
     def setUp(self):
         self.original_window = trickplay.window
+        self.original_log = trickplay.LOG
         self.original_preview_backoffs = trickplay.PREVIEW_RETRY_BACKOFFS
+        self.original_stationary_retry = (
+            trickplay.PREVIEW_STATIONARY_RETRY_SECONDS
+        )
+        self.original_metadata_delays = (
+            trickplay.METADATA_TRANSIENT_RETRY_DELAYS
+        )
         self.original_chapter_backoffs = trickplay.CHAPTER_RETRY_BACKOFFS
 
     def tearDown(self):
         trickplay.window = self.original_window
+        trickplay.LOG = self.original_log
         trickplay.PREVIEW_RETRY_BACKOFFS = self.original_preview_backoffs
+        trickplay.PREVIEW_STATIONARY_RETRY_SECONDS = (
+            self.original_stationary_retry
+        )
+        trickplay.METADATA_TRANSIENT_RETRY_DELAYS = (
+            self.original_metadata_delays
+        )
         trickplay.CHAPTER_RETRY_BACKOFFS = self.original_chapter_backoffs
 
     def make_request(
@@ -102,12 +117,16 @@ class TrickplayTest(unittest.TestCase):
         state = {
             "playback_token": request["token"]["playback"],
             "revision": request["token"]["revision"],
+            "item_id": "item-1",
+            "media_source_id": "source-1",
+            "width": 320,
             "info": INFO,
             "chapters": chapters or [],
             "request_slot": trickplay.LatestRequestSlot(),
             "prefetch_slot": trickplay.LatestRequestSlot(),
             "output_slots": trickplay.OutputSlots(output_root, 3),
             "publish_lock": threading.RLock(),
+            "last_preview_failure_log": None,
         }
         state["request_slot"].submit(request)
         return state
@@ -297,13 +316,298 @@ class TrickplayTest(unittest.TestCase):
                 "640": dict(INFO, Width=640),
             }
         }
-        width, selected = trickplay.select_trickplay(metadata, "source")
+        source, width, selected = trickplay.select_trickplay(metadata, "source")
+        self.assertEqual(source, "source")
         self.assertEqual(width, 320)
-        self.assertIs(selected, INFO)
+        self.assertEqual(selected, INFO)
         self.assertEqual(
             trickplay.select_trickplay({"source": {"320": {}}}, "source"),
-            (None, None),
+            (None, None, None),
         )
+
+    def test_fallback_manifest_replaces_stale_playback_source(self):
+        manifest = {
+            "manifest-source": {
+                "320": INFO,
+            }
+        }
+        source, width, selected = trickplay.select_trickplay(
+            manifest,
+            "stale-playback-source",
+        )
+        self.assertEqual(source, "manifest-source")
+        self.assertEqual(width, 320)
+        self.assertEqual(selected, INFO)
+
+    def test_flattened_manifest_retains_known_playback_source(self):
+        source, width, selected = trickplay.select_trickplay(
+            {"320": INFO},
+            "playback-source",
+        )
+        self.assertEqual(source, "playback-source")
+        self.assertEqual(width, 320)
+        self.assertEqual(selected, INFO)
+
+    def test_exact_source_wins_and_invalid_exact_never_falls_back(self):
+        alternate = dict(INFO, Width=640)
+        manifest = {
+            "wanted": {"320": INFO},
+            "alternate": {"640": alternate},
+        }
+        source, width, selected = trickplay.select_trickplay(
+            manifest,
+            "wanted",
+        )
+        self.assertEqual((source, width), ("wanted", 320))
+        self.assertEqual(selected, INFO)
+
+        manifest["wanted"] = {"320": dict(INFO, Interval=0)}
+        self.assertEqual(
+            trickplay.select_trickplay(manifest, "wanted"),
+            (None, None, None),
+        )
+
+    def test_stale_source_fallback_requires_one_valid_nested_source(self):
+        one_valid = {
+            "invalid": {"320": dict(INFO, Height=float("nan"))},
+            "only-valid": {"320": INFO},
+        }
+        self.assertEqual(
+            trickplay.select_trickplay(one_valid, "stale")[:2],
+            ("only-valid", 320),
+        )
+
+        ambiguous = dict(one_valid, second={"320": INFO})
+        self.assertEqual(
+            trickplay.select_trickplay(ambiguous, "stale"),
+            (None, None, None),
+        )
+
+    def test_numeric_source_key_is_nested_not_flattened(self):
+        manifest = {
+            "123": {"320": INFO},
+        }
+        source, width, selected = trickplay.select_trickplay(manifest, 123)
+        self.assertEqual((source, width), ("123", 320))
+        self.assertEqual(selected, INFO)
+
+    def test_malformed_or_mixed_manifests_are_unavailable(self):
+        invalid_values = (0, -1, 1.5, float("nan"), float("inf"), True)
+        for value in invalid_values:
+            with self.subTest(interval=value):
+                manifest = {
+                    "source": {"320": dict(INFO, Interval=value)},
+                }
+                self.assertEqual(
+                    trickplay.select_trickplay(manifest, "source"),
+                    (None, None, None),
+                )
+
+        width_mismatch = {"source": {"640": INFO}}
+        self.assertEqual(
+            trickplay.select_trickplay(width_mismatch, "source"),
+            (None, None, None),
+        )
+        mixed = {
+            "320": INFO,
+            "source": {"320": INFO},
+        }
+        self.assertEqual(
+            trickplay.select_trickplay(mixed, "stale"),
+            (None, None, None),
+        )
+
+    def test_lifecycle_carries_selected_source_into_runtime_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            item = {
+                "Id": "item-1",
+                "MediaSourceId": "stale-playback-source",
+                "Server": object(),
+            }
+            metadata = {
+                "Trickplay": {
+                    "manifest-source": {"320": INFO},
+                }
+            }
+            abort = threading.Event()
+            selected_sources = []
+            manager = trickplay.TrickplayPreviewManager(None)
+            manager._load_metadata = lambda _item, _abort: metadata
+
+            def new_state(_item, _client, source, *_args):
+                selected_sources.append(source)
+                abort.set()
+                return {}
+
+            manager._new_state = new_state
+            manager._close_state = lambda _state: None
+            manager._clear_if_owned = lambda _state: None
+            manager._run(item, 3, "playback-1", abort, root)
+            self.assertEqual(selected_sources, ["manifest-source"])
+
+    def test_metadata_startup_retries_then_recovers(self):
+        metadata = {"Trickplay": {"source": {"320": INFO}}}
+        outcomes = [RuntimeError("offline"), RuntimeError("warming"), metadata]
+        calls = []
+
+        def get_item(item_id):
+            calls.append(item_id)
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        item = {
+            "Id": "item-1",
+            "Server": types.SimpleNamespace(
+                jellyfin=types.SimpleNamespace(get_item=get_item)
+            ),
+        }
+        warnings = []
+        infos = []
+        trickplay.LOG = types.SimpleNamespace(
+            warning=lambda *args: warnings.append(args),
+            info=lambda *args: infos.append(args),
+        )
+        trickplay.METADATA_TRANSIENT_RETRY_DELAYS = (0,)
+        result = trickplay.TrickplayPreviewManager._load_metadata(
+            item,
+            threading.Event(),
+        )
+        self.assertIs(result, metadata)
+        self.assertEqual(calls, ["item-1", "item-1", "item-1"])
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(len(infos), 1)
+
+    def test_metadata_startup_abort_interrupts_long_backoff(self):
+        first_failure = threading.Event()
+
+        def get_item(_item_id):
+            first_failure.set()
+            raise RuntimeError("offline")
+
+        item = {
+            "Id": "item-1",
+            "Server": types.SimpleNamespace(
+                jellyfin=types.SimpleNamespace(get_item=get_item)
+            ),
+        }
+        trickplay.METADATA_TRANSIENT_RETRY_DELAYS = (30,)
+        abort = threading.Event()
+        results = []
+        worker = threading.Thread(
+            target=lambda: results.append(
+                trickplay.TrickplayPreviewManager._load_metadata(item, abort)
+            )
+        )
+        worker.start()
+        self.assertTrue(first_failure.wait(1))
+        abort.set()
+        worker.join(0.25)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [None])
+
+    def test_persistent_metadata_failures_log_at_bounded_cadence(self):
+        metadata = {"Id": "item-1"}
+        remaining_failures = [5]
+
+        def get_item(_item_id):
+            if remaining_failures[0]:
+                remaining_failures[0] -= 1
+                raise RuntimeError("offline")
+            return metadata
+
+        item = {
+            "Id": "item-1",
+            "Server": types.SimpleNamespace(
+                jellyfin=types.SimpleNamespace(get_item=get_item)
+            ),
+        }
+        warnings = []
+        infos = []
+        trickplay.LOG = types.SimpleNamespace(
+            warning=lambda *args: warnings.append(args),
+            info=lambda *args: infos.append(args),
+        )
+        trickplay.METADATA_TRANSIENT_RETRY_DELAYS = (0,)
+        times = iter((0, 10, 30, 31, 60))
+        result = trickplay.TrickplayPreviewManager._load_metadata(
+            item,
+            threading.Event(),
+            clock=lambda: next(times),
+        )
+        self.assertIs(result, metadata)
+        self.assertEqual(len(warnings), 3)
+        self.assertEqual(len(infos), 1)
+
+    def test_terminal_metadata_http_failure_does_not_retry(self):
+        class HttpError(RuntimeError):
+            response = types.SimpleNamespace(status_code=404)
+
+        calls = []
+
+        def get_item(item_id):
+            calls.append(item_id)
+            raise HttpError("not found")
+
+        item = {
+            "Id": "item-1",
+            "Server": types.SimpleNamespace(
+                jellyfin=types.SimpleNamespace(get_item=get_item)
+            ),
+        }
+        warnings = []
+        trickplay.LOG = types.SimpleNamespace(
+            warning=lambda *args: warnings.append(args),
+            info=lambda *_args: None,
+        )
+        result = trickplay.TrickplayPreviewManager._load_metadata(
+            item,
+            threading.Event(),
+        )
+        self.assertIsNone(result)
+        self.assertEqual(calls, ["item-1"])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("terminal failure", warnings[0][0])
+        self.assertIn(404, warnings[0])
+
+    def test_metadata_failure_finishing_after_abort_is_not_logged(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        def get_item(_item_id):
+            started.set()
+            self.assertTrue(release.wait(1))
+            raise RuntimeError("offline")
+
+        item = {
+            "Id": "item-1",
+            "Server": types.SimpleNamespace(
+                jellyfin=types.SimpleNamespace(get_item=get_item)
+            ),
+        }
+        warnings = []
+        infos = []
+        trickplay.LOG = types.SimpleNamespace(
+            warning=lambda *args: warnings.append(args),
+            info=lambda *args: infos.append(args),
+        )
+        abort = threading.Event()
+        results = []
+        worker = threading.Thread(
+            target=lambda: results.append(
+                trickplay.TrickplayPreviewManager._load_metadata(item, abort)
+            )
+        )
+        worker.start()
+        self.assertTrue(started.wait(1))
+        abort.set()
+        release.set()
+        worker.join(0.25)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [None])
+        self.assertEqual(warnings, [])
+        self.assertEqual(infos, [])
 
     def test_sanitizes_chapters_and_marks_every_entry_kind(self):
         chapters = [
@@ -366,6 +670,25 @@ class TrickplayTest(unittest.TestCase):
         self.assertIs(slot.take(abort), third)
         self.assertEqual(slot.pending_count, 0)
         self.assertTrue(slot.is_latest(third["key"]))
+
+    def test_stationary_retry_wait_is_abort_aware(self):
+        slot = trickplay.LatestRequestSlot()
+        request = self.make_request()
+        abort = threading.Event()
+        slot.submit(request)
+        self.assertIs(slot.take(abort), request)
+        results = []
+        worker = threading.Thread(
+            target=lambda: results.append(
+                slot.retry_after(request, 30, abort)
+            )
+        )
+        worker.start()
+        abort.set()
+        worker.join(0.25)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [False])
+        self.assertEqual(slot.pending_count, 0)
 
     def test_same_frame_churn_publishes_exact_latest_target_once(self):
         with tempfile.TemporaryDirectory() as root:
@@ -907,6 +1230,90 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(calls, [(6, True), (6, True)])
             self.assertIn(trickplay.PREVIEW_TOKEN, store.values)
 
+    def test_exhausted_transient_requeues_unchanged_stationary_target(self):
+        with tempfile.TemporaryDirectory() as root:
+            request = self.make_request()
+            source = self.write_file(os.path.join(root, "frame"), b"frame")
+            store = PropertyStore()
+            self.activate_request(store, request)
+            trickplay.window = store.window
+            trickplay.PREVIEW_RETRY_BACKOFFS = ()
+            trickplay.PREVIEW_STATIONARY_RETRY_SECONDS = 0
+            state = self.make_process_state(root, request)
+            manager = trickplay.TrickplayPreviewManager(None)
+            calls = []
+
+            def resolve(_state, frame, _abort, foreground):
+                calls.append((frame, foreground))
+                if len(calls) == 1:
+                    raise trickplay.PreviewFailure("temporary", True)
+                return source
+
+            manager._resolve_frame_path = resolve
+            self.assertFalse(
+                manager._process_preview_request(
+                    state,
+                    request,
+                    threading.Event(),
+                )
+            )
+            self.assertEqual(state["request_slot"].pending_count, 1)
+            retry = state["request_slot"].take(threading.Event())
+            self.assertIs(retry, request)
+            self.assertTrue(
+                manager._process_preview_request(
+                    state,
+                    retry,
+                    threading.Event(),
+                )
+            )
+            self.assertEqual(calls, [(6, True), (6, True)])
+            self.assertIn(trickplay.PREVIEW_TOKEN, store.values)
+
+    def test_stationary_retry_never_replaces_newer_target(self):
+        slot = trickplay.LatestRequestSlot()
+        failed = self.make_request(target="60")
+        latest = self.make_request(target="80")
+        abort = threading.Event()
+        started = threading.Event()
+        results = []
+        slot.submit(failed)
+        self.assertIs(slot.take(abort), failed)
+
+        def retry():
+            started.set()
+            results.append(slot.retry_after(failed, 30, abort))
+
+        worker = threading.Thread(target=retry)
+        worker.start()
+        self.assertTrue(started.wait(1))
+        slot.submit(latest)
+        worker.join(0.25)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [False])
+        self.assertIs(slot.take(abort), latest)
+
+    def test_preview_failure_diagnostics_are_rate_limited(self):
+        with tempfile.TemporaryDirectory() as root:
+            request = self.make_request()
+            state = self.make_process_state(root, request)
+            warnings = []
+            trickplay.LOG = types.SimpleNamespace(
+                warning=lambda *args: warnings.append(args)
+            )
+            error = trickplay.PreviewFailure("offline", True)
+            manager = trickplay.TrickplayPreviewManager(None)
+
+            self.assertTrue(manager._log_preview_failure(state, request, error))
+            self.assertFalse(manager._log_preview_failure(state, request, error))
+            self.assertEqual(len(warnings), 1)
+
+            state["last_preview_failure_log"] -= (
+                trickplay.PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS + 1
+            )
+            self.assertTrue(manager._log_preview_failure(state, request, error))
+            self.assertEqual(len(warnings), 2)
+
     def test_published_preview_has_complete_token_and_commit_order(self):
         with tempfile.TemporaryDirectory() as root:
             request = self.make_request(target="65")
@@ -1372,6 +1779,42 @@ class TrickplayTest(unittest.TestCase):
             chapter.join(1)
             self.assertEqual(counters["calls"], 2)
             self.assertEqual(counters["maximum"], 1)
+
+    def test_tile_request_uses_selected_manifest_media_source(self):
+        calls = []
+        manager = trickplay.TrickplayPreviewManager(None)
+        manager._download = lambda _client, handler, params, session=None: (
+            calls.append((handler, params, session)) or b"sprite"
+        )
+        exact_session = object()
+        state = {
+            "item_id": "item-1",
+            "media_source_id": "manifest-source",
+            "width": 320,
+            "client": object(),
+            "sprite_cache": trickplay.ByteLruCache(1024),
+            "sprite_condition": threading.Condition(threading.RLock()),
+            "inflight_sprites": set(),
+            "exact_session": exact_session,
+            "prefetch_session": object(),
+        }
+        result = manager._download_sprite_once(
+            state,
+            2,
+            threading.Event(),
+            foreground=True,
+        )
+        self.assertEqual(result, b"sprite")
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "Videos/item-1/Trickplay/320/2.jpg",
+                    {"MediaSourceId": "manifest-source"},
+                    exact_session,
+                )
+            ],
+        )
 
     def test_persistent_session_carries_token_in_header(self):
         class Session(object):

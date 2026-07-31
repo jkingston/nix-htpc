@@ -53,6 +53,13 @@ CHAPTER_CACHE_LIMIT = 24
 MAX_CHAPTERS = CHAPTER_CACHE_LIMIT
 CHAPTER_MIN_SEPARATION_SECONDS = 1.0
 PREVIEW_RETRY_BACKOFFS = (0.10, 0.30)
+PREVIEW_STATIONARY_RETRY_SECONDS = 1.0
+PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS = 30.0
+# The final delay repeats indefinitely. Playback metadata is expected to
+# recover after transient server/network outages without restarting playback.
+METADATA_TRANSIENT_RETRY_DELAYS = (0.25, 1.0, 3.0, 5.0)
+METADATA_DIAGNOSTIC_INTERVAL_SECONDS = 30.0
+METADATA_TERMINAL_HTTP_STATUSES = frozenset((400, 401, 403, 404))
 CHAPTER_RETRY_BACKOFFS = (0.20, 0.60)
 
 
@@ -290,6 +297,36 @@ class LatestRequestSlot(object):
                 and self._latest_key == key
             )
 
+    def retry_after(self, request, delay, abort):
+        """Requeue one unchanged request after an interruptible cooldown.
+
+        A newer request is already pending when it supersedes this object, so
+        never replace it here. Polling the abort event bounds shutdown latency
+        even though ``threading.Event.set()`` cannot wake this condition.
+        """
+        deadline = time.monotonic() + max(0.0, float(delay))
+        with self._condition:
+            while (
+                not self._closed
+                and not abort.is_set()
+                and self._latest is request
+            ):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._condition.wait(min(remaining, SEEK_POLL_SECONDS))
+
+            if (
+                self._closed
+                or abort.is_set()
+                or self._latest is not request
+            ):
+                return False
+            if self._pending is None:
+                self._pending = request
+                self._condition.notify_all()
+            return True
+
 
 def parse_time_label(value):
     """Convert a Kodi time label to seconds."""
@@ -351,45 +388,121 @@ def tile_for_time(seconds, info):
     return tile_for_frame(frame_for_time(seconds, info), info)
 
 
-def select_trickplay(trickplay, media_source_id, preferred_width=320):
-    """Select the most useful TrickplayInfo from an item response."""
-    if not isinstance(trickplay, dict) or not trickplay:
-        return None, None
+TRICKPLAY_INFO_FIELDS = (
+    "Interval",
+    "ThumbnailCount",
+    "TileWidth",
+    "TileHeight",
+    "Width",
+    "Height",
+)
 
-    source = trickplay.get(media_source_id)
-    if source is None and all(str(key).isdigit() for key in trickplay):
-        source = trickplay
-    if source is None:
-        source = next(
-            (value for value in trickplay.values() if isinstance(value, dict)),
-            None,
-        )
-    if not isinstance(source, dict):
-        return None, None
 
-    widths = []
-    for key, value in source.items():
-        try:
-            width = int(key)
-        except (TypeError, ValueError):
-            continue
-        if isinstance(value, dict):
-            widths.append((width, value))
-    if not widths:
-        return None, None
+def _positive_integer(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        not math.isfinite(numeric)
+        or numeric <= 0
+        or not numeric.is_integer()
+    ):
+        return None
+    return int(numeric)
 
-    width, info = min(widths, key=lambda value: abs(value[0] - preferred_width))
-    required = (
-        "Interval",
-        "ThumbnailCount",
-        "TileWidth",
-        "TileHeight",
-        "Width",
-        "Height",
+
+def _validated_trickplay_info(info):
+    if not isinstance(info, dict):
+        return None
+    normalized = dict(info)
+    for field in TRICKPLAY_INFO_FIELDS:
+        value = _positive_integer(info.get(field))
+        if value is None:
+            return None
+        normalized[field] = value
+    return normalized
+
+
+def _resolution_map(mapping):
+    """Return a complete, structurally valid width -> info mapping."""
+    if not isinstance(mapping, dict) or not mapping:
+        return None
+    resolutions = []
+    for raw_width, raw_info in mapping.items():
+        width = _positive_integer(raw_width)
+        info = _validated_trickplay_info(raw_info)
+        if width is None or info is None or info["Width"] != width:
+            return None
+        resolutions.append((width, info))
+    return resolutions
+
+
+def _looks_like_trickplay_info(value):
+    return isinstance(value, dict) and any(
+        field in value for field in TRICKPLAY_INFO_FIELDS
     )
-    if not all(info.get(key) for key in required):
-        return None, None
-    return width, info
+
+
+def select_trickplay(trickplay, media_source_id, preferred_width=320):
+    """Return the selected media source, width and TrickplayInfo.
+
+    Jellyfin manifests are normally keyed by media-source id. Playback can
+    carry a stale or transcoded source id, so a fallback manifest must also
+    replace the id sent to the tile endpoint.
+    """
+    if not isinstance(trickplay, dict) or not trickplay:
+        return None, None, None
+
+    flattened = _resolution_map(trickplay)
+    if flattened is not None:
+        width, info = min(
+            flattened,
+            key=lambda value: abs(value[0] - preferred_width),
+        )
+        return media_source_id, width, info
+
+    # A mixture of direct TrickplayInfo entries and nested sources is
+    # ambiguous. Do not reinterpret the direct entries as malformed sources.
+    if any(_looks_like_trickplay_info(value) for value in trickplay.values()):
+        return None, None, None
+
+    exact_key = next(
+        (
+            source_id
+            for source_id in trickplay
+            if media_source_id is not None
+            and str(source_id) == str(media_source_id)
+        ),
+        None,
+    )
+    if exact_key is not None:
+        exact = _resolution_map(trickplay.get(exact_key))
+        if exact is None:
+            return None, None, None
+        width, info = min(
+            exact,
+            key=lambda value: abs(value[0] - preferred_width),
+        )
+        return exact_key, width, info
+
+    valid_sources = []
+    for source_id, source in trickplay.items():
+        resolutions = _resolution_map(source)
+        if resolutions is not None:
+            valid_sources.append((source_id, resolutions))
+    if len(valid_sources) != 1:
+        return None, None, None
+
+    selected_source_id, resolutions = valid_sources[0]
+    width, info = min(
+        resolutions,
+        key=lambda value: abs(value[0] - preferred_width),
+    )
+    return selected_source_id, width, info
+
 
 def _safe_label(value, fallback):
     try:
@@ -415,6 +528,23 @@ def _clean_number(value):
 
 def _property_true(value):
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _http_status(error):
+    response = getattr(error, "response", None)
+    candidates = (
+        getattr(response, "status_code", None),
+        getattr(error, "status_code", None),
+        getattr(error, "status", None),
+    )
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            return int(candidate)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def sanitize_chapters(chapters, duration_seconds):
@@ -602,16 +732,25 @@ class TrickplayPreviewManager(object):
         try:
             os.makedirs(cache_root, exist_ok=True)
             client = item["Server"]
-            metadata = client.jellyfin.get_item(item["Id"]) or {}
-            width, info = select_trickplay(
+            metadata = self._load_metadata(item, abort)
+            if metadata is None:
+                return
+            media_source_id, width, info = select_trickplay(
                 metadata.get("Trickplay"),
                 item.get("MediaSourceId"),
             )
+            if info is None:
+                LOG.info(
+                    "HTPC trickplay manifest unavailable item=%s source=%s",
+                    item.get("Id"),
+                    item.get("MediaSourceId"),
+                )
             duration = media_duration_seconds(item, metadata, self.player)
             chapters = sanitize_chapters(metadata.get("Chapters") or [], duration)
             state = self._new_state(
                 item,
                 client,
+                media_source_id,
                 revision,
                 playback_token,
                 cache_root,
@@ -705,10 +844,79 @@ class TrickplayPreviewManager(object):
                 self._clear_if_owned(state)
             shutil.rmtree(cache_root, ignore_errors=True)
 
+    @staticmethod
+    def _load_metadata(item, abort, clock=None):
+        """Fetch item metadata until it succeeds or playback is aborted.
+
+        This runs on the preview lifecycle thread, never Kodi's player thread.
+        Known terminal HTTP responses stop immediately. Other failures retry
+        indefinitely with a capped delay and periodic diagnostics. Event.wait
+        makes shutdown immediate even during the longest delay.
+        """
+        clock = clock or time.monotonic
+        failures = 0
+        last_diagnostic = None
+        while not abort.is_set():
+            try:
+                metadata = item["Server"].jellyfin.get_item(item["Id"])
+                if not isinstance(metadata, dict) or not metadata:
+                    raise ValueError("item metadata was not an object")
+                if abort.is_set():
+                    return None
+                if failures:
+                    LOG.info(
+                        "HTPC preview metadata recovered item=%s attempts=%s",
+                        item.get("Id"),
+                        failures + 1,
+                    )
+                return metadata
+            except Exception as error:
+                if abort.is_set():
+                    return None
+                failures += 1
+                status = _http_status(error)
+                if status in METADATA_TERMINAL_HTTP_STATUSES:
+                    LOG.warning(
+                        "HTPC preview metadata terminal failure item=%s "
+                        "status=%s: %s",
+                        item.get("Id"),
+                        status,
+                        error,
+                    )
+                    return None
+
+                if METADATA_TRANSIENT_RETRY_DELAYS:
+                    index = min(
+                        failures - 1,
+                        len(METADATA_TRANSIENT_RETRY_DELAYS) - 1,
+                    )
+                    delay = METADATA_TRANSIENT_RETRY_DELAYS[index]
+                else:
+                    delay = SEEK_POLL_SECONDS
+                now = clock()
+                if (
+                    last_diagnostic is None
+                    or now - last_diagnostic
+                    >= METADATA_DIAGNOSTIC_INTERVAL_SECONDS
+                ):
+                    LOG.warning(
+                        "HTPC preview metadata transient failure item=%s "
+                        "attempt=%s retry_seconds=%s: %s",
+                        item.get("Id"),
+                        failures,
+                        delay,
+                        error,
+                    )
+                    last_diagnostic = now
+                if abort.wait(max(0.0, float(delay))):
+                    return None
+        return None
+
     def _new_state(
         self,
         item,
         client,
+        media_source_id,
         revision,
         playback_token,
         cache_root,
@@ -724,7 +932,7 @@ class TrickplayPreviewManager(object):
             os.makedirs(path, exist_ok=True)
         return {
             "item_id": item["Id"],
-            "media_source_id": item.get("MediaSourceId"),
+            "media_source_id": media_source_id,
             "client": client,
             "width": width,
             "info": info,
@@ -750,6 +958,7 @@ class TrickplayPreviewManager(object):
             "prefetch_session": self._new_session(client),
             "chapter_session": self._new_session(client),
             "manifest_revision": 0,
+            "last_preview_failure_log": None,
             "workers": [],
         }
 
@@ -779,7 +988,19 @@ class TrickplayPreviewManager(object):
             except PreviewFailure as error:
                 retry = error.transient and attempt < len(PREVIEW_RETRY_BACKOFFS)
                 if not retry:
-                    self._clear_preview_if_current(state, request, abort)
+                    current = self._clear_preview_if_current(
+                        state,
+                        request,
+                        abort,
+                    )
+                    if current:
+                        self._log_preview_failure(state, request, error)
+                    if current and error.transient:
+                        state["request_slot"].retry_after(
+                            request,
+                            PREVIEW_STATIONARY_RETRY_SECONDS,
+                            abort,
+                        )
                     return False
                 if not state["request_slot"].wait_retry(
                     request["key"],
@@ -803,6 +1024,28 @@ class TrickplayPreviewManager(object):
             self._queue_one_neighbor(state, published)
             return True
         return False
+
+    @staticmethod
+    def _log_preview_failure(state, request, error):
+        now = time.monotonic()
+        previous = state.get("last_preview_failure_log")
+        if (
+            previous is not None
+            and now - previous < PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS
+        ):
+            return False
+        state["last_preview_failure_log"] = now
+        LOG.warning(
+            "HTPC exact preview unavailable item=%s source=%s width=%s "
+            "frame=%s transient=%s: %s",
+            state.get("item_id"),
+            state.get("media_source_id"),
+            state.get("width"),
+            request.get("frame"),
+            error.transient,
+            error,
+        )
+        return True
 
     def _latest_current_request(self, state, request, abort):
         """Rebind same-frame work to the exact newest cursor target."""
@@ -1044,13 +1287,8 @@ class TrickplayPreviewManager(object):
 
     @staticmethod
     def _is_transient_download_error(error):
-        response = getattr(error, "response", None)
-        status = getattr(response, "status_code", None)
+        status = _http_status(error)
         if status is None:
-            return True
-        try:
-            status = int(status)
-        except (TypeError, ValueError):
             return True
         return status in (408, 425, 429) or status >= 500
 
