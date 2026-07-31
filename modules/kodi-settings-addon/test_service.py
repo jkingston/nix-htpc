@@ -144,7 +144,9 @@ from seek_controller import (
     SeekController,
 )
 from service import (
+    CORE_SETTINGS,
     ManagedSettings,
+    PLAYBACK_MODES,
     SeekService,
     ServiceMonitor,
     get_setting,
@@ -392,26 +394,85 @@ class JsonRpcResponseTest(unittest.TestCase):
 
 
 class ManagedCoreSettingsTest(unittest.TestCase):
-    def test_failed_write_returns_false_but_attempts_the_full_batch(self):
-        outcomes = [False] + [True] * 10
+    EXPECTED_CORE_SETTINGS = (
+        ("general.addonupdates", 2),
+        ("videoplayer.useprimedecoder", True),
+        ("videoplayer.useprimerenderer", 0),
+        ("videoplayer.adjustrefreshrate", 2),
+        ("videoscreen.whitelist", PLAYBACK_MODES),
+        ("videoscreen.whitelistpulldown", False),
+        ("videoscreen.whitelistdoublerefreshrate", False),
+        ("videoplayer.seeksteps", [-10, 10]),
+        ("videoplayer.seekdelay", 0),
+        ("filelists.showparentdiritems", False),
+        ("input.enablemouse", False),
+        ("debug.showloginfo", False),
+    )
+
+    @staticmethod
+    def _expected_calls():
+        return [
+            mock.call(setting, value)
+            for setting, value in ManagedCoreSettingsTest.EXPECTED_CORE_SETTINGS
+        ]
+
+    def test_success_applies_the_exact_batch_with_update_policy_first(self):
+        with mock.patch(
+            "service.set_setting",
+            return_value=True,
+        ) as set_core:
+            self.assertTrue(ManagedSettings._apply_core())
+
+        self.assertEqual(CORE_SETTINGS, self.EXPECTED_CORE_SETTINGS)
+        self.assertEqual(set_core.call_args_list, self._expected_calls())
+        self.assertEqual(
+            set_core.call_args_list[0],
+            mock.call("general.addonupdates", 2),
+        )
+
+    def test_update_policy_failure_attempts_the_full_batch_and_returns_false(self):
+        outcomes = [False] + [True] * (len(self.EXPECTED_CORE_SETTINGS) - 1)
         with mock.patch(
             "service.set_setting",
             side_effect=outcomes,
         ) as set_core:
             self.assertFalse(ManagedSettings._apply_core())
 
-        self.assertEqual(set_core.call_count, 11)
-        self.assertEqual(
-            set_core.call_args_list[0],
-            mock.call("videoplayer.useprimedecoder", True),
+        self.assertEqual(set_core.call_args_list, self._expected_calls())
+
+    def test_update_policy_failure_retries_until_the_core_is_ready(self):
+        now = [0.0]
+        settings = ManagedSettings(clock=lambda: now[0])
+        settings.skin_applied = True
+        settings.screenshot_ready = True
+        outcomes = [False] + [True] * (
+            len(self.EXPECTED_CORE_SETTINGS) * 2 - 1
         )
-        self.assertIn(
-            mock.call("filelists.showparentdiritems", False),
+        with mock.patch(
+            "service.set_setting",
+            side_effect=outcomes,
+        ) as set_core, mock.patch("service.log") as log:
+            settings.tick()
+            self.assertFalse(settings.core_applied)
+            self.assertEqual(settings.next_core_check, 1.0)
+
+            now[0] = settings.next_core_check
+            settings.tick()
+
+        self.assertTrue(settings.core_applied)
+        self.assertEqual(
             set_core.call_args_list,
+            self._expected_calls() * 2,
         )
         self.assertEqual(
-            set_core.call_args_list[-1],
-            mock.call("debug.showloginfo", False),
+            log.call_args_list,
+            [
+                mock.call(
+                    "managed core settings incomplete; retrying",
+                    fake_xbmc.LOGWARNING,
+                ),
+                mock.call("managed core settings ready"),
+            ],
         )
 
     def test_retry_deadlines_and_backoff_cap(self):

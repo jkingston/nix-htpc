@@ -28,6 +28,23 @@ PLAYBACK_MODES = [
     "0384002160029.97003pstd",
     "0384002160030.00000pstd",
 ]
+ADDON_UPDATES_NEVER = 2
+CORE_SETTINGS = (
+    # Kodi persists this global policy across Nix generation rollbacks. Restore
+    # automatic updates only with an explicit Settings.SetSettingValue write of 0.
+    ("general.addonupdates", ADDON_UPDATES_NEVER),
+    ("videoplayer.useprimedecoder", True),
+    ("videoplayer.useprimerenderer", 0),
+    ("videoplayer.adjustrefreshrate", 2),
+    ("videoscreen.whitelist", PLAYBACK_MODES),
+    ("videoscreen.whitelistpulldown", False),
+    ("videoscreen.whitelistdoublerefreshrate", False),
+    ("videoplayer.seeksteps", [-10, 10]),
+    ("videoplayer.seekdelay", 0),
+    ("filelists.showparentdiritems", False),
+    ("input.enablemouse", False),
+    ("debug.showloginfo", False),
+)
 SCREENSHOT_PATH = "@HTPC_SCREENSHOT_PATH@"
 SCREENSHOT_SETTING = "debug.screenshotpath"
 CORE_RETRY_INITIAL = 1.0
@@ -226,17 +243,7 @@ class ManagedSettings(object):
     @staticmethod
     def _apply_core():
         results = [
-            set_setting("videoplayer.useprimedecoder", True),
-            set_setting("videoplayer.useprimerenderer", 0),
-            set_setting("videoplayer.adjustrefreshrate", 2),
-            set_setting("videoscreen.whitelist", PLAYBACK_MODES),
-            set_setting("videoscreen.whitelistpulldown", False),
-            set_setting("videoscreen.whitelistdoublerefreshrate", False),
-            set_setting("videoplayer.seeksteps", [-10, 10]),
-            set_setting("videoplayer.seekdelay", 0),
-            set_setting("filelists.showparentdiritems", False),
-            set_setting("input.enablemouse", False),
-            set_setting("debug.showloginfo", False),
+            set_setting(setting, value) for setting, value in CORE_SETTINGS
         ]
         return all(results)
 

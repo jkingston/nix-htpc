@@ -1,7 +1,7 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
-  kodiSettingsAddonVersion = "2.1.7";
+  kodiSettingsAddonVersion = "2.1.8";
   kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   kodiScreenshotEvidence = import ./kodi-screenshot-evidence/package.nix {
