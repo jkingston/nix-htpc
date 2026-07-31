@@ -635,6 +635,92 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             "the owned surface must not add another slider authority",
         )
 
+    def test_focused_actual_playhead_reuses_target_ranges_geometry(self):
+        focused_groups = _controls_by_description(
+            self.surface,
+            "HTPC video OSD focused timeline rail",
+        )
+        self.assertEqual(len(focused_groups), 1)
+        focused_group = focused_groups[0]
+        self.assertEqual(
+            _visible_text(focused_group),
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]",
+        )
+
+        actual_markers = [
+            control
+            for control in focused_group.findall("control")
+            if _description(control)
+            == "HTPC video OSD focused actual playhead"
+        ]
+        self.assertEqual(len(actual_markers), 1)
+        actual_marker = actual_markers[0]
+        self.assertEqual(actual_marker.get("type"), "ranges")
+        self.assertIsNone(actual_marker.get("id"))
+        self.assertEqual(
+            actual_marker.findtext("info", default="").strip(),
+            "Window($PARAM[property_window]).Property("
+            "$PARAM[property_prefix].actualmarker)",
+        )
+        self.assertEqual(
+            _visible_text(actual_marker),
+            "$PARAM[presentation_ready] + !String.IsEmpty(Window("
+            "$PARAM[property_window]).Property("
+            "$PARAM[property_prefix].actualmarker))",
+        )
+
+        geometry_and_textures = (
+            "posx",
+            "posy",
+            "width",
+            "height",
+            "texturebg",
+            "lefttexture",
+            "midtexture",
+            "righttexture",
+        )
+
+        def node_contract(control: ET.Element, tag: str):
+            node = control.find(tag)
+            self.assertIsNotNone(node, tag)
+            return (
+                (node.text or "").strip(),
+                tuple(sorted(node.attrib.items())),
+            )
+
+        target_markers = _controls_by_description(
+            self.playback_root,
+            TARGET_MARKER_DESCRIPTION,
+        )
+        self.assertEqual(len(target_markers), 2)
+        for target_marker in target_markers:
+            with self.subTest(
+                target_info=target_marker.findtext("info", default="")
+            ):
+                self.assertEqual(target_marker.get("type"), "ranges")
+                for tag in geometry_and_textures:
+                    self.assertEqual(
+                        node_contract(actual_marker, tag),
+                        node_contract(target_marker, tag),
+                        tag,
+                    )
+
+        forbidden_actions = {
+            "onclick",
+            "ondown",
+            "onfocus",
+            "onleft",
+            "onright",
+            "onunfocus",
+            "onup",
+        }
+        self.assertTrue(
+            forbidden_actions.isdisjoint(
+                node.tag for node in actual_marker.iter()
+            )
+        )
+
     def test_chapter_hint_is_compact_noninteractive_and_localized(self):
         hint = _controls_by_description(
             self.surface,
@@ -1640,6 +1726,7 @@ class ProducerSafetyContractTest(unittest.TestCase):
         source = PRESENTER.read_text(encoding="utf-8")
         contract = MEDIA_CONTRACT.read_text(encoding="utf-8")
         for property_name in (
+            "actualmarker",
             "viewslot",
             "targetfill",
             "targetmarker",

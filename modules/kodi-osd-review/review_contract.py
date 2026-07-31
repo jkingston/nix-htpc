@@ -16,6 +16,7 @@ PROPERTY_NAMES = (
     "subtitle",
     "elapsed",
     "remaining",
+    "seek.actualmarker",
     "seek.viewactive",
     "seek.viewslot",
     "seek.a.revision",
@@ -77,6 +78,7 @@ _COMMON = {
     "subtitle": "Deterministic fixture",
     "elapsed": "40:00",
     "remaining": "\N{MINUS SIGN}1:00:00",
+    "seek.actualmarker": "40,40",
 }
 
 _PLAYBACK_STATE = {

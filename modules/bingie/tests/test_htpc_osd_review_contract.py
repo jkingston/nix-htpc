@@ -41,6 +41,7 @@ EXPECTED_CLEANUP = {
     "htpc.review.subtitle",
     "htpc.review.elapsed",
     "htpc.review.remaining",
+    "htpc.review.seek.actualmarker",
     "htpc.review.seek.viewactive",
     "htpc.review.seek.viewslot",
     "htpc.review.seek.a.revision",

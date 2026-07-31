@@ -338,6 +338,19 @@
 						<info>$PARAM[actual_progress]</info>
 						<reveal>true</reveal>
 					</control>
+					<control type="ranges">
+						<description>HTPC video OSD focused actual playhead</description>
+						<posx>$PARAM[rail_left]</posx>
+						<posy>$PARAM[target_marker_top]</posy>
+						<width>$PARAM[rail_width]</width>
+						<height>$PARAM[target_marker_height]</height>
+						<texturebg colordiffuse="00ffffff">common/slider/slider_button_nofocus.png</texturebg>
+						<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</lefttexture>
+						<midtexture/>
+						<righttexture/>
+						<info>Window($PARAM[property_window]).Property($PARAM[property_prefix].actualmarker)</info>
+						<visible>$PARAM[presentation_ready] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].actualmarker))</visible>
+					</control>
 				</control>
 				<include content="HTPCPlaybackPresentationLayout">
 					<param name="visible" value="$PARAM[visible]" />

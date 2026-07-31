@@ -1664,6 +1664,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher = KodiPropertyPublisher(window)
         view = {
             "active": True,
+            "identity": "/media/movie.mkv",
+            "playback_epoch": 2,
             "target_revision": 1,
             "phase": "ready",
             "actual_percent": 10,
@@ -1676,6 +1678,10 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "preview_path": "/tmp/frame.jpg",
         }
         publisher.publish_view(view)
+        self.assertEqual(
+            window.getProperty("htpc.seek.actualmarker"),
+            "10,10",
+        )
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")
         self.assertEqual(
             window.getProperty("htpc.seek.a.targetfill"),
@@ -1735,7 +1741,89 @@ class PresenterAndLeaseTest(unittest.TestCase):
         changed_only_in_unrendered_actual = dict(changed)
         changed_only_in_unrendered_actual["actual_percent"] = 42
         publisher.publish_view(changed_only_in_unrendered_actual)
+        self.assertEqual(
+            window.operations,
+            [("set", "htpc.seek.actualmarker", "42,42")],
+        )
+        window.operations[:] = []
+        publisher.publish_view(changed_only_in_unrendered_actual)
         self.assertEqual(window.operations, [])
+
+        window.operations[:] = []
+        for actual_percent in range(43, 48):
+            sample = dict(changed)
+            sample["actual_percent"] = actual_percent
+            publisher.publish_view(sample)
+        self.assertEqual(
+            window.operations,
+            [
+                (
+                    "set",
+                    "htpc.seek.actualmarker",
+                    "%d,%d" % (percent, percent),
+                )
+                for percent in range(43, 48)
+            ],
+        )
+
+    def test_view_publisher_actual_marker_is_bounded_and_lifecycle_safe(self):
+        window = FakeWindow()
+        window.properties["htpc.seek.actualmarker"] = "stale"
+        publisher = KodiPropertyPublisher(window)
+        invalid = {
+            "active": False,
+            "identity": "",
+            "playback_epoch": "",
+            "actual_percent": 0,
+        }
+        publisher.publish_view(invalid)
+        self.assertEqual(
+            window.operations[0],
+            ("clear", "htpc.seek.actualmarker", ""),
+        )
+
+        valid = dict(
+            invalid,
+            identity="/media/movie.mkv",
+            playback_epoch=2,
+        )
+        for value, expected in (
+            (0, "0,0"),
+            (40.49, "40,40"),
+            (40.51, "41,41"),
+            (float("nan"), "0,0"),
+            (float("inf"), "0,0"),
+            (-20, "0,0"),
+            (120, "100,100"),
+        ):
+            with self.subTest(value=value):
+                sample = dict(valid, actual_percent=value)
+                publisher.publish_view(sample)
+                self.assertEqual(
+                    window.getProperty("htpc.seek.actualmarker"),
+                    expected,
+                )
+
+        window.operations[:] = []
+        publisher.publish_view(invalid)
+        self.assertEqual(
+            window.operations,
+            [("clear", "htpc.seek.actualmarker", "")],
+        )
+        publisher.publish_view(invalid)
+        self.assertEqual(len(window.operations), 1)
+
+        publisher.publish_view(dict(valid, actual_percent=40))
+        window.operations[:] = []
+        publisher.clear()
+        self.assertIn(
+            ("clear", "htpc.seek.actualmarker", ""),
+            window.operations,
+        )
+        self.assertEqual(
+            window.getProperty("htpc.seek.actualmarker"),
+            "",
+        )
 
     def test_view_publisher_clamps_bad_geometry_and_hides_first(self):
         window = FakeWindow()
@@ -1743,6 +1831,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish_view(
             {
                 "active": True,
+                "identity": "/media/movie.mkv",
+                "playback_epoch": 2,
                 "target_percent": float("inf"),
                 "actual_percent": float("nan"),
                 "target_valid": True,
@@ -1763,14 +1853,34 @@ class PresenterAndLeaseTest(unittest.TestCase):
         )
 
         window.operations[:] = []
-        publisher.publish_view({"active": False, "target_percent": 200})
+        publisher.publish_view(
+            {
+                "active": False,
+                "identity": "/media/movie.mkv",
+                "playback_epoch": 2,
+                "actual_percent": 42,
+                "target_percent": 200,
+            }
+        )
         self.assertEqual(
             window.operations[0],
+            ("set", "htpc.seek.actualmarker", "42,42"),
+        )
+        self.assertEqual(
+            window.operations[1],
             ("clear", "htpc.seek.viewactive", ""),
         )
         self.assertEqual(window.getProperty("htpc.seek.viewactive"), "")
         window.operations[:] = []
-        publisher.publish_view({"active": False, "target_percent": 200})
+        publisher.publish_view(
+            {
+                "active": False,
+                "identity": "/media/movie.mkv",
+                "playback_epoch": 2,
+                "actual_percent": 42,
+                "target_percent": 200,
+            }
+        )
         self.assertEqual(window.operations, [])
 
     def test_controller_clear_cannot_erase_latched_view_slot(self):
@@ -1799,6 +1909,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish_view(
             {
                 "active": True,
+                "identity": "/media/movie.mkv",
+                "playback_epoch": 1,
                 "target_revision": 1,
                 "phase": "applying",
                 "actual_percent": 10,
@@ -1811,6 +1923,10 @@ class PresenterAndLeaseTest(unittest.TestCase):
         slot = window.getProperty("htpc.seek.viewslot")
         publisher.clear_controller()
         self.assertEqual(window.getProperty("htpc.seek.active"), "")
+        self.assertEqual(
+            window.getProperty("htpc.seek.actualmarker"),
+            "10,10",
+        )
         self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), slot)
         self.assertEqual(
@@ -2737,6 +2853,25 @@ class SeekServiceCleanupTest(unittest.TestCase):
         self.service.presenter.reset.assert_not_called()
         self.service.chapters.close.assert_not_called()
 
+    def test_startup_clears_all_seek_state_before_readiness(self):
+        trace = []
+        self.service.publisher.clear.side_effect = self._record(
+            trace,
+            "publisher",
+        )
+        self.service.lease.refresh.side_effect = self._record(
+            trace,
+            "ready",
+        )
+        self.service.monitor = mock.Mock()
+        self.service.monitor.waitForAbort.return_value = True
+
+        with mock.patch("service.log"):
+            self.service.run()
+
+        self.assertEqual(trace, ["publisher", "ready"])
+        self.service.lease.refresh.assert_called_once_with(force=True)
+
     def test_every_player_boundary_runs_navigation_and_visual_cleanup(self):
         for name in ("started", "stopped", "ended"):
             with self.subTest(name=name):
@@ -2752,7 +2887,7 @@ class SeekServiceCleanupTest(unittest.TestCase):
                 self.service.chapters.close.assert_called_once_with()
                 self.service.chapters.clear_properties.assert_called_once_with()
                 publisher = self.service.publisher
-                publisher.clear_controller.assert_called_once_with()
+                publisher.clear.assert_called_once_with()
 
     def test_boundary_callbacks_precede_failure_isolated_cleanup(self):
         trace = []
@@ -2796,9 +2931,10 @@ class SeekServiceCleanupTest(unittest.TestCase):
             trace,
             "chapter-properties",
         )
-        self.service.publisher.clear_controller.side_effect = self._record(
+        self.service.publisher.clear.side_effect = self._record(
             trace,
             "publisher",
+            fail=True,
         )
 
         with mock.patch("service.log"):
@@ -2822,6 +2958,7 @@ class SeekServiceCleanupTest(unittest.TestCase):
         self.service.controller.reset.assert_called_once_with(
             clear_handoff=True,
         )
+        self.service.publisher.clear.assert_called_once_with()
 
     def test_recovery_isolates_failures_and_closes_chapter_state(self):
         trace = []

@@ -120,6 +120,34 @@ class KodiPropertyPublisher(object):
         from different revisions if it binds its two groups to slots a/b.
         """
         active = bool(view.get("active"))
+        playback_epoch = view.get("playback_epoch")
+        actual_valid = bool(view.get("identity")) and playback_epoch not in (
+            None,
+            "",
+        )
+        if actual_valid:
+            actual_percent = self._safe_percent(
+                view.get("actual_percent", 0.0)
+            )
+            actual_position = int(round(actual_percent))
+            actual_marker = "%d,%d" % (
+                actual_position,
+                actual_position,
+            )
+        else:
+            actual_marker = ""
+        if self.last.get("actualmarker") != actual_marker:
+            if actual_marker:
+                self.window.setProperty(
+                    SEEK_PREFIX + "actualmarker",
+                    actual_marker,
+                )
+            else:
+                self.window.clearProperty(
+                    SEEK_PREFIX + "actualmarker"
+                )
+            self.last["actualmarker"] = actual_marker
+
         percent = self._safe_percent(view.get("target_percent", 0.0))
         formatted = "%.4f" % percent
         if not active and self.last.get("viewactive"):

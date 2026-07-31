@@ -409,7 +409,8 @@ class SeekService(object):
         self.settings = ManagedSettings()
 
     def run(self):
-        # Publish readiness before any optional skin wait or settings work.
+        # Revoke stale seek/view state before advertising this service lease.
+        self.publisher.clear()
         self.lease.refresh(force=True)
         log("input router ready; managed settings scheduled")
         while not self.monitor.waitForAbort(0.05):
@@ -535,8 +536,8 @@ class SeekService(object):
             self.chapters.clear_properties,
         )
         self._attempt(
-            "publisher boundary controller clear",
-            self.publisher.clear_controller,
+            "publisher boundary clear",
+            self.publisher.clear,
         )
 
     def _recover(self, message):

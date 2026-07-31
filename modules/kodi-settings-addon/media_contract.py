@@ -49,6 +49,7 @@ SEEK_CONTROLLER_PROPERTY_KEYS = (
     "previewpath",
 )
 SEEK_VIEW_PROPERTY_KEYS = (
+    "actualmarker",
     "viewactive",
     "viewslot",
 ) + tuple(

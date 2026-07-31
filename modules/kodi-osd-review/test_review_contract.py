@@ -70,6 +70,15 @@ class ReviewContractTest(unittest.TestCase):
                     all(key.startswith("htpc.review.") for key in values)
                 )
 
+    def test_every_scenario_has_one_deterministic_actual_marker(self):
+        for scenario in SCENARIOS:
+            with self.subTest(scenario=scenario):
+                values = scenario_properties(scenario)
+                self.assertEqual(
+                    values["htpc.review.seek.actualmarker"],
+                    "40,40",
+                )
+
     def test_seek_pair_proves_target_specific_preview_and_position(self):
         backward = scenario_properties("seek-backward")
         forward = scenario_properties("seek-forward")
@@ -154,7 +163,7 @@ class ReviewContractTest(unittest.TestCase):
                     baseline,
                 )
 
-    def test_non_seek_scenarios_publish_no_seek_view(self):
+    def test_non_seek_scenarios_publish_only_the_actual_seek_marker(self):
         for scenario in (
             "transport-playing",
             "transport-paused",
@@ -164,8 +173,13 @@ class ReviewContractTest(unittest.TestCase):
             "top-stop",
         ):
             values = scenario_properties(scenario)
-            self.assertFalse(
-                any(key.startswith("htpc.review.seek.") for key in values)
+            self.assertEqual(
+                {
+                    key: value
+                    for key, value in values.items()
+                    if key.startswith("htpc.review.seek.")
+                },
+                {"htpc.review.seek.actualmarker": "40,40"},
             )
 
     def test_playing_fixtures_differ_only_by_playback_state(self):

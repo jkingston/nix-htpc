@@ -27,6 +27,7 @@
 	<onunload>ClearProperty(htpc.review.subtitle,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.elapsed,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.remaining,Home)</onunload>
+	<onunload>ClearProperty(htpc.review.seek.actualmarker,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewactive,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewslot,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.revision,Home)</onunload>
