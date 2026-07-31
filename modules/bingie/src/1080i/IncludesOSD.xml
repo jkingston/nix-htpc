@@ -742,8 +742,8 @@
 	<include name="OSDButtonsModern">
         
         <!--SeekBar -->
-		<include condition="Skin.HasSetting(UseBingieOSD) + Player.HasVideo | Player.HasAudio">SeekBar_Bingie</include>
-		<include condition="!Skin.HasSetting(UseBingieOSD) + Player.HasVideo | Player.HasAudio">SeekBar_Clasic</include>
+		<include condition="Skin.HasSetting(UseBingieOSD) + [Player.HasVideo | Player.HasAudio]">SeekBar_Bingie</include>
+		<include condition="!Skin.HasSetting(UseBingieOSD) + [Player.HasVideo | Player.HasAudio]">SeekBar_Clasic</include>
 
 		<!-- OSD buttons -->
 		<include condition="Skin.HasSetting(UseBingieOSD)">OSDButtons_Bingie_Layout_Factory</include>
@@ -1211,19 +1211,11 @@
 	<include name="SeekBar_Bingie">
 		<control type="button" id="187">
 			<include>HiddenObject</include>
-			<onup condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</onup>
-			<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + !String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-up)</onup>
-			<onup condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal)) + String.IsEmpty(Window(Home).Property(htpc.service.ready))">300</onup>
-			<onfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-focus)</onfocus>
-			<onunfocus condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-blur)</onunfocus>
-			<ondown condition="!String.IsEmpty(Window(Home).Property(htpc.seek.modal))">noop</ondown>
-			<ondown condition="String.IsEmpty(Window(Home).Property(htpc.seek.modal))">200</ondown>
-			<onright condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-right)</onright>
-			<onright condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepForward</onright>
-			<onleft condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-left)</onleft>
-			<onleft condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">StepBack</onleft>
-			<onclick condition="!String.IsEmpty(Window(Home).Property(htpc.service.ready))">NotifyAll(htpc.seek,timeline-confirm)</onclick>
-			<onclick condition="String.IsEmpty(Window(Home).Property(htpc.service.ready))">PlayerControl(Play)</onclick>
+			<onup>300</onup>
+			<ondown>200</ondown>
+			<onright>StepForward</onright>
+			<onleft>StepBack</onleft>
+			<onclick>PlayerControl(Play)</onclick>
 		</control>
 		<control type="slider">
 			<animation type="WindowOpen">
@@ -1245,7 +1237,7 @@
 			<width>1152</width>
 			<texturesliderbar>colors/color_transparent.png</texturesliderbar>
 			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
-			<visible>[String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))] + Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
+			<visible>Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
         </control>
 	</include>
     

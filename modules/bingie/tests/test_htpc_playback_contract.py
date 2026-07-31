@@ -1633,7 +1633,84 @@ class PlaybackXmlContractTest(unittest.TestCase):
             _visible_text(hints[0]),
         )
 
-    def test_native_progress_is_an_idle_fallback_not_custom_active(self):
+    def test_inherited_music_osd_seekbar_uses_native_navigation(self):
+        factories = [
+            node
+            for node in self.osd_root.findall("include")
+            if node.get("name") == "OSDButtonsModern"
+        ]
+        self.assertEqual(len(factories), 1)
+        self.assertEqual(
+            tuple(
+                (
+                    (node.text or "").strip(),
+                    node.get("condition"),
+                )
+                for node in factories[0].findall("include")
+                if (node.text or "").strip()
+                in ("SeekBar_Bingie", "SeekBar_Clasic")
+            ),
+            (
+                (
+                    "SeekBar_Bingie",
+                    "Skin.HasSetting(UseBingieOSD) + "
+                    "[Player.HasVideo | Player.HasAudio]",
+                ),
+                (
+                    "SeekBar_Clasic",
+                    "!Skin.HasSetting(UseBingieOSD) + "
+                    "[Player.HasVideo | Player.HasAudio]",
+                ),
+            ),
+        )
+        seekbars = [
+            node
+            for node in self.osd_root.findall("include")
+            if node.get("name") == "SeekBar_Bingie"
+        ]
+        self.assertEqual(len(seekbars), 1)
+        buttons = [
+            control
+            for control in seekbars[0].findall("control")
+            if control.get("type") == "button"
+            and control.get("id") == "187"
+        ]
+        self.assertEqual(len(buttons), 1)
+        button = buttons[0]
+        self.assertEqual(
+            tuple(
+                (
+                    node.tag,
+                    (node.text or "").strip(),
+                    tuple(sorted(node.attrib.items())),
+                )
+                for node in button
+            ),
+            (
+                ("include", "HiddenObject", ()),
+                ("onup", "300", ()),
+                ("ondown", "200", ()),
+                ("onright", "StepForward", ()),
+                ("onleft", "StepBack", ()),
+                ("onclick", "PlayerControl(Play)", ()),
+            ),
+        )
+        sliders = [
+            control
+            for control in seekbars[0].findall("control")
+            if control.get("type") == "slider"
+        ]
+        self.assertEqual(len(sliders), 1)
+        self.assertEqual(
+            sliders[0].findtext("info", default="").strip(),
+            "Player.Progress",
+        )
+        self.assertEqual(
+            _visible_text(sliders[0]),
+            "Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]",
+        )
+
+    def test_native_video_progress_is_idle_fallback_not_custom_active(self):
         def assert_fallback_visibility(control: ET.Element):
             visible = re.sub(r"\s+", "", _visible_text(control))
             ready_empty = (
@@ -1654,26 +1731,6 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 + re.escape(ready_empty)
             )
             self.assertRegex(visible, alternatives)
-
-        seekbar_includes = [
-            node
-            for node in self.osd_root.findall("include")
-            if node.get("name") == "SeekBar_Bingie"
-        ]
-        self.assertEqual(len(seekbar_includes), 1)
-        native_progress = [
-            control
-            for control in seekbar_includes[0].iter("control")
-            if control.findtext("info", default="").strip() == "Player.Progress"
-            and "seek slider" in _description(control).lower()
-        ]
-        self.assertGreaterEqual(
-            len(native_progress),
-            1,
-            "IncludesOSD.xml must retain a native Player.Progress fallback",
-        )
-        for control in native_progress:
-            assert_fallback_visibility(control)
 
         panel_includes = [
             node
