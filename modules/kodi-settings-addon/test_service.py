@@ -103,6 +103,7 @@ from chapter_dialog import (
     ACTION_MOVE_UP,
     ACTION_NAV_BACK,
     ACTION_PREVIOUS_MENU,
+    CHAPTER_LIST_ID,
     ChapterDialogManager,
     ChapterRail,
 )
@@ -2290,6 +2291,10 @@ class FakeChapterControl(object):
     def __init__(self, selected):
         self.selected = selected
         self.selections = []
+        self.items = []
+
+    def addItems(self, items):
+        self.items.extend(items)
 
     def getSelectedPosition(self):
         return self.selected
@@ -2332,6 +2337,53 @@ class ChapterRailTest(unittest.TestCase):
         )
         rail.getControl = lambda _control_id: control
         return rail, control, focus_events, exit_events
+
+    def test_init_publishes_only_visible_item_fields_and_selects_current(self):
+        control = FakeChapterControl(0)
+        focus_ids = []
+        rail = ChapterRail(
+            "ChapterRail.xml",
+            "/addon",
+            "Default",
+            "1080i",
+            chapters=[
+                {
+                    "index": 0,
+                    "start_seconds": 0.0,
+                    "label": "Opening",
+                    "image_path": "",
+                },
+                {
+                    "index": 1,
+                    "start_seconds": 600.0,
+                    "label": "Second act",
+                    "image_path": "/tmp/chapter-1.jpg",
+                },
+            ],
+            current_seconds=650.0,
+        )
+        rail.getControl = lambda _control_id: control
+        rail.setFocusId = focus_ids.append
+
+        rail.onInit()
+
+        self.assertEqual(
+            [
+                (item.label, item.label2, item.art, item.properties)
+                for item in control.items
+            ],
+            [
+                ("Opening", "0:00", {}, {}),
+                (
+                    "Second act",
+                    "10:00",
+                    {"thumb": "/tmp/chapter-1.jpg"},
+                    {},
+                ),
+            ],
+        )
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(focus_ids, [CHAPTER_LIST_ID])
 
     def test_right_observes_native_selection_and_emits_one_focus_event(self):
         rail, control, events, _exit_events = self._rail(0)
@@ -2604,12 +2656,17 @@ class ChapterDialogManagerTest(unittest.TestCase):
 
 
 class ServiceMonitorTest(unittest.TestCase):
-    def test_only_owned_notifications_enter_input_queue(self):
+    def test_only_htpc_seek_notifications_enter_input_queue(self):
         monitor = ServiceMonitor()
         monitor.onNotification(
             "htpc.seek",
             "Other.timeline-left",
             '{"source":"skin"}',
+        )
+        monitor.onNotification(
+            "htpc.chapter",
+            "Other.chapter-focus",
+            '{"index":1}',
         )
         monitor.onNotification("other.addon", "Other.timeline-right", "{}")
         events = monitor.drain()

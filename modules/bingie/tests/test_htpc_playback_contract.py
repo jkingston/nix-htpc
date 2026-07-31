@@ -1603,6 +1603,36 @@ class PlaybackXmlContractTest(unittest.TestCase):
                     )
         self.assertEqual(violations, [])
 
+    def test_chapter_availability_hint_is_owned_by_video_osd(self):
+        seekbars = [
+            node
+            for node in self.osd_root.findall("include")
+            if node.get("name") == "SeekBar_Bingie"
+        ]
+        self.assertEqual(len(seekbars), 1)
+        self.assertNotIn(
+            "htpc.chapter.available",
+            ET.tostring(seekbars[0], encoding="unicode"),
+        )
+        hints = _controls_by_description(
+            self.video_osd_surface,
+            "HTPC video OSD chapter hint",
+        )
+        self.assertEqual(len(hints), 1)
+        parameters = {
+            node.get("name"): node.get("default")
+            for node in self.video_osd_surface.findall("param")
+        }
+        self.assertEqual(
+            parameters["chapter_available_condition"],
+            "!String.IsEmpty(Window(Home).Property("
+            "htpc.chapter.available))",
+        )
+        self.assertIn(
+            "$PARAM[chapter_available_condition]",
+            _visible_text(hints[0]),
+        )
+
     def test_native_progress_is_an_idle_fallback_not_custom_active(self):
         def assert_fallback_visibility(control: ET.Element):
             visible = re.sub(r"\s+", "", _visible_text(control))

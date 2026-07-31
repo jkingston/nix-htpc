@@ -246,7 +246,6 @@ class TrickplayTest(unittest.TestCase):
         token = request["token"]
         values = {
             trickplay.PREVIEW_PATH: path,
-            trickplay.PREVIEW_CHAPTER: "Replacement chapter",
             trickplay.PREVIEW_TARGET: request["target_text"],
             trickplay.PREVIEW_TOKEN: json.dumps(
                 token,
@@ -912,20 +911,10 @@ class TrickplayTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             request = self.make_request(target="65")
             source = self.write_file(os.path.join(root, "frame"), b"frame")
-            chapters = [
-                {
-                    "kind": "chapter",
-                    "id": "chapter-0000",
-                    "index": 0,
-                    "time_seconds": 0,
-                    "label": "Opening",
-                    "image": "",
-                }
-            ]
             store = PropertyStore()
             self.activate_request(store, request)
             trickplay.window = store.window
-            state = self.make_process_state(root, request, chapters)
+            state = self.make_process_state(root, request)
             manager = trickplay.TrickplayPreviewManager(None)
             manager._resolve_frame_path = lambda *_args, **_kwargs: source
 
@@ -938,15 +927,30 @@ class TrickplayTest(unittest.TestCase):
             )
             token = json.loads(store.values[trickplay.PREVIEW_TOKEN])
             self.assertEqual(token, request["token"])
-            self.assertEqual(store.values[trickplay.PREVIEW_CHAPTER], "Opening")
-            keys = [event[0] for event in store.events]
-            self.assertLess(
-                keys.index(trickplay.PREVIEW_PATH),
-                keys.index(trickplay.PREVIEW_TOKEN),
+            preview_keys = (
+                trickplay.PREVIEW_PATH,
+                trickplay.PREVIEW_PLAYBACK,
+                trickplay.PREVIEW_GENERATION,
+                trickplay.PREVIEW_SAMPLE,
+                trickplay.PREVIEW_FRAME,
+                trickplay.PREVIEW_REVISION,
+                trickplay.PREVIEW_TOKEN,
+                trickplay.PREVIEW_TARGET,
             )
-            self.assertLess(
-                keys.index(trickplay.PREVIEW_TOKEN),
-                keys.index(trickplay.PREVIEW_TARGET),
+            published = tuple(
+                key
+                for key, value, clear in store.events
+                if value is not None and not clear
+            )
+            self.assertEqual(published, preview_keys)
+            self.assertEqual(
+                set(store.values),
+                {
+                    trickplay.SEEK_ACTIVE,
+                    trickplay.SEEK_GENERATION,
+                    trickplay.SEEK_TARGET,
+                }
+                | set(preview_keys),
             )
 
     def test_abort_wins_against_a_preview_waiting_to_publish(self):

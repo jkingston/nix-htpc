@@ -20,9 +20,8 @@ from .helper.utils import translate_path
 
 LOG = LazyLogger(__name__)
 
-# Legacy properties consumed by the current BINGIE skin.
+# Exact-preview component properties consumed by the settings service.
 PREVIEW_PATH = "jellyfin.htpc.seekpreview"
-PREVIEW_CHAPTER = "jellyfin.htpc.seekpreviewchapter"
 PREVIEW_TARGET = "jellyfin.htpc.seekpreviewtarget"
 
 # Versioned exact-preview contract. PREVIEW_TOKEN is the commit marker.
@@ -392,21 +391,6 @@ def select_trickplay(trickplay, media_source_id, preferred_width=320):
         return None, None
     return width, info
 
-
-def chapter_for_time(chapters, seconds):
-    """Compatibility helper for raw Jellyfin chapter metadata."""
-    selected = None
-    for index, chapter in enumerate(chapters or []):
-        try:
-            start = float(chapter.get("StartPositionTicks", 0)) / 10000000.0
-        except (TypeError, ValueError):
-            continue
-        if start > seconds:
-            break
-        selected = (index, chapter)
-    return selected
-
-
 def _safe_label(value, fallback):
     try:
         value = str(value or "")
@@ -479,16 +463,6 @@ def sanitize_chapters(chapters, duration_seconds):
         if len(sanitized) >= MAX_CHAPTERS:
             break
     return sanitized
-
-
-def chapter_entry_for_time(chapters, seconds):
-    selected = None
-    for chapter in chapters or []:
-        if float(chapter["time_seconds"]) > float(seconds):
-            break
-        selected = chapter
-    return selected
-
 
 def media_duration_seconds(item, metadata, player=None):
     try:
@@ -861,20 +835,14 @@ class TrickplayPreviewManager(object):
             latest = self._latest_current_request(state, request, abort)
             if latest is None:
                 return None
-            chapter = chapter_entry_for_time(
-                state["chapters"],
-                latest["target_seconds"],
-            )
-            chapter_label = chapter["label"] if chapter is not None else ""
             payload = latest["token"]
             token_json = json.dumps(
                 payload,
                 sort_keys=True,
                 separators=(",", ":"),
             )
-            # The new immutable slot is installed first while the old target
-            # keeps legacy skins from exposing it. The complete token and exact
-            # target are the final commit markers.
+            # Install path and component fields first. The token and exact
+            # target are the final consistency fields validated by readers.
             window(PREVIEW_PATH, staged_path)
             state["output_slots"].activate(staged_path)
             window(PREVIEW_PLAYBACK, payload["playback"])
@@ -882,10 +850,6 @@ class TrickplayPreviewManager(object):
             window(PREVIEW_SAMPLE, str(payload["sample_seconds"]))
             window(PREVIEW_FRAME, str(payload["frame_index"]))
             window(PREVIEW_REVISION, str(payload["revision"]))
-            if chapter_label:
-                window(PREVIEW_CHAPTER, chapter_label)
-            else:
-                window(PREVIEW_CHAPTER, clear=True)
             window(PREVIEW_TOKEN, token_json)
             window(PREVIEW_TARGET, latest["target_text"])
         return latest
@@ -1280,12 +1244,12 @@ class TrickplayPreviewManager(object):
 
     def _clear_preview_properties(self, state=None):
         with self._property_lock:
-            # Clear the legacy commit marker first so a stale image is hidden.
+            # Clear the final target consistency field first so a stale image
+            # is hidden.
             window(PREVIEW_TARGET, clear=True)
             for key in (
                 PREVIEW_TOKEN,
                 PREVIEW_PATH,
-                PREVIEW_CHAPTER,
                 PREVIEW_PLAYBACK,
                 PREVIEW_GENERATION,
                 PREVIEW_SAMPLE,

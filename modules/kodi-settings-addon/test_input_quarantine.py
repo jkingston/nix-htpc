@@ -60,7 +60,6 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
             ("timeline-cancel", {}),
             ("chapter-focus", {}),
             ("chapter-focus", {"physical_direction": "invalid"}),
-            ("chapter-open", {}),
             ("chapter-exit", {"arm_back": False}),
             ("chapter-exit", {"physical_direction": "invalid"}),
             ("chapter-exit", {}),

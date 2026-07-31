@@ -83,16 +83,8 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             )
             if chapter["image_path"]:
                 item.setArt(
-                    {
-                        "thumb": chapter["image_path"],
-                        "icon": chapter["image_path"],
-                    }
+                    {"thumb": chapter["image_path"]}
                 )
-            item.setProperty("chapter.index", str(chapter["index"]))
-            item.setProperty(
-                "chapter.startseconds",
-                str(chapter["start_seconds"]),
-            )
             items.append(item)
             if chapter["start_seconds"] <= self.current_seconds:
                 focus_position = position

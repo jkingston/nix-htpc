@@ -371,7 +371,7 @@ class ServiceMonitor(xbmc.Monitor):
             return self.input_generation
 
     def onNotification(self, sender, method, data):
-        if sender not in ("htpc.seek", "htpc.chapter"):
+        if sender != "htpc.seek":
             return
         action = method[len("Other.") :] if method.startswith("Other.") else method
         payload = {}

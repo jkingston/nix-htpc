@@ -1247,19 +1247,6 @@
 			<textureslidernib colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">common/slider/slider_button_nofocus.png</textureslidernib>
 			<visible>[String.IsEmpty(Window(Home).Property(htpc.service.ready)) | String.IsEmpty(Window(Home).Property(htpc.seek.viewactive))] + Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]</visible>
         </control>
-		<control type="label">
-			<description>Chapter rail affordance for the focused timeline</description>
-			<posx>384</posx>
-			<posy>895</posy>
-			<width>1152</width>
-			<height>38</height>
-			<font>Reg24</font>
-			<align>center</align>
-			<aligny>center</aligny>
-			<textcolor>ccffffff</textcolor>
-			<label>↑  Chapters</label>
-			<visible>!String.IsEmpty(Window(Home).Property(htpc.service.ready)) + Control.HasFocus(187) + !String.IsEmpty(Window(Home).Property(htpc.chapter.available)) + String.IsEmpty(Window(Home).Property(htpc.seek.viewactive)) + Player.HasVideo</visible>
-		</control>
 	</include>
     
     <include name="OSDInfoPanel">

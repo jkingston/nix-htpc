@@ -147,10 +147,10 @@ class InputRouter(object):
                 )
             return True
 
-        if action in ("timeline-up", "chapter-open"):
+        if action == "timeline-up":
             return self._timeline_up(
                 timestamp,
-                physical_key if action == "timeline-up" else None,
+                physical_key,
                 input_generation,
             )
 
