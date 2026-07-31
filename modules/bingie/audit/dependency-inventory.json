@@ -8,18 +8,18 @@
   ],
   "dependencies": [
     {
-      "classification": "userdata_only",
+      "classification": "nix_only",
       "id": "script.bingie.helper",
       "minimum_version": "1.1.2",
-      "nix_closure": null,
-      "optional": false,
-      "planned_resolution": "package_in_nix_m0_9",
-      "provenance_status": "unverified_deployed_userdata",
-      "runtime_enabled": true,
-      "userdata": {
+      "nix_closure": {
         "addon_xml_sha256": "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6",
         "version": "1.1.2"
-      }
+      },
+      "optional": false,
+      "planned_resolution": "package_in_nix_m0_9",
+      "provenance_status": "nix_pinned",
+      "runtime_enabled": true,
+      "userdata": null
     },
     {
       "classification": "userdata_only",
@@ -108,9 +108,11 @@
   ],
   "nix_closure_evidence": {
     "coverage": "all_addon_manifests_in_recursive_requisites",
-    "mandatory_addons_found": [],
+    "mandatory_addons_found": [
+      "script.bingie.helper"
+    ],
     "method": "nix-store --query --requisites /run/current-system",
-    "system_closure_basename": "fsar7whs83jjjilfwhl2s8i96imcp1wy-nixos-system-htpc-pi-sd-card-26.05.20260724.597283a"
+    "system_closure_basename": "1lw18bydgk2xxa4gygkiph89zgc6sp78-nixos-system-htpc-pi-sd-card-26.05.20260724.597283a"
   },
   "referenced_not_imported": {
     "addons": [

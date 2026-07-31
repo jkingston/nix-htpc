@@ -32,8 +32,10 @@ See `UPSTREAM.md` for import provenance and asset boundaries, and
 ## Dependency evidence
 
 `audit/dependency-inventory.json` records the seven non-core imports, their
-sanitized deployed observations, and optional add-ons referenced by the skin.
-Validate it headlessly against the current fork:
+sanitized userdata or Nix-closure observations, and optional add-ons referenced
+by the skin. Generation B pins `script.bingie.helper` in Nix, resolves
+`script.module.simplejson` transitively, and leaves the other six mandatory
+imports in userdata. Validate the report headlessly against the current fork:
 
 ```bash
 python3 -B tools/bingie_dependency_inventory.py check

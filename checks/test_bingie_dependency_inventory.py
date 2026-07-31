@@ -54,6 +54,10 @@ EXPECTED_OBSERVATIONS = {
         "1a6ca7fefcbe2550fda02795681537e01931bbd55259999545159ebf1c888141",
     ),
 }
+NIX_ONLY_ID = "script.bingie.helper"
+USERDATA_ONLY_IDS = [
+    addon_id for addon_id in inventory.MANDATORY_IDS if addon_id != NIX_ONLY_ID
+]
 
 
 def _manifest(addon_id: str, version: str) -> str:
@@ -96,28 +100,44 @@ class DependencyInventoryTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
 
-    def test_exact_deployed_observations_remain_sanitized_userdata_only(self):
-        actual = {
-            dependency["id"]: (
-                dependency["userdata"]["version"],
-                dependency["userdata"]["addon_xml_sha256"],
-            )
-            for dependency in self.report["dependencies"]
-        }
-        self.assertEqual(actual, EXPECTED_OBSERVATIONS)
+    def test_exact_observations_match_generation_b_provenance(self):
         self.assertEqual(
             [dependency["id"] for dependency in self.report["dependencies"]],
             inventory.MANDATORY_IDS,
         )
         for dependency in self.report["dependencies"]:
-            self.assertIsNone(dependency["nix_closure"])
-            self.assertTrue(dependency["runtime_enabled"])
-            self.assertNotIn("enabled", dependency["userdata"])
-            self.assertEqual(dependency["classification"], "userdata_only")
-            self.assertEqual(
-                dependency["provenance_status"],
-                "unverified_deployed_userdata",
-            )
+            with self.subTest(addon_id=dependency["id"]):
+                observation = (
+                    dependency["nix_closure"]
+                    if dependency["id"] == NIX_ONLY_ID
+                    else dependency["userdata"]
+                )
+                self.assertEqual(
+                    (
+                        observation["version"],
+                        observation["addon_xml_sha256"],
+                    ),
+                    EXPECTED_OBSERVATIONS[dependency["id"]],
+                )
+                self.assertTrue(dependency["runtime_enabled"])
+                self.assertNotIn("enabled", observation)
+                if dependency["id"] == NIX_ONLY_ID:
+                    self.assertIsNone(dependency["userdata"])
+                    self.assertEqual(dependency["classification"], "nix_only")
+                    self.assertEqual(
+                        dependency["provenance_status"],
+                        "nix_pinned",
+                    )
+                else:
+                    self.assertIsNone(dependency["nix_closure"])
+                    self.assertEqual(
+                        dependency["classification"],
+                        "userdata_only",
+                    )
+                    self.assertEqual(
+                        dependency["provenance_status"],
+                        "unverified_deployed_userdata",
+                    )
 
     def test_optional_reference_inventory_covers_user_visible_integrations(self):
         references = self.report["referenced_not_imported"]
@@ -177,24 +197,34 @@ class DependencyInventoryTest(unittest.TestCase):
                     expected,
                 )
 
-    def test_current_empty_nix_observations_have_complete_sanitized_evidence(self):
+    def test_current_nix_observation_has_complete_sanitized_evidence(self):
         self.assertEqual(
             self.report["nix_closure_evidence"],
             {
                 "coverage": "all_addon_manifests_in_recursive_requisites",
-                "mandatory_addons_found": [],
+                "mandatory_addons_found": [NIX_ONLY_ID],
                 "method": "nix-store --query --requisites /run/current-system",
                 "system_closure_basename": (
-                    "fsar7whs83jjjilfwhl2s8i96imcp1wy-"
+                    "1lw18bydgk2xxa4gygkiph89zgc6sp78-"
                     "nixos-system-htpc-pi-sd-card-26.05.20260724.597283a"
                 ),
             },
         )
-        self.assertTrue(
-            all(
-                dependency["nix_closure"] is None
+        self.assertEqual(
+            [
+                dependency["id"]
                 for dependency in self.report["dependencies"]
-            )
+                if dependency["nix_closure"] is not None
+            ],
+            [NIX_ONLY_ID],
+        )
+        self.assertEqual(
+            [
+                dependency["id"]
+                for dependency in self.report["dependencies"]
+                if dependency["userdata"] is not None
+            ],
+            USERDATA_ONLY_IDS,
         )
 
     def test_future_pinned_nix_provenance_states_validate(self):
@@ -215,10 +245,10 @@ class DependencyInventoryTest(unittest.TestCase):
         for userdata_mode, classification, provenance in cases:
             with self.subTest(classification=classification):
                 report = copy.deepcopy(self.report)
-                dependency = report["dependencies"][0]
-                report["nix_closure_evidence"]["mandatory_addons_found"] = [
-                    dependency["id"]
-                ]
+                dependency = report["dependencies"][1]
+                report["nix_closure_evidence"]["mandatory_addons_found"] = sorted(
+                    [NIX_ONLY_ID, dependency["id"]]
+                )
                 dependency["nix_closure"] = copy.deepcopy(dependency["userdata"])
                 if userdata_mode is None:
                     dependency["userdata"] = None
@@ -332,7 +362,7 @@ class DependencyInventoryTest(unittest.TestCase):
         drift["dependencies"][0]["minimum_version"] = "0"
         cases["declaration"] = drift
         classification = copy.deepcopy(self.report)
-        classification["dependencies"][0]["classification"] = "nix_only"
+        classification["dependencies"][1]["classification"] = "nix_only"
         cases["classification"] = classification
         resolution = copy.deepcopy(self.report)
         resolution["dependencies"][0]["planned_resolution"] = "later"
@@ -347,7 +377,7 @@ class DependencyInventoryTest(unittest.TestCase):
         runtime_type["dependencies"][0]["runtime_enabled"] = "true"
         cases["runtime_enabled"] = runtime_type
         privacy = copy.deepcopy(self.report)
-        privacy["dependencies"][0]["userdata"]["version"] = "/home/private"
+        privacy["dependencies"][1]["userdata"]["version"] = "/home/private"
         cases["private filesystem"] = privacy
         references = copy.deepcopy(self.report)
         references["referenced_not_imported"]["addons"].remove(
@@ -355,9 +385,7 @@ class DependencyInventoryTest(unittest.TestCase):
         )
         cases["referenced_not_imported"] = references
         closure = copy.deepcopy(self.report)
-        closure["nix_closure_evidence"]["mandatory_addons_found"] = [
-            inventory.MANDATORY_IDS[0]
-        ]
+        closure["nix_closure_evidence"]["mandatory_addons_found"] = []
         cases["contradicts nix_closure_evidence"] = closure
 
         for expected, report in cases.items():
