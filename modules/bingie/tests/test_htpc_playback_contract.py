@@ -262,6 +262,10 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 "production_actions": "true",
                 "inert_actions": "false",
                 "preview_background_load": "true",
+                "preview_visible_condition": (
+                    "String.IsEmpty(Window(Home).Property("
+                    "htpc.chapter.open))"
+                ),
             },
         )
         inherited = [
@@ -388,6 +392,11 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(parameters["production_actions"], "true")
         self.assertEqual(parameters["inert_actions"], "false")
         self.assertEqual(parameters["preview_background_load"], "true")
+        self.assertEqual(parameters["preview_visible_condition"], "true")
+        self.assertNotIn(
+            "htpc.chapter.open",
+            ET.tostring(self.root, encoding="unicode"),
+        )
 
     def test_private_interactive_ids_are_unique_and_exclude_legacy_proxies(self):
         controls = [
@@ -1097,6 +1106,10 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             "$PARAM[preview_background_load]",
         )
         self.assertEqual(
+            passed_parameters["preview_visible_condition"],
+            "$PARAM[preview_visible_condition]",
+        )
+        self.assertEqual(
             passed_parameters["ready_condition"],
             "$PARAM[presentation_ready]",
         )
@@ -1310,6 +1323,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 "preview_loading_label": "$LOCALIZE[31582]",
                 "preview_unavailable_label": "$LOCALIZE[31583]",
                 "preview_background_load": "true",
+                "preview_visible_condition": "true",
                 "ready_condition": (
                     "!String.IsEmpty(Window(Home).Property("
                     "htpc.service.ready))"
@@ -1415,6 +1429,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
             "Window(Home).Property(htpc.seek.",
             serialized,
         )
+        self.assertNotIn("htpc.chapter.open", serialized)
         self.assertIn("$PARAM[property_window]", serialized)
         self.assertIn("$PARAM[property_prefix]", serialized)
         self.assertNotIn(".a.", serialized)
@@ -1703,6 +1718,20 @@ class PlaybackXmlContractTest(unittest.TestCase):
         preview = self._one_slot_control(PREVIEW_DESCRIPTION)
         status = _slot_info("previewstatus")
         path = _slot_info("previewpath")
+        self.assertEqual(
+            _visible_text(preview),
+            "$PARAM[preview_visible_condition] + "
+            f"!String.IsEmpty({_slot_info('targetvalid')})",
+        )
+        self.assertEqual(
+            [
+                _description(control)
+                for control in self.playback_root.iter("control")
+                if "$PARAM[preview_visible_condition]"
+                in _visible_text(control)
+            ],
+            [PREVIEW_DESCRIPTION],
+        )
         expected_visibility = {
             PREVIEW_READY_DESCRIPTION: (
                 f"String.IsEqual({status},ready) + "
@@ -1831,6 +1860,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
             review_parameters["preview_unavailable_label"],
             localized["31583"],
         )
+        self.assertNotIn("preview_visible_condition", review_parameters)
 
     def test_no_diagnostic_controls_or_properties_ship(self):
         serialized = ET.tostring(

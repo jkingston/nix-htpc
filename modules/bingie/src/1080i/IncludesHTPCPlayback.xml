@@ -26,6 +26,7 @@
 		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
 		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
 		<param name="preview_background_load" default="true" />
+		<param name="preview_visible_condition" default="true" />
 		<param name="ready_condition" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
 		<param name="property_window" default="Home" />
 		<param name="property_prefix" default="htpc.seek" />
@@ -87,7 +88,7 @@
 				<posy>$PARAM[preview_top]</posy>
 				<width>$PARAM[preview_width]</width>
 				<height>$PARAM[preview_height]</height>
-				<visible>!String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetvalid))</visible>
+				<visible>$PARAM[preview_visible_condition] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].targetvalid))</visible>
 				<!-- BEGIN GENERATED PREVIEW ANCHORS -->
 				<animation effect="slide" end="0,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),0)">Conditional</animation>
 				<animation effect="slide" end="12,0" time="0" condition="String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewanchor),1)">Conditional</animation>

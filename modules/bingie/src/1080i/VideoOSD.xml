@@ -24,6 +24,7 @@
 				<param name="production_actions" value="true" />
 				<param name="inert_actions" value="false" />
 				<param name="preview_background_load" value="true" />
+				<param name="preview_visible_condition" value="String.IsEmpty(Window(Home).Property(htpc.chapter.open))" />
 			</include>
 		</control>
 	</controls>
