@@ -189,6 +189,7 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertFalse(settled["active"])
         self.assertEqual(settled["preview_status"], "none")
+        self.assertIsNone(view.preview_started_at)
 
     def test_controller_handoff_covers_a_missing_skip_callback(self):
         view = PlaybackViewModel()
@@ -469,7 +470,9 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertFalse(cancelled["active"])
         self.assertFalse(cancelled["target_valid"])
+        self.assertEqual(cancelled["preview_status"], "none")
         self.assertEqual(cancelled["preview_path"], "")
+        self.assertIsNone(view.preview_started_at)
 
         resuming = view.update(
             controller(
@@ -483,24 +486,259 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertFalse(resuming["active"])
         self.assertFalse(resuming["target_valid"])
+        self.assertEqual(resuming["preview_status"], "none")
+        self.assertEqual(resuming["preview_path"], "")
+        self.assertIsNone(view.preview_started_at)
 
-    def test_preview_must_match_current_generation_and_target(self):
+    def test_preview_lifecycle_uses_exact_grace_and_timeout_boundaries(self):
+        view = PlaybackViewModel()
+        initial = view.update(
+            controller(target=110, generation=4),
+            player(),
+            0.0,
+        )
+        self.assertEqual(initial["preview_status"], "none")
+        self.assertEqual(initial["preview_path"], "")
+
+        before_loading = view.update(
+            controller(target=110, generation=4),
+            player(),
+            0.179,
+        )
+        self.assertEqual(before_loading["preview_status"], "none")
+        at_loading = view.update(
+            controller(target=110, generation=4),
+            player(),
+            0.180,
+        )
+        self.assertEqual(at_loading["preview_status"], "loading")
+
+        before_unavailable = view.update(
+            controller(target=110, generation=4),
+            player(),
+            1.999,
+        )
+        self.assertEqual(before_unavailable["preview_status"], "loading")
+        at_unavailable = view.update(
+            controller(target=110, generation=4),
+            player(),
+            2.000,
+        )
+        self.assertEqual(at_unavailable["preview_status"], "unavailable")
+
+    def test_empty_and_stale_preview_offers_do_not_restart_lifecycle(self):
         view = PlaybackViewModel()
         view.update(controller(target=110, generation=4), player(), 0.0)
-        self.assertFalse(view.offer_preview("/tmp/old.jpg", 3, 110))
-        self.assertEqual(view.snapshot()["preview_status"], "loading")
-        self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
-        self.assertEqual(view.snapshot()["preview_status"], "ready")
 
-        changed = view.update(
+        self.assertFalse(view.offer_preview("", 4, 110))
+        self.assertFalse(view.offer_preview("", 4, 110))
+        self.assertFalse(view.offer_preview("/tmp/old-generation.jpg", 3, 110))
+        self.assertFalse(view.offer_preview("/tmp/old-target.jpg", 4, 109))
+        self.assertEqual(view.snapshot()["preview_status"], "none")
+        self.assertEqual(view.snapshot()["preview_path"], "")
+        self.assertEqual(view.preview_started_at, 0.0)
+
+        loading = view.update(
+            controller(target=110, generation=4),
+            player(),
+            0.180,
+        )
+        self.assertEqual(loading["preview_status"], "loading")
+        self.assertFalse(view.offer_preview("", 4, 110))
+        self.assertFalse(
+            view.offer_preview("/tmp/other-generation.jpg", 5, 110)
+        )
+        self.assertFalse(view.offer_preview("/tmp/other-target.jpg", 4, 120))
+        self.assertEqual(view.preview_started_at, 0.0)
+
+        unavailable = view.update(
+            controller(target=110, generation=4),
+            player(),
+            2.000,
+        )
+        self.assertEqual(unavailable["preview_status"], "unavailable")
+        self.assertEqual(unavailable["preview_path"], "")
+
+    def test_exact_preview_can_recover_after_becoming_unavailable(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+        unavailable = view.update(
+            controller(target=110, generation=4),
+            player(),
+            2.000,
+        )
+        self.assertEqual(unavailable["preview_status"], "unavailable")
+
+        self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
+        recovered = view.snapshot()
+        self.assertEqual(recovered["preview_status"], "ready")
+        self.assertEqual(recovered["preview_path"], "/tmp/110.jpg")
+
+    def test_target_and_generation_changes_restart_preview_grace(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+        view.update(controller(target=110, generation=4), player(), 2.0)
+
+        changed_target = view.update(
             controller(target=120, generation=4),
             player(),
+            2.1,
+        )
+        self.assertEqual(changed_target["preview_status"], "none")
+        self.assertEqual(changed_target["preview_path"], "")
+        self.assertEqual(view.preview_started_at, 2.1)
+        still_in_target_grace = view.update(
+            controller(target=120, generation=4),
+            player(),
+            2.279,
+        )
+        self.assertEqual(still_in_target_grace["preview_status"], "none")
+        target_loading = view.update(
+            controller(target=120, generation=4),
+            player(),
+            2.281,
+        )
+        self.assertEqual(target_loading["preview_status"], "loading")
+
+        changed_generation = view.update(
+            controller(target=120, generation=5),
+            player(),
+            3.0,
+        )
+        self.assertEqual(changed_generation["preview_status"], "none")
+        self.assertEqual(changed_generation["preview_path"], "")
+        self.assertEqual(view.preview_started_at, 3.0)
+        still_in_generation_grace = view.update(
+            controller(target=120, generation=5),
+            player(),
+            3.179,
+        )
+        self.assertEqual(still_in_generation_grace["preview_status"], "none")
+        generation_loading = view.update(
+            controller(target=120, generation=5),
+            player(),
+            3.181,
+        )
+        self.assertEqual(generation_loading["preview_status"], "loading")
+
+    def test_sub_microsecond_target_jitter_does_not_restart_preview_grace(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+
+        jittered = view.update(
+            controller(target=110.0000004, generation=4),
+            player(),
+            0.179,
+        )
+        self.assertEqual(jittered["preview_status"], "none")
+        self.assertEqual(view.preview_started_at, 0.0)
+        loading = view.update(
+            controller(target=110.0000004, generation=4),
+            player(),
+            0.180,
+        )
+        self.assertEqual(loading["preview_status"], "loading")
+        self.assertEqual(view.preview_started_at, 0.0)
+
+    def test_ready_preview_survives_empty_and_stale_offers(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+        self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
+
+        self.assertFalse(view.offer_preview("", 4, 110))
+        self.assertFalse(view.offer_preview("/tmp/old-generation.jpg", 3, 110))
+        self.assertFalse(view.offer_preview("/tmp/old-target.jpg", 4, 109))
+        retained = view.snapshot()
+        self.assertEqual(retained["preview_status"], "ready")
+        self.assertEqual(retained["preview_path"], "/tmp/110.jpg")
+        still_ready = view.update(
+            controller(target=110, generation=4),
+            player(),
+            10.0,
+        )
+        self.assertEqual(still_ready["preview_status"], "ready")
+        self.assertEqual(still_ready["preview_path"], "/tmp/110.jpg")
+
+    def test_same_target_handoff_preserves_ready_across_generation_change(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+        self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
+
+        handoff = view.update(
+            controller(
+                state=IDLE,
+                target=0,
+                generation=5,
+                handoff_active=True,
+                handoff_target=110,
+                handoff_identity="movie",
+                handoff_epoch=1,
+            ),
+            player(current=100),
             0.1,
         )
-        self.assertEqual(changed["preview_status"], "loading")
-        self.assertEqual(changed["preview_path"], "")
-        self.assertFalse(view.offer_preview("/tmp/110.jpg", 4, 110))
-        self.assertTrue(view.offer_preview("/tmp/120.jpg", 4, 120))
+        self.assertTrue(handoff["active"])
+        self.assertEqual(handoff["phase"], "settling")
+        self.assertEqual(handoff["target_seconds"], 110)
+        self.assertEqual(handoff["preview_status"], "ready")
+        self.assertEqual(handoff["preview_path"], "/tmp/110.jpg")
+
+    def test_changed_handoff_target_clears_ready_and_starts_new_grace(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 0.0)
+        self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
+
+        handoff = view.update(
+            controller(
+                state=IDLE,
+                target=0,
+                generation=5,
+                handoff_active=True,
+                handoff_target=120,
+                handoff_identity="movie",
+                handoff_epoch=1,
+            ),
+            player(current=100),
+            0.1,
+        )
+        self.assertTrue(handoff["active"])
+        self.assertEqual(handoff["phase"], "settling")
+        self.assertEqual(handoff["target_seconds"], 120)
+        self.assertEqual(handoff["preview_status"], "none")
+        self.assertEqual(handoff["preview_path"], "")
+        self.assertEqual(view.preview_started_at, 0.1)
+
+    def test_preview_status_does_not_regress_if_clock_moves_backwards(self):
+        view = PlaybackViewModel()
+        view.update(controller(target=110, generation=4), player(), 10.0)
+        loading = view.update(
+            controller(target=110, generation=4),
+            player(),
+            10.181,
+        )
+        self.assertEqual(loading["preview_status"], "loading")
+
+        before_start = view.update(
+            controller(target=110, generation=4),
+            player(),
+            9.0,
+        )
+        self.assertEqual(before_start["preview_status"], "loading")
+        unavailable = view.update(
+            controller(target=110, generation=4),
+            player(),
+            12.0,
+        )
+        self.assertEqual(unavailable["preview_status"], "unavailable")
+        back_inside_loading_window = view.update(
+            controller(target=110, generation=4),
+            player(),
+            10.5,
+        )
+        self.assertEqual(
+            back_inside_loading_window["preview_status"],
+            "unavailable",
+        )
 
     def test_media_epoch_and_stale_callback_cannot_leak(self):
         view = PlaybackViewModel()
@@ -520,6 +758,8 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertFalse(changed["active"])
         self.assertEqual(changed["actual_seconds"], 5)
+        self.assertEqual(changed["preview_status"], "none")
+        self.assertIsNone(view.preview_started_at)
         view.on_player_event(
             "seeked",
             {

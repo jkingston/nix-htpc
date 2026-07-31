@@ -22,6 +22,8 @@ SETTLE_STABLE_SAMPLES = 2
 SETTLE_MAX_SECONDS = 4.0
 PLAYING_SAMPLE_BACKWARD_TOLERANCE = 0.25
 PLAYING_SAMPLE_MAX_ADVANCE = 5.0
+PREVIEW_LOADING_DELAY_SECONDS = 0.180
+PREVIEW_UNAVAILABLE_DELAY_SECONDS = 2.000
 
 
 def finite_number(value, default=None):
@@ -71,6 +73,7 @@ class PlaybackViewModel(object):
         self.settle_samples = 0
         self.preview_status = "none"
         self.preview_path = ""
+        self.preview_started_at = None
         self.hold_active = False
         self.hold_released = False
         self.last_update = None
@@ -110,20 +113,48 @@ class PlaybackViewModel(object):
         numeric = self._clamp_seconds(seconds, 0.0)
         return clamp((numeric * 100.0) / self.duration, 0.0, 100.0)
 
-    def _clear_preview(self, loading=False):
+    def _clear_preview(self):
         self.preview_path = ""
-        self.preview_status = "loading" if loading else "none"
+        self.preview_status = "none"
+        self.preview_started_at = None
 
-    def _set_target(self, controller_snapshot):
+    def _start_preview(self, now):
+        self.preview_path = ""
+        self.preview_status = "none"
+        self.preview_started_at = now
+
+    def _advance_preview(self, now):
+        if (
+            not self.active
+            or not self.target_valid
+            or self.preview_status == "ready"
+            or self.preview_started_at is None
+        ):
+            return
+        elapsed = max(0.0, now - self.preview_started_at)
+        if elapsed >= PREVIEW_UNAVAILABLE_DELAY_SECONDS:
+            self.preview_status = "unavailable"
+        elif elapsed >= PREVIEW_LOADING_DELAY_SECONDS:
+            if self.preview_status != "unavailable":
+                self.preview_status = "loading"
+        elif self.preview_status not in ("loading", "unavailable"):
+            self.preview_status = "none"
+
+    def _clear_target(self):
+        self.target = None
+        self.target_valid = False
+        self.target_key = None
+        self.controller_generation = None
+        self._clear_preview()
+
+    def _set_target(self, controller_snapshot, now):
         target = self._clamp_seconds(controller_snapshot.get("target"))
         if target is None:
             target = self._clamp_seconds(
                 controller_snapshot.get("target_seconds")
             )
         if target is None:
-            self.target = None
-            self.target_valid = False
-            self._clear_preview()
+            self._clear_target()
             return
 
         generation = controller_snapshot.get("generation")
@@ -132,7 +163,7 @@ class PlaybackViewModel(object):
             self.target_revision += 1
             self.target_key = key
             self.target = target
-            self._clear_preview(loading=True)
+            self._start_preview(now)
         else:
             self.target = target
         self.controller_generation = generation
@@ -209,16 +240,13 @@ class PlaybackViewModel(object):
             if observed is not None:
                 self.actual = observed
             self.active = False
-            self.target_valid = False
-            self.target = None
-            self.target_key = None
+            self._clear_target()
             self.phase = "idle"
             self.settle_target = None
             self.settle_revision = None
             self.settle_started = None
             self.settle_samples = 0
             self.operations = {}
-            self._clear_preview()
 
     def _adopt_controller_handoff(self, controller_snapshot, now):
         """Latch a committed target even when Kodi omits the seek callback.
@@ -241,6 +269,16 @@ class PlaybackViewModel(object):
         )
         if target is None:
             return
+
+        generation = controller_snapshot.get("generation")
+        rounded_target = round(target, 6)
+        if (
+            self.target_key is None
+            or self.target_key[1] != rounded_target
+        ):
+            self.target_key = (generation, rounded_target)
+            self.controller_generation = generation
+            self._start_preview(now)
 
         same_settlement = (
             self.settle_target is not None
@@ -294,7 +332,7 @@ class PlaybackViewModel(object):
         self._adopt_controller_handoff(controller_snapshot, now)
 
         if controller_active and controller_matches:
-            self._set_target(controller_snapshot)
+            self._set_target(controller_snapshot, now)
             if not self.target_valid:
                 self.active = False
                 self.phase = "idle"
@@ -304,7 +342,6 @@ class PlaybackViewModel(object):
                 self.settle_revision = None
                 self.settle_started = None
                 self.settle_samples = 0
-                self._clear_preview()
                 self.last_update = now
                 return self.snapshot()
             self._register_operations(controller_snapshot)
@@ -338,21 +375,18 @@ class PlaybackViewModel(object):
             elif state == CANCEL_WAIT_PAUSE:
                 self.phase = "cancelling"
                 self.active = False
-                self.target_valid = False
-                self.target = None
+                self._clear_target()
                 self.prompt = ""
-                self._clear_preview()
             elif state == RESUME_PENDING:
                 reason = controller_snapshot.get("resume_reason")
                 if reason in ("cancel", "pause-timeout"):
                     self.phase = "cancelling"
                     self.active = False
-                    self.target_valid = False
-                    self.target = None
-                    self._clear_preview()
+                    self._clear_target()
                 else:
                     self.phase = "settling"
                     self.active = True
+            self._advance_preview(now)
             self.last_update = now
             return self.snapshot()
 
@@ -371,12 +405,10 @@ class PlaybackViewModel(object):
                 self.actual,
             )
             self.active = False
-            self.target_valid = False
-            self.target = None
-            self.target_key = None
+            self._clear_target()
             self.phase = "idle"
             self.operations = {}
-            self._clear_preview()
+        self._advance_preview(now)
         self.last_update = now
         return self.snapshot()
 
@@ -422,11 +454,11 @@ class PlaybackViewModel(object):
 
     def offer_preview(self, path, generation, target_seconds):
         """Accept only an exact preview for the currently latched target."""
-        if not self.active or not self.target_valid or not path:
+        if not self.active or not self.target_valid:
+            return False
+        if not path:
             if (
                 self.phase == "settling"
-                and self.active
-                and self.target_valid
                 and self.preview_status == "ready"
                 and self.preview_path
             ):
@@ -435,10 +467,6 @@ class PlaybackViewModel(object):
                 # validates. Retain the last proven frame through the raw
                 # decoder-position handoff instead of making it disappear.
                 return True
-            if self.target_valid and self.active:
-                self._clear_preview(loading=True)
-            else:
-                self._clear_preview()
             return False
         target = finite_number(target_seconds)
         if (
@@ -446,7 +474,6 @@ class PlaybackViewModel(object):
             or target is None
             or int(round(target)) != int(round(self.target))
         ):
-            self._clear_preview(loading=True)
             return False
         self.preview_path = str(path)
         self.preview_status = "ready"
