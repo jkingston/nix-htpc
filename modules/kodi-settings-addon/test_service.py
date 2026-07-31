@@ -1744,7 +1744,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish_view(view)
         self.assertEqual(
             window.getProperty("htpc.seek.actualmarker"),
-            "10,10",
+            "10.00,10.00",
         )
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")
         self.assertEqual(
@@ -1802,18 +1802,31 @@ class PresenterAndLeaseTest(unittest.TestCase):
         )
 
         window.operations[:] = []
-        changed_only_in_unrendered_actual = dict(changed)
-        changed_only_in_unrendered_actual["actual_percent"] = 42
-        publisher.publish_view(changed_only_in_unrendered_actual)
+        actual_only = dict(changed)
+        actual_only["actual_percent"] = 42.001
+        publisher.publish_view(actual_only)
         self.assertEqual(
             window.operations,
-            [("set", "htpc.seek.actualmarker", "42,42")],
+            [("set", "htpc.seek.actualmarker", "42.00,42.00")],
         )
         window.operations[:] = []
-        publisher.publish_view(changed_only_in_unrendered_actual)
+        same_formatted_actual = dict(actual_only)
+        same_formatted_actual["actual_percent"] = 42.004
+        publisher.publish_view(same_formatted_actual)
         self.assertEqual(window.operations, [])
 
+        next_hundredth = dict(actual_only)
+        next_hundredth["actual_percent"] = 42.006
+        publisher.publish_view(next_hundredth)
+        self.assertEqual(
+            window.operations,
+            [("set", "htpc.seek.actualmarker", "42.01,42.01")],
+        )
         window.operations[:] = []
+        same_formatted_actual["actual_percent"] = 42.014
+        publisher.publish_view(same_formatted_actual)
+        self.assertEqual(window.operations, [])
+
         for actual_percent in range(43, 48):
             sample = dict(changed)
             sample["actual_percent"] = actual_percent
@@ -1824,7 +1837,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 (
                     "set",
                     "htpc.seek.actualmarker",
-                    "%d,%d" % (percent, percent),
+                    "%.2f,%.2f" % (percent, percent),
                 )
                 for percent in range(43, 48)
             ],
@@ -1852,13 +1865,13 @@ class PresenterAndLeaseTest(unittest.TestCase):
             playback_epoch=2,
         )
         for value, expected in (
-            (0, "0,0"),
-            (40.49, "40,40"),
-            (40.51, "41,41"),
-            (float("nan"), "0,0"),
-            (float("inf"), "0,0"),
-            (-20, "0,0"),
-            (120, "100,100"),
+            (0, "0.00,0.00"),
+            (40.49, "40.49,40.49"),
+            (40.51, "40.51,40.51"),
+            (float("nan"), "0.00,0.00"),
+            (float("inf"), "0.00,0.00"),
+            (-20, "0.00,0.00"),
+            (120, "100.00,100.00"),
         ):
             with self.subTest(value=value):
                 sample = dict(valid, actual_percent=value)
@@ -1928,7 +1941,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
         )
         self.assertEqual(
             window.operations[0],
-            ("set", "htpc.seek.actualmarker", "42,42"),
+            ("set", "htpc.seek.actualmarker", "42.00,42.00"),
         )
         self.assertEqual(
             window.operations[1],
@@ -1989,7 +2002,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertEqual(window.getProperty("htpc.seek.active"), "")
         self.assertEqual(
             window.getProperty("htpc.seek.actualmarker"),
-            "10,10",
+            "10.00,10.00",
         )
         self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), slot)

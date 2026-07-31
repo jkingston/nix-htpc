@@ -129,10 +129,10 @@ class KodiPropertyPublisher(object):
             actual_percent = self._safe_percent(
                 view.get("actual_percent", 0.0)
             )
-            actual_position = int(round(actual_percent))
-            actual_marker = "%d,%d" % (
-                actual_position,
-                actual_position,
+            formatted_actual = "%.2f" % actual_percent
+            actual_marker = "%s,%s" % (
+                formatted_actual,
+                formatted_actual,
             )
         else:
             actual_marker = ""
