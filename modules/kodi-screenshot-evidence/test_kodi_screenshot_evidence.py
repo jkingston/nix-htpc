@@ -457,18 +457,37 @@ class LinuxFilesystemIntegrationTest(unittest.TestCase):
 
     def test_real_root_move_away_and_back_cannot_mix_directories(self):
         with ManagedDirectory() as directory:
+            path = os.path.join(directory, "screenshot1.png")
             write_file(
-                os.path.join(directory, "screenshot1.png"),
+                path,
                 b"original",
             )
+            expected_directory = evidence._stat_evidence(os.stat(directory))
+            expected_file = evidence._stat_evidence(os.stat(path))
             filesystem = RootRebindingFilesystem(directory)
+            collected = None
+            raised = None
             with patch_managed_path(directory):
-                collected = evidence.collect_evidence(filesystem)
-        self.assertEqual(
-            tuple(file.name for file in collected.files),
-            ("screenshot1.png",),
-        )
-        self.assertEqual(collected.files[0].stat.size, len(b"original"))
+                try:
+                    collected = evidence.collect_evidence(filesystem)
+                except evidence.EvidenceError as error:
+                    raised = error
+
+        self.assertTrue(filesystem.rebound)
+        if filesystem.metadata_changed:
+            self.assertIsNone(collected)
+            self.assertEqual(
+                str(raised),
+                "managed directory metadata changed during enumeration",
+            )
+        else:
+            self.assertIsNone(raised)
+            self.assertEqual(collected.stat, expected_directory)
+            self.assertEqual(
+                tuple(file.name for file in collected.files),
+                ("screenshot1.png",),
+            )
+            self.assertEqual(collected.files[0].stat, expected_file)
 
     def test_real_entry_rebind_between_anchored_opens_is_rejected(self):
         with ManagedDirectory() as directory:
@@ -628,8 +647,11 @@ class TestOsFilesystem(evidence.OsFilesystem):
 class RootRebindingFilesystem(TestOsFilesystem):
     def __init__(self, directory):
         self.directory = directory
+        self.rebound = False
+        self.metadata_changed = None
 
     def iter_names(self, directory_fd):
+        before = evidence._stat_evidence(os.fstat(directory_fd))
         names = tuple(super().iter_names(directory_fd))
         moved = self.directory + ".moved"
         replacement = self.directory + ".replacement"
@@ -643,6 +665,9 @@ class RootRebindingFilesystem(TestOsFilesystem):
         os.unlink(os.path.join(self.directory, "screenshot999.png"))
         os.rmdir(self.directory)
         os.rename(moved, self.directory)
+        after = evidence._stat_evidence(os.fstat(directory_fd))
+        self.metadata_changed = before != after
+        self.rebound = True
         return iter(names)
 
 
