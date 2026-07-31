@@ -70,6 +70,7 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
         self.focus_callback = kwargs.pop("focus_callback", None)
         self.exit_callback = kwargs.pop("exit_callback", None)
         self._closing = False
+        self._selected_position = None
         super(ChapterRail, self).__init__(*args, **kwargs)
 
     def onInit(self):
@@ -93,6 +94,7 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             control.selectItem(focus_position)
         except AttributeError:
             pass
+        self._selected_position = focus_position
         self.setFocusId(CHAPTER_LIST_ID)
 
     def onClick(self, control_id):
@@ -110,9 +112,35 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
         action_id = action.getId()
         if action_id in (ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT):
             control = self.getControl(CHAPTER_LIST_ID)
-            selected = control.getSelectedPosition()
-            if not 0 <= selected < len(self.chapters):
+            native_position = control.getSelectedPosition()
+            if not 0 <= native_position < len(self.chapters):
                 return
+            previous_position = self._selected_position
+            if previous_position is None:
+                self._selected_position = native_position
+                return
+            # WindowXML callbacks can queue behind several native panel moves.
+            # An earlier callback may already have corrected the live control,
+            # so each callback advances from our accepted position and the
+            # native position is used only to repair the panel when necessary.
+            delta = -1 if action_id == ACTION_MOVE_LEFT else 1
+            selected = max(
+                0,
+                min(len(self.chapters) - 1, previous_position + delta),
+            )
+            if selected == previous_position:
+                if native_position != selected:
+                    try:
+                        control.selectItem(selected)
+                    except AttributeError:
+                        pass
+                return
+            if native_position != selected:
+                try:
+                    control.selectItem(selected)
+                except AttributeError:
+                    return
+            self._selected_position = selected
             if self.focus_callback:
                 chapter = dict(self.chapters[selected])
                 chapter["physical_direction"] = (

@@ -2336,6 +2336,7 @@ class ChapterRailTest(unittest.TestCase):
             ),
         )
         rail.getControl = lambda _control_id: control
+        rail._selected_position = selected
         return rail, control, focus_events, exit_events
 
     def test_init_publishes_only_visible_item_fields_and_selects_current(self):
@@ -2383,6 +2384,7 @@ class ChapterRailTest(unittest.TestCase):
             ],
         )
         self.assertEqual(control.selections, [1])
+        self.assertEqual(rail._selected_position, 1)
         self.assertEqual(focus_ids, [CHAPTER_LIST_ID])
 
     def test_right_observes_native_selection_and_emits_one_focus_event(self):
@@ -2435,24 +2437,81 @@ class ChapterRailTest(unittest.TestCase):
             [1, 2],
         )
 
-    def test_end_stops_emit_current_item_without_python_movement(self):
+    def test_native_overrun_is_corrected_to_one_chapter(self):
+        rail, control, events, _exit_events = self._rail(0)
+        control.simulate_native_navigation(2)
+
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selected, 1)
+        self.assertEqual(rail._selected_position, 1)
+        self.assertEqual([event["index"] for event in events], [1])
+
+    def test_queued_direction_callback_advances_from_cached_position(self):
+        rail, control, events, _exit_events = self._rail(1)
+
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        self.assertEqual(control.selections, [2])
+        self.assertEqual(rail._selected_position, 2)
+        self.assertEqual([event["index"] for event in events], [2])
+
+    def test_queued_same_direction_callback_survives_overrun_correction(self):
+        rail, control, events, _exit_events = self._rail(0)
+        control.simulate_native_navigation(2)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        self.assertEqual(control.selections, [1, 2])
+        self.assertEqual(control.selected, 2)
+        self.assertEqual(rail._selected_position, 2)
+        self.assertEqual([event["index"] for event in events], [1, 2])
+
+    def test_end_stops_correct_native_wrap_without_focus_event(self):
         cases = (
-            (0, ACTION_MOVE_LEFT, "left"),
-            (2, ACTION_MOVE_RIGHT, "right"),
+            (0, 2, ACTION_MOVE_LEFT),
+            (2, 0, ACTION_MOVE_RIGHT),
         )
-        for selected, action_id, direction in cases:
-            with self.subTest(direction=direction):
+        for selected, native_position, action_id in cases:
+            with self.subTest(action_id=action_id):
                 rail, control, events, _exit_events = self._rail(selected)
+                control.simulate_native_navigation(native_position)
 
                 rail.onAction(FakeAction(action_id))
 
-                self.assertEqual(control.selections, [])
-                self.assertEqual(len(events), 1)
-                self.assertEqual(events[0]["index"], selected)
-                self.assertEqual(
-                    events[0]["physical_direction"],
-                    direction,
-                )
+                self.assertEqual(control.selections, [selected])
+                self.assertEqual(control.selected, selected)
+                self.assertEqual(rail._selected_position, selected)
+                self.assertEqual(events, [])
+
+    def test_reversal_after_correction_uses_last_accepted_position(self):
+        rail, control, events, _exit_events = self._rail(0)
+        control.simulate_native_navigation(2)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        control.simulate_native_navigation(0)
+
+        rail.onAction(FakeAction(ACTION_MOVE_LEFT))
+
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selected, 0)
+        self.assertEqual(rail._selected_position, 0)
+        self.assertEqual([event["index"] for event in events], [1, 0])
+
+    def test_click_uses_position_corrected_after_native_overrun(self):
+        rail, control, _events, _exit_events = self._rail(0)
+        selected_chapters = []
+        rail.select_callback = selected_chapters.append
+        control.simulate_native_navigation(2)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+
+        rail.onClick(CHAPTER_LIST_ID)
+
+        self.assertEqual(
+            [chapter["index"] for chapter in selected_chapters],
+            [1],
+        )
 
     def test_vertical_and_back_actions_request_exit_without_closing(self):
         cases = (
