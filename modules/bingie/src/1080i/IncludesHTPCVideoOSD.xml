@@ -21,11 +21,6 @@
 		<value condition="Control.HasFocus(9105)">$LOCALIZE[33061]</value>
 	</variable>
 
-	<variable name="HTPCVideoOSDTimelineFocusCueLabel">
-		<value condition="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))">$LOCALIZE[31581]</value>
-		<value>$LOCALIZE[31580]</value>
-	</variable>
-
 	<include name="HTPCVideoOSD">
 		<param name="visible" default="Player.HasVideo" />
 		<param name="rail_left" default="384" />
@@ -53,11 +48,12 @@
 		<param name="preview_top" default="634" />
 		<param name="preview_width" default="380" />
 		<param name="preview_height" default="320" />
-		<param name="timeline_focus_cue_left" default="610" />
-		<param name="timeline_focus_cue_top" default="900" />
-		<param name="timeline_focus_cue_width" default="700" />
-		<param name="timeline_focus_cue_height" default="40" />
-		<param name="timeline_focus_cue_label" default="$VAR[HTPCVideoOSDTimelineFocusCueLabel]" />
+		<param name="timeline_chapter_hint_left" default="1320" />
+		<param name="timeline_chapter_hint_top" default="914" />
+		<param name="timeline_chapter_hint_width" default="216" />
+		<param name="timeline_chapter_hint_height" default="32" />
+		<param name="timeline_chapter_hint_label" default="$LOCALIZE[31581]" />
+		<param name="chapter_available_condition" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
 		<param name="time_top" default="948" />
 		<param name="elapsed_left" default="194" />
 		<param name="remaining_left" default="1556" />
@@ -385,29 +381,18 @@
 					<label>$PARAM[remaining]</label>
 				</control>
 
-				<control type="group">
-					<description>HTPC video OSD timeline focus cue</description>
-					<left>$PARAM[timeline_focus_cue_left]</left>
-					<top>$PARAM[timeline_focus_cue_top]</top>
-					<width>$PARAM[timeline_focus_cue_width]</width>
-					<height>$PARAM[timeline_focus_cue_height]</height>
-					<visible>$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[view_inactive_condition]</visible>
-					<control type="image">
-						<description>HTPC timeline focus cue backplate</description>
-						<width>$PARAM[timeline_focus_cue_width]</width>
-						<height>$PARAM[timeline_focus_cue_height]</height>
-						<texture border="18" colordiffuse="b3080808">diffuse/panel2.png</texture>
-					</control>
-					<control type="label">
-						<description>HTPC timeline focus cue label</description>
-						<width>$PARAM[timeline_focus_cue_width]</width>
-						<height>$PARAM[timeline_focus_cue_height]</height>
-						<font>Reg22</font>
-						<align>center</align>
-						<aligny>center</aligny>
-						<textcolor>e6ffffff</textcolor>
-						<label>$PARAM[timeline_focus_cue_label]</label>
-					</control>
+				<control type="label">
+					<description>HTPC video OSD chapter hint</description>
+					<left>$PARAM[timeline_chapter_hint_left]</left>
+					<top>$PARAM[timeline_chapter_hint_top]</top>
+					<width>$PARAM[timeline_chapter_hint_width]</width>
+					<height>$PARAM[timeline_chapter_hint_height]</height>
+					<font>Reg22</font>
+					<align>right</align>
+					<aligny>center</aligny>
+					<textcolor>b3ffffff</textcolor>
+					<label>$PARAM[timeline_chapter_hint_label]</label>
+					<visible>$PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[chapter_available_condition] + $PARAM[view_inactive_condition]</visible>
 				</control>
 			</control>
 		</definition>

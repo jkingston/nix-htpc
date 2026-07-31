@@ -16,7 +16,6 @@ PROPERTY_NAMES = (
     "subtitle",
     "elapsed",
     "remaining",
-    "focuscue",
     "seek.viewactive",
     "seek.viewslot",
     "seek.a.revision",
@@ -74,20 +73,6 @@ _COMMON = {
     "subtitle": "Deterministic fixture",
     "elapsed": "40:00",
     "remaining": "\N{MINUS SIGN}1:00:00",
-    "focuscue": (
-        "\N{LEFTWARDS ARROW}  10s   \N{BULLET}   Hold to scrub"
-        "   \N{BULLET}   10s  \N{RIGHTWARDS ARROW}"
-    ),
-}
-
-_FOCUS_CUE = {
-    "timeline-chapters": {
-        "focuscue": (
-            "\N{LEFTWARDS ARROW}  10s   \N{BULLET}   Hold to scrub"
-            "   \N{BULLET}   10s  \N{RIGHTWARDS ARROW}"
-            "    \N{UPWARDS ARROW}  Chapters"
-        ),
-    },
 }
 
 _PLAYBACK_STATE = {
@@ -181,7 +166,6 @@ def scenario_properties(scenario):
     values = dict(_COMMON)
     values["scenario"] = scenario
     values.update(_PLAYBACK_STATE.get(scenario, {}))
-    values.update(_FOCUS_CUE.get(scenario, {}))
     values.update(_SEEK.get(scenario, {}))
     return {
         PROPERTY_PREFIX + name: value

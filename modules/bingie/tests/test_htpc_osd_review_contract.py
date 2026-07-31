@@ -39,7 +39,6 @@ EXPECTED_CLEANUP = {
     "htpc.review.subtitle",
     "htpc.review.elapsed",
     "htpc.review.remaining",
-    "htpc.review.focuscue",
     "htpc.review.seek.viewactive",
     "htpc.review.seek.viewslot",
     "htpc.review.seek.a.revision",
@@ -172,8 +171,13 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(parameters["seekable_condition"], "true")
         self.assertEqual(parameters["preview_background_load"], "false")
         self.assertEqual(
-            parameters["timeline_focus_cue_label"],
-            "$INFO[Window(Home).Property(htpc.review.focuscue)]",
+            parameters["chapter_available_condition"],
+            "String.IsEqual(Window(Home).Property("
+            "htpc.review.scenario),timeline-chapters)",
+        )
+        self.assertEqual(
+            parameters["timeline_chapter_hint_label"],
+            "↑  Chapters",
         )
         self.assertEqual(
             parameters["presentation_ready"],

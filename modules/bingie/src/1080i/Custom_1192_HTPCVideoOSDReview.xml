@@ -25,7 +25,6 @@
 	<onunload>ClearProperty(htpc.review.subtitle,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.elapsed,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.remaining,Home)</onunload>
-	<onunload>ClearProperty(htpc.review.focuscue,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewactive,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.viewslot,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.seek.a.revision,Home)</onunload>
@@ -71,7 +70,8 @@
 			<param name="actual_progress" value="Integer.ValueOf(40)" />
 			<param name="seekable_condition" value="true" />
 			<param name="paused_condition" value="!String.IsEmpty(Window(Home).Property(htpc.review.paused))" />
-			<param name="timeline_focus_cue_label" value="$INFO[Window(Home).Property(htpc.review.focuscue)]" />
+			<param name="chapter_available_condition" value="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-chapters)" />
+			<param name="timeline_chapter_hint_label" value="↑  Chapters" />
 			<param name="view_inactive_condition" value="String.IsEmpty(Window(Home).Property(htpc.review.seek.viewactive))" />
 			<!--
 			  Controls must exist for onload focus before the driver publishes

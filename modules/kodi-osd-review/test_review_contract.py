@@ -163,20 +163,42 @@ class ReviewContractTest(unittest.TestCase):
             },
         )
 
-    def test_chapter_focus_cue_preserves_seek_help(self):
-        idle = scenario_properties("timeline-idle")[
-            "htpc.review.focuscue"
-        ]
-        chapters = scenario_properties("timeline-chapters")[
-            "htpc.review.focuscue"
-        ]
-        self.assertNotEqual(idle, chapters)
-        for token in ("10s", "Hold to scrub"):
-            with self.subTest(token=token):
-                self.assertIn(token, idle)
-                self.assertIn(token, chapters)
-        self.assertNotIn("Chapters", idle)
-        self.assertIn("↑  Chapters", chapters)
+    def test_chapter_hint_is_window_owned_not_staged_state(self):
+        idle = scenario_properties("timeline-idle")
+        chapters = scenario_properties("timeline-chapters")
+        self.assertEqual(
+            {
+                key: value
+                for key, value in idle.items()
+                if key != "htpc.review.scenario"
+            },
+            {
+                key: value
+                for key, value in chapters.items()
+                if key != "htpc.review.scenario"
+            },
+        )
+        self.assertNotIn("htpc.review.focuscue", PROPERTY_KEYS)
+
+        root = ET.parse(REVIEW_WINDOW).getroot()
+        include = next(
+            node
+            for node in root.iter("include")
+            if node.get("content") == "HTPCVideoOSD"
+        )
+        parameters = {
+            node.get("name"): node.get("value")
+            for node in include.findall("param")
+        }
+        self.assertEqual(
+            parameters["chapter_available_condition"],
+            "String.IsEqual(Window(Home).Property("
+            "htpc.review.scenario),timeline-chapters)",
+        )
+        self.assertEqual(
+            parameters["timeline_chapter_hint_label"],
+            "↑  Chapters",
+        )
 
     def test_driver_keys_and_focus_equal_the_skin_contract(self):
         root = ET.parse(REVIEW_WINDOW).getroot()
