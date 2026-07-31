@@ -103,7 +103,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(self.root.get("type"), "dialog")
         self.assertEqual(
             self.root.findtext("defaultcontrol", default="").strip(),
-            "9201",
+            "9300",
         )
 
         actual = {}

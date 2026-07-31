@@ -6,7 +6,7 @@
   htpc.review.* namespace. This window owns only layout, focus, and cleanup.
 -->
 <window type="dialog" id="1192">
-	<defaultcontrol always="true">9201</defaultcontrol>
+	<defaultcontrol always="true">9300</defaultcontrol>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),transport-playing)">SetFocus(9201)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),transport-paused)">SetFocus(9201)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),timeline-playing)">SetFocus(9300)</onload>
