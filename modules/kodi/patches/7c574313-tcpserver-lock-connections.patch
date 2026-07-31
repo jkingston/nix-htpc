@@ -1,0 +1,118 @@
+From 7c57431393845f323e32650be8b6004e3ca74d64 Mon Sep 17 00:00:00 2001
+From: reardonia <2925104+reardonia@users.noreply.github.com>
+Date: Fri, 24 Apr 2026 21:37:27 -0400
+Subject: [PATCH] TCPServer: fix race in Announce iterating m_connections
+ without server lock
+
+Backport of xbmc/xbmc@7c57431393845f323e32650be8b6004e3ca74d64
+to Kodi 21.3. The only adaptation is retaining Omega's explicit
+std::unique_lock<CCriticalSection> spelling.
+
+CTCPServer::Announce iterates m_connections protected only by a per-
+connection lock, while the Process thread can erase entries from the
+vector concurrently. A client that disconnects right after receiving
+its response is removed from m_connections in Process while Announce is
+mid-iteration, dereferencing a freed CTCPClient.
+
+Add a server-level CCriticalSection covering all m_connections access.
+---
+ xbmc/network/TCPServer.cpp | 41 ++++++++++++++++++++++++++++----------
+ xbmc/network/TCPServer.h   |  1 +
+ 2 files changed, 31 insertions(+), 11 deletions(-)
+
+diff --git a/xbmc/network/TCPServer.cpp b/xbmc/network/TCPServer.cpp
+index 0223b430b2911..1e9b372f24b6b 100644
+--- a/xbmc/network/TCPServer.cpp
++++ b/xbmc/network/TCPServer.cpp
+@@ -115,18 +115,26 @@ void CTCPServer::Process()
+     struct timeval  to     = {1, 0};
+     FD_ZERO(&rfds);
+ 
+-    for (auto& it : m_servers)
+     {
+-      FD_SET(it, &rfds);
+-      if ((intptr_t)it > (intptr_t)max_fd)
+-        max_fd = it;
+-    }
++      // Build the fd_set under lock so a concurrent Announce or modification
++      // of m_connections doesn't tear out from under us. Drop the lock for
++      // the select() call below since it sleeps up to 1s and would otherwise
++      // starve Announce.
++      std::unique_lock<CCriticalSection> lock(m_connectionsCritSection);
+ 
+-    for (unsigned int i = 0; i < m_connections.size(); i++)
+-    {
+-      FD_SET(m_connections[i]->m_socket, &rfds);
+-      if ((intptr_t)m_connections[i]->m_socket > (intptr_t)max_fd)
+-        max_fd = m_connections[i]->m_socket;
++      for (auto& it : m_servers)
++      {
++        FD_SET(it, &rfds);
++        if ((intptr_t)it > (intptr_t)max_fd)
++          max_fd = it;
++      }
++
++      for (unsigned int i = 0; i < m_connections.size(); i++)
++      {
++        FD_SET(m_connections[i]->m_socket, &rfds);
++        if ((intptr_t)m_connections[i]->m_socket > (intptr_t)max_fd)
++          max_fd = m_connections[i]->m_socket;
++      }
+     }
+ 
+     int res = select((intptr_t)max_fd+1, &rfds, NULL, NULL, &to);
+@@ -138,6 +146,9 @@ void CTCPServer::Process()
+     }
+     else if (res > 0)
+     {
++      // Re-acquire for the I/O and accept passes; both modify m_connections.
++      std::unique_lock<CCriticalSection> lock(m_connectionsCritSection);
++
+       for (int i = m_connections.size() - 1; i >= 0; i--)
+       {
+         int socket = m_connections[i]->m_socket;
+@@ -237,6 +248,12 @@ void CTCPServer::Announce(ANNOUNCEMENT::AnnouncementFlag flag,
+                           const std::string& message,
+                           const CVariant& data)
+ {
++  // Hold m_connectionsCritSection across the whole iteration so the Process
++  // thread cannot erase a connection out from under us while we Send to it.
++  // Without this lock, a client that disconnects right after receiving its
++  // response crashes Announce on use-after-free.
++  std::unique_lock<CCriticalSection> lock(m_connectionsCritSection);
++
+   if (m_connections.empty())
+     return;
+ 
+@@ -245,7 +262,7 @@ void CTCPServer::Announce(ANNOUNCEMENT::AnnouncementFlag flag,
+   for (unsigned int i = 0; i < m_connections.size(); i++)
+   {
+     {
+-      std::unique_lock<CCriticalSection> lock(m_connections[i]->m_critSection);
++      std::unique_lock<CCriticalSection> connLock(m_connections[i]->m_critSection);
+       if ((m_connections[i]->GetAnnouncementFlags() & flag) == 0)
+         continue;
+     }
+@@ -479,6 +496,8 @@ bool CTCPServer::InitializeTCP()
+ 
+ void CTCPServer::Deinitialize()
+ {
++  std::unique_lock<CCriticalSection> lock(m_connectionsCritSection);
++
+   for (unsigned int i = 0; i < m_connections.size(); i++)
+   {
+     m_connections[i]->Disconnect();
+diff --git a/xbmc/network/TCPServer.h b/xbmc/network/TCPServer.h
+index 27f2d28509bd7..2a148c3ecb8d7 100644
+--- a/xbmc/network/TCPServer.h
++++ b/xbmc/network/TCPServer.h
+@@ -109,6 +109,7 @@ namespace JSONRPC
+ 
+     std::vector<CTCPClient*> m_connections;
+     std::vector<SOCKET> m_servers;
++    CCriticalSection m_connectionsCritSection;
+     int m_port;
+     bool m_nonlocal;
+     void* m_sdpd;
+-- 
+2.54.0

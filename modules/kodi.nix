@@ -1,7 +1,15 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
-  kodiPackages = rpiPackages.kodi-gbm.packages;
+  kodiBase = rpiPackages.kodi-gbm;
+  kodiTcpServerRaceBackport =
+    ./kodi/patches/7c574313-tcpserver-lock-connections.patch;
+  kodiCore = kodiBase.overrideAttrs (oldAttrs: {
+    patches = (oldAttrs.patches or [ ]) ++ [
+      kodiTcpServerRaceBackport
+    ];
+  });
+  kodiPackages = kodiCore.packages;
   kodiSettingsAddonVersion = "2.1.11";
   kodiOsdReviewAddonVersion = "0.1.0";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
@@ -177,10 +185,12 @@ let
   kodiAddonRoots =
     baseKodiAddonRoots ++ kodiAddonReconciler.managedAddons;
   kodiRuntimeAddons = kodiPackages.requiredKodiAddons kodiAddonRoots;
-  kodiWithAddons = (rpiPackages.kodi-gbm.withPackages (_: kodiAddonRoots))
-    .overrideAttrs (oldAttrs: {
+  kodiWithAddons =
+    (kodiCore.withPackages (_: kodiAddonRoots)).overrideAttrs (oldAttrs: {
       passthru = (oldAttrs.passthru or { }) // {
         inherit
+          kodiCore
+          kodiTcpServerRaceBackport
           kodiAddonRoots
           kodiRuntimeAddons
           managedAddonEnableSpecs
@@ -188,6 +198,9 @@ let
       };
     });
   kodiBingieDependenciesCheck =
+    assert kodiCore == kodiCore.passthru.kodi;
+    assert kodiCore.packages.kodi == kodiCore;
+    assert builtins.elem kodiTcpServerRaceBackport kodiCore.patches;
     assert simplejson.version == simplejsonIdentity.version;
     assert bingieHelper.manifestIdentity == bingieHelperIdentity;
     assert bingieHelper.requiredKodiAddons == [ simplejson ];
@@ -255,6 +268,12 @@ let
             "${simplejson}/share/kodi/addons/script.module.simplejson/lib"
         } \
         ${kodiWithAddons}/bin/kodi
+      grep -Fq \
+        ${lib.escapeShellArg "${kodiCore}/bin/kodi"} \
+        ${kodiWithAddons}/bin/kodi
+      test "$(
+        sha256sum ${kodiTcpServerRaceBackport} | cut -d ' ' -f 1
+      )" = a9abbd265e7b4c024e4caa75b104c6d1cb08a94ad9843f1a086ee42205d5356b
 
       touch "$out"
     '';
