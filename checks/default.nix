@@ -371,6 +371,12 @@ in
     ];
     assert builtins.elem kodiBingieHelper kodiWithAddons.kodiRuntimeAddons;
     assert builtins.elem kodiSimplejson kodiWithAddons.kodiRuntimeAddons;
+    assert !(builtins.elem
+      "service.openelec.settings"
+      (map (addon: addon.namespace) kodiWithAddons.kodiRuntimeAddons));
+    assert !(builtins.elem
+      "service.libreelec.settings"
+      (map (addon: addon.namespace) kodiWithAddons.kodiRuntimeAddons));
     assert kodiSettingsAddon.namespace == "service.htpc.settings";
     assert kodiSettingsAddon.version == "2.1.16";
     assert kodiOsdReviewAddon.namespace == "script.htpc.osd-review";
