@@ -170,8 +170,8 @@
 						<height>$PARAM[top_size]</height>
 						<label />
 						<font />
-						<texturefocus colordiffuse="ffffffff">osd/bingie/stop.png</texturefocus>
-						<texturenofocus colordiffuse="ccffffff">osd/bingie/stop.png</texturenofocus>
+						<texturefocus colordiffuse="ffffffff">special://skin/resources/htpc/osd/stop-focused.png</texturefocus>
+						<texturenofocus colordiffuse="ccffffff">special://skin/resources/htpc/osd/stop.png</texturenofocus>
 						<onclick condition="$PARAM[production_actions]">PlayerControl(Stop)</onclick>
 						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
