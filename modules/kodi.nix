@@ -8,6 +8,29 @@ let
     inherit lib pkgs;
     screenshotPath = kodiScreenshotPath;
   };
+  kodiAddonReconciler = import ./kodi-addon-reconciler {
+    inherit lib pkgs;
+    addonSpecs = [
+      {
+        addonId = "script.module.simplejson";
+        userdata = {
+          version = "3.19.1+matrix.1";
+          manifestSha256 =
+            "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
+        };
+        managed = null;
+      }
+      {
+        addonId = "script.bingie.helper";
+        userdata = {
+          version = "1.1.2";
+          manifestSha256 =
+            "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
+        };
+        managed = null;
+      }
+    ];
+  };
   bingieMod = import ./bingie {
     inherit pkgs;
     kodiPackages = rpiPackages.kodi-gbm.packages;
@@ -128,11 +151,14 @@ in
     kodiSettingsWatchdog
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
+  system.build.kodiAddonReconciler = kodiAddonReconciler;
   system.build.kodiOsdReviewAddon = kodiOsdReviewAddon;
   system.build.kodiSettingsWatchdog = kodiSettingsWatchdog;
 
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
+    "d /var/lib/nix-htpc 0755 root root - -"
+    "d ${kodiAddonReconciler.backupRoot} 0700 root root - -"
   ];
 
   # BINGIE must be writable because Skin Shortcuts generates an include inside
@@ -153,6 +179,8 @@ in
 
     preStart = ''
       set -eu
+
+      ${kodiAddonReconciler}/bin/kodi-addon-reconciler
 
       source_skin=${bingieMod}/share/kodi/addons/skin.bingie
       addon_root=/home/htpc/.kodi/addons
@@ -210,6 +238,7 @@ in
     restartTriggers = [
       bingieMod
       jellyfinHtpc
+      kodiAddonReconciler
       kodiSettingsAddon
       kodiOsdReviewAddon
     ];

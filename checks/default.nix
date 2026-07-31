@@ -25,6 +25,18 @@ let
     htpcConfiguration.systemd.units."cec-tv-wake.service";
   settingsWatchdog =
     htpcConfiguration.systemd.services.kodi-settings-watchdog;
+  kodiAddonReconciler =
+    htpcConfiguration.system.build.kodiAddonReconciler;
+  kodiAddonReconcilerConfiguration =
+    kodiAddonReconciler.configuration;
+  kodiAddonReconcilerCommand =
+    "${kodiAddonReconciler}/bin/kodi-addon-reconciler";
+  greetdPreStart =
+    htpcConfiguration.systemd.services.greetd.preStart;
+  greetdPreStartParts =
+    lib.splitString
+      (builtins.unsafeDiscardStringContext kodiAddonReconcilerCommand)
+      (builtins.unsafeDiscardStringContext greetdPreStart);
   evidenceProducer =
     repositoryRoot
     + "/modules/kodi-screenshot-evidence/kodi_screenshot_evidence.py";
@@ -73,6 +85,14 @@ let
         (file: file.hasExt "xml" || file.hasExt "xsp")
         (repositoryRoot + "/modules/bingie/src"))
       (repositoryRoot + "/tools/bingie_dependency_inventory.py")
+    ];
+  };
+  kodiAddonReconcilerSource = lib.fileset.toSource {
+    root = repositoryRoot;
+    fileset = lib.fileset.unions [
+      (repositoryRoot + "/modules/kodi-addon-reconciler/main.py")
+      (repositoryRoot + "/modules/kodi-addon-reconciler/reconciler.py")
+      (repositoryRoot + "/modules/kodi-addon-reconciler/test_reconciler.py")
     ];
   };
   osdReviewSource = lib.fileset.toSource {
@@ -232,6 +252,60 @@ in
     python3 -B tools/bingie_dependency_inventory.py check
     touch "$out"
   '';
+
+  kodi-addon-reconciler =
+    assert kodiAddonReconciler.activeRoot == "/home/htpc/.kodi/addons";
+    assert kodiAddonReconciler.backupRoot
+      == "/var/lib/nix-htpc/kodi-addon-backups";
+    assert kodiAddonReconciler.managedAddons == [ ];
+    assert kodiAddonReconcilerConfiguration.schema_version == 1;
+    assert kodiAddonReconcilerConfiguration.backup_uid == 0;
+    assert kodiAddonReconcilerConfiguration.backup_gid == 0;
+    assert kodiAddonReconcilerConfiguration.backup_mode == 448;
+    assert map (spec: spec.addon_id)
+      kodiAddonReconcilerConfiguration.specs == [
+        "script.module.simplejson"
+        "script.bingie.helper"
+      ];
+    assert map (spec: spec.managed)
+      kodiAddonReconcilerConfiguration.specs == [ null null ];
+    assert (builtins.elem {
+      addon_id = "script.module.simplejson";
+      managed = null;
+      userdata = {
+        manifest_sha256 =
+          "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
+        version = "3.19.1+matrix.1";
+      };
+    } kodiAddonReconcilerConfiguration.specs);
+    assert (builtins.elem {
+      addon_id = "script.bingie.helper";
+      managed = null;
+      userdata = {
+        manifest_sha256 =
+          "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
+        version = "1.1.2";
+      };
+    } kodiAddonReconcilerConfiguration.specs);
+    assert builtins.length greetdPreStartParts == 2;
+    assert !(lib.hasInfix "source_skin=" (builtins.head greetdPreStartParts));
+    assert !(lib.hasInfix "rsync" (builtins.head greetdPreStartParts));
+    assert lib.hasInfix "source_skin=" (builtins.elemAt greetdPreStartParts 1);
+    assert lib.hasInfix "rsync" (builtins.elemAt greetdPreStartParts 1);
+    assert builtins.elem
+      "d /var/lib/nix-htpc 0755 root root - -"
+      htpcConfiguration.systemd.tmpfiles.rules;
+    assert builtins.elem
+      "d /var/lib/nix-htpc/kodi-addon-backups 0700 root root - -"
+      htpcConfiguration.systemd.tmpfiles.rules;
+    pkgs.runCommand "kodi-addon-reconciler-tests" {
+      nativeBuildInputs = [ pkgs.python3 ];
+    } ''
+      cd ${kodiAddonReconcilerSource}/modules/kodi-addon-reconciler
+      export PYTHONDONTWRITEBYTECODE=1
+      python3 -B -m unittest -v test_reconciler.py
+      touch "$out"
+    '';
 
   kodi-osd-review = pkgs.runCommand "kodi-osd-review-tests" {
     nativeBuildInputs = [
