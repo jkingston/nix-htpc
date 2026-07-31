@@ -884,7 +884,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 )
 
         self.assertEqual(hint.get("type"), "label")
-        self.assertEqual(hint.findtext("align"), "right")
+        self.assertEqual(hint.findtext("align"), "center")
         self.assertEqual(hint.findtext("aligny"), "center")
         self.assertEqual(hint.findtext("textcolor"), "b3ffffff")
         self.assertEqual(
@@ -929,6 +929,10 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         hint_bottom = hint_top + int(parameters["timeline_chapter_hint_height"])
         self.assertGreaterEqual(hint_left, rail_left)
         self.assertLessEqual(hint_right, rail_right)
+        self.assertEqual(
+            (2 * hint_left) + int(parameters["timeline_chapter_hint_width"]),
+            rail_left + rail_right,
+        )
         self.assertLess(hint_bottom, int(parameters["timeline_focus_rail_top"]))
 
         self.assertEqual(

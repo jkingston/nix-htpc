@@ -50,7 +50,7 @@
 		<param name="preview_height" default="320" />
 		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
 		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
-		<param name="timeline_chapter_hint_left" default="1320" />
+		<param name="timeline_chapter_hint_left" default="852" />
 		<param name="timeline_chapter_hint_top" default="914" />
 		<param name="timeline_chapter_hint_width" default="216" />
 		<param name="timeline_chapter_hint_height" default="32" />
@@ -454,7 +454,7 @@
 					<width>$PARAM[timeline_chapter_hint_width]</width>
 					<height>$PARAM[timeline_chapter_hint_height]</height>
 					<font>Reg22</font>
-					<align>right</align>
+					<align>center</align>
 					<aligny>center</aligny>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[timeline_chapter_hint_label]</label>
