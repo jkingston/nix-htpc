@@ -75,7 +75,6 @@ kodiPackages.buildKodiAddon {
 
     BINGIE_SKIN_ROOT="$PWD" \
       BINGIE_TOOLS_ROOT=${./tools} \
-      BINGIE_DEPENDENCY_REPORT=${./audit}/dependency-inventory.json \
       HTPC_SETTINGS_ROOT=${../kodi-settings-addon} \
       HTPC_HOME_MODULE=${../htpc-home.nix} \
       PYTHONDONTWRITEBYTECODE=1 \

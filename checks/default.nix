@@ -62,6 +62,19 @@ let
       (repositoryRoot + "/tools/kodi_capture")
     ];
   };
+  bingieDependencyAuditSource = lib.fileset.toSource {
+    root = repositoryRoot;
+    fileset = lib.fileset.unions [
+      (repositoryRoot + "/checks/test_bingie_dependency_inventory.py")
+      (repositoryRoot
+        + "/modules/bingie/audit/dependency-inventory.json")
+      (repositoryRoot + "/modules/bingie/default.nix")
+      (lib.fileset.fileFilter
+        (file: file.hasExt "xml" || file.hasExt "xsp")
+        (repositoryRoot + "/modules/bingie/src"))
+      (repositoryRoot + "/tools/bingie_dependency_inventory.py")
+    ];
+  };
   osdReviewSource = lib.fileset.toSource {
     root = repositoryRoot;
     fileset = lib.fileset.unions [
@@ -209,6 +222,16 @@ in
       python3 -B checks/test_passive_evidence_producer_protocol.py -v
       touch "$out"
     '';
+
+  bingie-dependency-audit = pkgs.runCommand "bingie-dependency-audit" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    cd ${bingieDependencyAuditSource}
+    export PYTHONDONTWRITEBYTECODE=1
+    python3 -B checks/test_bingie_dependency_inventory.py -v
+    python3 -B tools/bingie_dependency_inventory.py check
+    touch "$out"
+  '';
 
   kodi-osd-review = pkgs.runCommand "kodi-osd-review-tests" {
     nativeBuildInputs = [

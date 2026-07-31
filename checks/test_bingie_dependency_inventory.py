@@ -2,29 +2,26 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
-BINGIE_ROOT = Path(__file__).resolve().parents[1]
-SKIN_ROOT = Path(
-    os.environ.get("BINGIE_SKIN_ROOT", str(BINGIE_ROOT / "src"))
-).resolve()
-TOOLS_ROOT = Path(
-    os.environ.get("BINGIE_TOOLS_ROOT", str(BINGIE_ROOT / "tools"))
-).resolve()
-REPORT_PATH = Path(
-    os.environ.get(
-        "BINGIE_DEPENDENCY_REPORT",
-        str(BINGIE_ROOT / "audit" / "dependency-inventory.json"),
-    )
-).resolve()
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SKIN_ROOT = REPOSITORY_ROOT / "modules" / "bingie" / "src"
+REPORT_PATH = (
+    REPOSITORY_ROOT
+    / "modules"
+    / "bingie"
+    / "audit"
+    / "dependency-inventory.json"
+)
+RUNTIME_PACKAGE_PATH = REPOSITORY_ROOT / "modules" / "bingie" / "default.nix"
+TOOLS_ROOT = REPOSITORY_ROOT / "tools"
 sys.path.insert(0, str(TOOLS_ROOT))
 
-import dependency_inventory as inventory  # noqa: E402
+import bingie_dependency_inventory as inventory  # noqa: E402
 
 
 EXPECTED_OBSERVATIONS = {
@@ -84,6 +81,20 @@ class DependencyInventoryTest(unittest.TestCase):
             inventory.validate_report(self.report, self.raw, SKIN_ROOT),
             [],
         )
+
+    def test_command_defaults_resolve_from_repository_root(self):
+        self.assertEqual(inventory.main(["check"]), 0)
+
+    def test_runtime_skin_package_has_no_dependency_audit_inputs(self):
+        source = RUNTIME_PACKAGE_PATH.read_text(encoding="utf-8")
+        for forbidden in (
+            "BINGIE_DEPENDENCY_REPORT",
+            "bingie_dependency_inventory",
+            "dependency-inventory.json",
+            "./audit",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
 
     def test_exact_deployed_observations_remain_sanitized_userdata_only(self):
         actual = {

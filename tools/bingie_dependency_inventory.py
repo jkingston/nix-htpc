@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -384,9 +383,17 @@ def main(argv: list[str] | None = None) -> int:
                 raise InventoryError("capture needs --root and/or --path-list")
             sys.stdout.write(canonical_json(capture(args.scope, args.root, args.path_list)))
             return 0
-        module_root = Path(__file__).resolve().parents[1]
-        skin_root = args.skin_root or Path(os.environ.get("BINGIE_SKIN_ROOT", module_root / "src"))
-        report_path = args.report or module_root / "audit" / "dependency-inventory.json"
+        repository_root = Path(__file__).resolve().parents[1]
+        skin_root = args.skin_root or (
+            repository_root / "modules" / "bingie" / "src"
+        )
+        report_path = args.report or (
+            repository_root
+            / "modules"
+            / "bingie"
+            / "audit"
+            / "dependency-inventory.json"
+        )
         report, raw = load_report(report_path)
         errors = validate_report(report, raw, skin_root)
         for error in errors:

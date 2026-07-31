@@ -36,7 +36,7 @@ sanitized deployed observations, and optional add-ons referenced by the skin.
 Validate it headlessly against the current fork:
 
 ```bash
-python3 -B modules/bingie/tools/dependency_inventory.py check
+python3 -B tools/bingie_dependency_inventory.py check
 ```
 
 The same tool can passively capture version and manifest-hash observations from
@@ -44,7 +44,7 @@ explicit locations. It filters output to the seven mandatory imports and never
 invokes Kodi, shells out, or changes the scanned files:
 
 ```bash
-python3 -B modules/bingie/tools/dependency_inventory.py capture \
+python3 -B tools/bingie_dependency_inventory.py capture \
   --scope userdata \
   --root /path/to/kodi/addons \
   --path-list /path/to/addon-xml-paths.txt
@@ -62,10 +62,12 @@ recursive requisite returned by
 `nix-store --query --requisites /run/current-system`; the report records only
 the sanitized system-closure basename and matching mandatory add-on IDs.
 
-The report and its validator are build inputs of the BINGIE package. Deploying
-an audit-only change therefore changes that package derivation, restarts Kodi
-through the managed greetd restart trigger, and reruns the writable-skin sync
-even though the installed skin payload is unchanged.
+The report, validator, and audit tests are inputs only to the dedicated
+`bingie-dependency-audit` flake check. They are deliberately not inputs to the
+runtime BINGIE package, so an audit-only change cannot alter the skin
+derivation, restart Kodi, or rerun the writable-skin synchronization. Applying
+this decoupling changes the runtime derivation once; later audit-only changes
+do not.
 
 ## Updating upstream
 
