@@ -627,12 +627,81 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             ),
             [],
         )
+
+    def test_focused_actual_playhead_is_passive_and_slot_independent(self):
+        sliders = [
+            control
+            for control in self.surface.iter("control")
+            if control.get("type") == "slider"
+        ]
+        self.assertEqual(len(sliders), 1)
+        playhead = sliders[0]
+        self.assertEqual(
+            _description(playhead),
+            "HTPC video OSD focused actual playhead",
+        )
+        self.assertIsNone(playhead.get("id"))
+        self.assertEqual(playhead.findtext("info"), "$PARAM[actual_progress]")
+        self.assertEqual(playhead.findtext("left"), "$PARAM[rail_left]")
+        self.assertEqual(playhead.findtext("top"), "$PARAM[target_marker_top]")
+        self.assertEqual(playhead.findtext("width"), "$PARAM[rail_width]")
+        self.assertEqual(
+            playhead.findtext("height"),
+            "$PARAM[target_marker_height]",
+        )
+        self.assertEqual(
+            playhead.findtext("texturesliderbar"),
+            "colors/color_transparent.png",
+        )
+        nib = playhead.find("textureslidernib")
+        self.assertIsNotNone(nib)
+        self.assertEqual(
+            nib.get("colordiffuse"),
+            "$INFO[Skin.String(OSDBingieButtonsFocusColor)]",
+        )
+        self.assertEqual(
+            (nib.text or "").strip(),
+            "common/slider/slider_button_nofocus.png",
+        )
+        self.assertIsNone(playhead.find("textureslidernibfocus"))
+        self.assertEqual(playhead.findall("visible"), [])
+        self.assertNotIn(
+            "Window(",
+            ET.tostring(playhead, encoding="unicode"),
+        )
+        self.assertEqual(
+            [
+                control
+                for control in self.playback_root.iter("control")
+                if control.get("type") == "slider"
+            ],
+            [],
+        )
+
+        focused_rail = _controls_by_description(
+            self.surface,
+            "HTPC video OSD focused timeline rail",
+        )[0]
+        self.assertIs(focused_rail.findall("control")[-1], playhead)
+        self.assertEqual(
+            _visible_text(focused_rail),
+            "$PARAM[seekable_condition] + Control.HasFocus(9300) + "
+            "$PARAM[view_inactive_condition]",
+        )
+        forbidden_actions = {
+            "animation",
+            "onclick",
+            "ondown",
+            "onfocus",
+            "onleft",
+            "onright",
+            "onunfocus",
+            "onup",
+        }
         self.assertFalse(
-            any(
-                control.get("type") == "slider"
-                for control in self.surface.iter("control")
-            ),
-            "the owned surface must not add another slider authority",
+            forbidden_actions.intersection(
+                child.tag for child in playhead
+            )
         )
 
     def test_chapter_hint_is_compact_noninteractive_and_localized(self):
@@ -1276,6 +1345,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         violations = []
         for source_name, root in (
             (PLAYBACK_XML.name, self.playback_root),
+            (VIDEO_OSD_XML.name, self.video_osd_surface),
             (OSD_XML.name, self.osd_root),
         ):
             for control in root.iter("control"):
