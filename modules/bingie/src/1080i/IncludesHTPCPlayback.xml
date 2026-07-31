@@ -16,8 +16,8 @@
 		<param name="rail_height" default="7" />
 		<param name="marker_top" default="955" />
 		<param name="marker_height" default="24" />
-		<param name="target_marker_top" default="962" />
-		<param name="target_marker_height" default="11" />
+		<param name="target_marker_top" default="957.5" />
+		<param name="target_marker_height" default="20" />
 		<param name="preview_left" default="194" />
 		<param name="preview_top" default="650" />
 		<param name="preview_width" default="380" />

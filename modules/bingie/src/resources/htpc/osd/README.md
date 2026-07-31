@@ -12,11 +12,12 @@ magick -background none stop-focused.svg -depth 8 PNG32:stop-focused.png
 magick -background none timeline-marker.svg -depth 8 -strip PNG32:timeline-marker.png
 ```
 
-The timeline marker is intentionally 11 x 11 pixels. Its intrinsic width must
-match the `ranges` control height because Kodi preserves a range endpoint's
-texture width while scaling only its height. Eleven pixels retains the
-existing marker's vertical diameter and the focused timeline geometry while
-removing the distortion inherited from the upstream 30 x 30 slider texture.
+The timeline marker uses a 20 x 20 transparent canvas containing an 11-pixel
+disc. This matches Kodi's native `ranges` endpoint allocation instead of
+depending on a scale from that 20-pixel allocation to a smaller control. The
+visible disc retains the established compact marker size, and the control is
+centred on the focused rail so actual and target playheads share one explicit
+vertical position.
 
 The icons are original project assets and are covered by the repository
 licence.

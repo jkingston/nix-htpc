@@ -177,8 +177,12 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
             "htpc.review.scenario),timeline-chapters)",
         )
         self.assertEqual(
+            parameters["timeline_chapter_hint_arrow_label"],
+            "↑",
+        )
+        self.assertEqual(
             parameters["timeline_chapter_hint_label"],
-            "↑  Chapters",
+            "Chapters",
         )
         self.assertEqual(
             parameters["preview_loading_label"],

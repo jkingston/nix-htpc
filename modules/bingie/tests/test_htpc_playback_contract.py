@@ -884,9 +884,9 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             for node in self.surface.findall("param")
         }
         expected_geometry = {
-            "left": "timeline_chapter_hint_left",
+            "left": "rail_left",
             "top": "timeline_chapter_hint_top",
-            "width": "timeline_chapter_hint_width",
+            "width": "rail_width",
             "height": "timeline_chapter_hint_height",
         }
         for node, parameter in expected_geometry.items():
@@ -896,13 +896,56 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                     f"$PARAM[{parameter}]",
                 )
 
-        self.assertEqual(hint.get("type"), "label")
-        self.assertEqual(hint.findtext("align"), "center")
-        self.assertEqual(hint.findtext("aligny"), "center")
-        self.assertEqual(hint.findtext("textcolor"), "b3ffffff")
+        self.assertEqual(hint.get("type"), "group")
         self.assertEqual(
-            hint.findtext("label"),
+            tuple(
+                _description(control)
+                for control in hint.findall("control")
+            ),
+            (
+                "HTPC video OSD chapter arrow",
+                "HTPC video OSD chapter label",
+            ),
+        )
+        arrow, label = hint.findall("control")
+        for control in (arrow, label):
+            with self.subTest(description=_description(control)):
+                self.assertEqual(control.get("type"), "label")
+                self.assertEqual(control.findtext("left"), "0")
+                self.assertEqual(
+                    control.findtext("width"),
+                    "$PARAM[rail_width]",
+                )
+                self.assertEqual(control.findtext("align"), "center")
+                self.assertEqual(control.findtext("aligny"), "center")
+                self.assertEqual(control.findtext("textcolor"), "b3ffffff")
+        self.assertEqual(
+            arrow.findtext("label"),
+            "$PARAM[timeline_chapter_hint_arrow_label]",
+        )
+        self.assertEqual(
+            label.findtext("label"),
             "$PARAM[timeline_chapter_hint_label]",
+        )
+        self.assertEqual(
+            (
+                arrow.findtext("top"),
+                arrow.findtext("height"),
+                arrow.findtext("font"),
+            ),
+            ("0", "18", "Reg18"),
+        )
+        self.assertEqual(
+            (
+                label.findtext("top"),
+                label.findtext("height"),
+                label.findtext("font"),
+            ),
+            ("16", "26", "Reg22"),
+        )
+        self.assertLessEqual(
+            int(label.findtext("top")) + int(label.findtext("height")),
+            int(parameters["timeline_chapter_hint_height"]),
         )
         self.assertEqual(
             _visible_text(hint),
@@ -934,20 +977,11 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertNotIn(token, serialized)
 
-        rail_left = int(parameters["rail_left"])
-        rail_right = rail_left + int(parameters["rail_width"])
-        hint_left = int(parameters["timeline_chapter_hint_left"])
-        hint_right = hint_left + int(parameters["timeline_chapter_hint_width"])
         hint_top = int(parameters["timeline_chapter_hint_top"])
         hint_bottom = hint_top + int(parameters["timeline_chapter_hint_height"])
-        self.assertGreaterEqual(hint_left, rail_left)
-        self.assertLessEqual(hint_right, rail_right)
-        self.assertEqual(
-            (2 * hint_left) + int(parameters["timeline_chapter_hint_width"]),
-            rail_left + rail_right,
-        )
         self.assertLess(hint_bottom, int(parameters["timeline_focus_rail_top"]))
 
+        self.assertEqual(parameters["timeline_chapter_hint_arrow_label"], "↑")
         self.assertEqual(
             parameters["timeline_chapter_hint_label"],
             "$LOCALIZE[31581]",
@@ -963,7 +997,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             strings,
         )
         self.assertIsNotNone(chapter_match)
-        self.assertEqual(chapter_match.group(1), "↑  Chapters")
+        self.assertEqual(chapter_match.group(1), "Chapters")
         self.assertNotIn('msgctxt "#31580"', strings)
 
         focus_visuals = [
@@ -1067,18 +1101,14 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             + int(parameters["timeline_focus_rail_height"]) / 2
         )
         target_center = (
-            int(parameters["target_marker_top"])
+            float(parameters["target_marker_top"])
             + int(parameters["target_marker_height"]) / 2
         )
         self.assertEqual(focus_center, normal_center)
         self.assertEqual(target_center, normal_center)
-        self.assertEqual(
-            parameters["target_marker_top"],
-            parameters["timeline_focus_rail_top"],
-        )
-        self.assertEqual(
-            parameters["target_marker_height"],
-            parameters["timeline_focus_rail_height"],
+        self.assertGreater(
+            int(parameters["target_marker_height"]),
+            int(parameters["timeline_focus_rail_height"]),
         )
         self.assertGreater(
             int(parameters["timeline_focus_rail_height"]),
@@ -1343,8 +1373,8 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 "rail_height": "7",
                 "marker_top": "955",
                 "marker_height": "24",
-                "target_marker_top": "962",
-                "target_marker_height": "11",
+                "target_marker_top": "957.5",
+                "target_marker_height": "20",
                 "preview_left": "194",
                 "preview_top": "650",
                 "preview_width": "380",
@@ -1533,7 +1563,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         marker_png = OSD_ASSETS / "timeline-marker.png"
         marker_svg = OSD_ASSETS / "timeline-marker.svg"
 
-        self.assertEqual(diameter, 11)
+        self.assertEqual(diameter, 20)
         self.assertEqual(
             _png_contract(marker_png),
             (diameter, diameter, 8, 6),
@@ -1542,15 +1572,15 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(
             hashlib.sha256(marker_png.read_bytes()).hexdigest(),
-            "cb02f3c388eead254f6822e9da6cdbf7"
-            "6e4dd36c7bfa9896738f39f3867ca471",
+            "993969e6046ad66f33ae139a4da957d1"
+            "f215f315d6ff0095cbc30fd36438bd9a",
         )
 
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         source = ET.parse(marker_svg).getroot()
         self.assertEqual(source.get("width"), str(diameter))
         self.assertEqual(source.get("height"), str(diameter))
-        self.assertEqual(source.get("viewBox"), "0 0 11 11")
+        self.assertEqual(source.get("viewBox"), "0 0 20 20")
         disc = source.find("svg:circle", namespace)
         self.assertIsNotNone(disc)
         self.assertEqual(
@@ -1559,8 +1589,8 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 for attribute in ("cx", "cy", "r", "fill")
             },
             {
-                "cx": "5.5",
-                "cy": "5.5",
+                "cx": "10",
+                "cy": "10",
                 "r": "5.25",
                 "fill": "#ffffff",
             },

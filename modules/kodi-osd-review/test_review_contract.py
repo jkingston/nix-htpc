@@ -271,8 +271,12 @@ class ReviewContractTest(unittest.TestCase):
             "htpc.review.scenario),timeline-chapters)",
         )
         self.assertEqual(
+            parameters["timeline_chapter_hint_arrow_label"],
+            "↑",
+        )
+        self.assertEqual(
             parameters["timeline_chapter_hint_label"],
-            "↑  Chapters",
+            "Chapters",
         )
 
     def test_driver_keys_and_focus_equal_the_skin_contract(self):

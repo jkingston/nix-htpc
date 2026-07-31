@@ -2380,7 +2380,7 @@ msgstr ""
 
 #. Playback timeline chapter affordance
 msgctxt "#31581"
-msgid "↑  Chapters"
+msgid "Chapters"
 msgstr ""
 
 #. Trick-play preview state while an exact frame is pending

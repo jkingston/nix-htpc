@@ -31,8 +31,8 @@
 		<param name="timeline_focus_rail_height" default="11" />
 		<param name="marker_top" default="955" />
 		<param name="marker_height" default="24" />
-		<param name="target_marker_top" default="962" />
-		<param name="target_marker_height" default="11" />
+		<param name="target_marker_top" default="957.5" />
+		<param name="target_marker_height" default="20" />
 		<param name="timeline_hit_top" default="922" />
 		<param name="timeline_hit_height" default="80" />
 		<param name="transport_left" default="112" />
@@ -50,10 +50,9 @@
 		<param name="preview_height" default="320" />
 		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
 		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
-		<param name="timeline_chapter_hint_left" default="852" />
-		<param name="timeline_chapter_hint_top" default="914" />
-		<param name="timeline_chapter_hint_width" default="216" />
-		<param name="timeline_chapter_hint_height" default="32" />
+		<param name="timeline_chapter_hint_top" default="906" />
+		<param name="timeline_chapter_hint_height" default="42" />
+		<param name="timeline_chapter_hint_arrow_label" default="↑" />
 		<param name="timeline_chapter_hint_label" default="$LOCALIZE[31581]" />
 		<param name="chapter_available_condition" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
 		<param name="time_top" default="948" />
@@ -447,20 +446,39 @@
 					<animation effect="fade" time="120">Hidden</animation>
 				</control>
 
-				<control type="label">
+				<control type="group">
 					<description>HTPC video OSD chapter hint</description>
-					<left>$PARAM[timeline_chapter_hint_left]</left>
+					<left>$PARAM[rail_left]</left>
 					<top>$PARAM[timeline_chapter_hint_top]</top>
-					<width>$PARAM[timeline_chapter_hint_width]</width>
+					<width>$PARAM[rail_width]</width>
 					<height>$PARAM[timeline_chapter_hint_height]</height>
-					<font>Reg22</font>
-					<align>center</align>
-					<aligny>center</aligny>
-					<textcolor>b3ffffff</textcolor>
-					<label>$PARAM[timeline_chapter_hint_label]</label>
 					<visible>$PARAM[presentation_ready] + $PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[chapter_available_condition] + $PARAM[view_inactive_condition] + ![$PARAM[modal_condition]]</visible>
 					<animation effect="fade" time="120">Visible</animation>
 					<animation effect="fade" time="120">Hidden</animation>
+					<control type="label">
+						<description>HTPC video OSD chapter arrow</description>
+						<left>0</left>
+						<top>0</top>
+						<width>$PARAM[rail_width]</width>
+						<height>18</height>
+						<font>Reg18</font>
+						<align>center</align>
+						<aligny>center</aligny>
+						<textcolor>b3ffffff</textcolor>
+						<label>$PARAM[timeline_chapter_hint_arrow_label]</label>
+					</control>
+					<control type="label">
+						<description>HTPC video OSD chapter label</description>
+						<left>0</left>
+						<top>16</top>
+						<width>$PARAM[rail_width]</width>
+						<height>26</height>
+						<font>Reg22</font>
+						<align>center</align>
+						<aligny>center</aligny>
+						<textcolor>b3ffffff</textcolor>
+						<label>$PARAM[timeline_chapter_hint_label]</label>
+					</control>
 				</control>
 			</control>
 		</definition>
