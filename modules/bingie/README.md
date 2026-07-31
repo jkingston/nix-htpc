@@ -29,6 +29,44 @@ code retains or mutates live Kodi window controls.
 See `UPSTREAM.md` for import provenance and asset boundaries, and
 `FORK_CHANGES.md` for the maintained behavioural delta.
 
+## Dependency evidence
+
+`audit/dependency-inventory.json` records the seven non-core imports, their
+sanitized deployed observations, and optional add-ons referenced by the skin.
+Validate it headlessly against the current fork:
+
+```bash
+python3 -B modules/bingie/tools/dependency_inventory.py check
+```
+
+The same tool can passively capture version and manifest-hash observations from
+explicit locations. It filters output to the seven mandatory imports and never
+invokes Kodi, shells out, or changes the scanned files:
+
+```bash
+python3 -B modules/bingie/tools/dependency_inventory.py capture \
+  --scope userdata \
+  --root /path/to/kodi/addons \
+  --path-list /path/to/addon-xml-paths.txt
+```
+
+Each `--root` is either one add-on directory or a directory whose immediate
+children are add-ons; capture does not recurse deeper. Each non-comment line in
+a `--path-list` must be an absolute path to an add-on directory or its
+`addon.xml`.
+
+Capture output intentionally omits host paths and Kodi's enabled state; the
+committed runtime-enabled observations are separately reviewed evidence. A null
+`nix_closure` is backed by a complete scan of all add-on manifests in every
+recursive requisite returned by
+`nix-store --query --requisites /run/current-system`; the report records only
+the sanitized system-closure basename and matching mandatory add-on IDs.
+
+The report and its validator are build inputs of the BINGIE package. Deploying
+an audit-only change therefore changes that package derivation, restarts Kodi
+through the managed greetd restart trigger, and reruns the writable-skin sync
+even though the installed skin payload is unchanged.
+
 ## Updating upstream
 
 1. Fetch and hash the new upstream archive.
