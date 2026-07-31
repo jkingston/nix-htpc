@@ -28,6 +28,9 @@ OSD_XML = XML_ROOT / "IncludesOSD.xml"
 VIDEO_OSD_WINDOW_XML = XML_ROOT / "VideoOSD.xml"
 PASSIVE_SEEK_HUD_XML = XML_ROOT / "DialogSeekBar.xml"
 AUTO_CLOSE_OSD_XML = XML_ROOT / "Custom_1158_AutoCloseOSD.xml"
+VIDEO_BOOKMARKS_XML = XML_ROOT / "VideoOSDBookmarks.xml"
+BINGIE_SETTINGS_XML = SKIN_ROOT / "extras" / "bingiesettings.xml"
+DEFAULT_SKIN_SETTINGS_XML = XML_ROOT / "IncludesDefaultSkinSettings.xml"
 EN_GB_STRINGS = (
     SKIN_ROOT
     / "language"
@@ -1709,6 +1712,187 @@ class PlaybackXmlContractTest(unittest.TestCase):
             _visible_text(sliders[0]),
             "Control.HasFocus(187) + [Player.HasVideo | Player.HasAudio]",
         )
+
+    def test_inherited_music_osd_control_inventories(self):
+        layouts = {
+            node.get("name"): node
+            for node in self.osd_root.findall("include")
+            if node.get("name")
+            in ("OSDButtons_Layout", "OSDButtons_Bingie_Layout")
+        }
+        self.assertEqual(
+            set(layouts),
+            {"OSDButtons_Layout", "OSDButtons_Bingie_Layout"},
+        )
+
+        def direct_control_ids(layout_name: str, group_id: str):
+            groups = [
+                control
+                for control in layouts[layout_name].iter("control")
+                if control.get("id") == group_id
+            ]
+            self.assertEqual(len(groups), 1)
+            return tuple(
+                control.get("id")
+                for control in groups[0].findall("control")
+                if control.get("id")
+            )
+
+        self.assertEqual(
+            direct_control_ids("OSDButtons_Layout", "200"),
+            (
+                "201",
+                "202",
+                "203",
+                "204",
+                "205",
+                "206",
+                "207",
+                "208",
+                "210",
+                "212",
+                "10",
+                "215",
+                "705",
+                "101",
+                "102",
+                "104",
+                "105",
+                "701",
+                "500",
+                "21417",
+                "703",
+                "806",
+                "807",
+                "811",
+                "808",
+            ),
+        )
+        self.assertEqual(
+            direct_control_ids("OSDButtons_Bingie_Layout", "400"),
+            (
+                "204",
+                "10",
+                "104",
+                "101",
+                "811",
+                "500",
+                "701",
+                "102",
+                "806",
+                "807",
+                "215",
+                "209",
+                "808",
+            ),
+        )
+        serialized_layouts = " ".join(
+            ET.tostring(layout, encoding="unicode")
+            for layout in layouts.values()
+        ).lower()
+        self.assertNotIn("activatewindow(videobookmarks)", serialized_layouts)
+
+        descriptions = [
+            node
+            for node in self.osd_root.findall("variable")
+            if node.get("name") == "osd_button_description"
+        ]
+        self.assertEqual(len(descriptions), 1)
+        focus_pattern = re.compile(r"Control\.HasFocus\(([0-9]+)\)")
+        focus_ids = []
+        for node in descriptions[0].findall("value"):
+            match = focus_pattern.fullmatch(node.get("condition", ""))
+            if match:
+                focus_ids.append(match.group(1))
+        self.assertEqual(
+            tuple(focus_ids),
+            (
+                "10",
+                "101",
+                "102",
+                "104",
+                "204",
+                "209",
+                "215",
+                "500",
+                "701",
+                "806",
+                "807",
+                "808",
+                "811",
+            ),
+        )
+
+    def test_inherited_music_osd_settings_match_defaults(self):
+        settings_root = ET.parse(BINGIE_SETTINGS_XML).getroot()
+        option_groups = [
+            setting
+            for setting in settings_root.iter("setting")
+            if setting.get("id") == "bingie_osd_buttons"
+        ]
+        self.assertEqual(len(option_groups), 1)
+        option_ids = tuple(
+            option.get("id")
+            for option in option_groups[0].findall("option")
+        )
+        self.assertEqual(
+            option_ids,
+            (
+                "bingie_osd_buttons_back",
+                "bingie_osd_buttons_record",
+                "bingie_osd_buttons_subtitles",
+                "bingie_osd_buttons_audio",
+                "bingie_osd_buttons_video",
+                "bingie_osd_buttons_channellist",
+                "bingie_osd_buttons_pvrguide",
+                "bingie_osd_buttons_play_beginning",
+                "bingie_osd_buttons_playlist",
+                "bingie_osd_buttons_viz",
+                "bingie_osd_buttons_lyrics",
+                "bingie_osd_buttons_info",
+            ),
+        )
+        defaults_root = ET.parse(DEFAULT_SKIN_SETTINGS_XML).getroot()
+        default_ids = []
+        default_pattern = re.compile(
+            r"Skin\.SetBool\((bingie_osd_buttons_[^)]+)\)"
+        )
+        for node in defaults_root.iter("onload"):
+            match = default_pattern.fullmatch((node.text or "").strip())
+            if match:
+                default_ids.append(match.group(1))
+        self.assertEqual(len(default_ids), len(set(default_ids)))
+        self.assertEqual(set(default_ids), set(option_ids))
+
+    def test_conventional_video_bookmark_window_is_retained(self):
+        bookmark_root = ET.parse(VIDEO_BOOKMARKS_XML).getroot()
+        self.assertEqual(
+            bookmark_root.findtext("defaultcontrol", default="").strip(),
+            "1",
+        )
+        core_controls = tuple(
+            (
+                control.get("id"),
+                control.get("type"),
+                _description(control),
+            )
+            for control in bookmark_root.iter("control")
+            if control.get("id") in {"2", "3", "4", "11"}
+        )
+        self.assertEqual(
+            core_controls,
+            (
+                ("11", "list", ""),
+                ("2", "button", "Add"),
+                ("3", "button", "Delete"),
+                ("4", "button", "Episode Bookmarks"),
+            ),
+        )
+        passive_seek = PASSIVE_SEEK_HUD_XML.read_text(encoding="utf-8-sig")
+        auto_close = AUTO_CLOSE_OSD_XML.read_text(encoding="utf-8-sig")
+        self.assertIn("Window.IsActive(videobookmarks)", passive_seek)
+        self.assertIn("Window.IsVisible(VideoOSDBookmarks.xml)", passive_seek)
+        self.assertIn("Window.IsActive(videobookmarks)", auto_close)
 
     def test_native_video_progress_is_idle_fallback_not_custom_active(self):
         def assert_fallback_visibility(control: ET.Element):

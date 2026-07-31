@@ -937,18 +937,6 @@
 				<onclick>PVR.ToggleRecordPlayingChannel</onclick>
 				<visible>PVR.CanRecordPlayingChannel</visible>
 			</control>
-			<control type="button" id="214">
-				<description>bookmarks</description>
-				<width>$PARAM[size]</width>
-				<height>$PARAM[size]</height>
-				<label/>
-				<font/>
-				<texturefocus colordiffuse="$INFO[Skin.String(OSDButtonsFocusColor)]">$PARAM[iconspath]bookmarks.png</texturefocus>
-				<texturenofocus colordiffuse="$INFO[Skin.String(OSDButtonsColor)]">$PARAM[iconspath]bookmarks.png</texturenofocus>
-				<onclick>ActivateWindow(VideoBookmarks)</onclick>
-				<visible>Player.HasVideo</visible>
-				<visible>!VideoPlayer.Content(livetv)</visible>
-			</control>
 			<control type="button" id="215">
 				<description>disc menu</description>
 				<width>$PARAM[size]</width>
@@ -1864,19 +1852,6 @@
 					<onclick>ActivateWindow(pvrchannelguide)</onclick>
 					<visible>Skin.HasSetting(bingie_osd_buttons_pvrguide)</visible>
 				</control>
-				<control type="button" id="214">
-					<description>bookmarks</description>
-					<width>$PARAM[topsize]</width>
-					<height>$PARAM[topsize]</height>
-					<label/>
-					<font/>
-					<texturefocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">$PARAM[iconspath]bookmarks_fo.png</texturefocus>
-					<texturenofocus colordiffuse="$INFO[Skin.String(OSDBingieButtonsColor)]">$PARAM[iconspath]bookmarks.png</texturenofocus>
-					<onclick>ActivateWindow(VideoBookmarks)</onclick>
-					<visible>!VideoPlayer.Content(livetv)</visible>
-					<visible>Skin.HasSetting(bingie_osd_buttons_bookmarks)</visible>
-					<visible>Player.HasVideo</visible>
-				</control>
 				<control type="button" id="215">
 					<description>pvrguide</description>
 					<width>$PARAM[topsize]</width>
@@ -2171,7 +2146,6 @@
         <value condition="Control.HasFocus(104)">[UPPERCASE]$LOCALIZE[24012][/UPPERCASE]</value>
         <value condition="Control.HasFocus(204)">[UPPERCASE]$LOCALIZE[13012][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(209)">[UPPERCASE]$LOCALIZE[12021][/UPPERCASE]</value>
-		<value condition="Control.HasFocus(214)">[UPPERCASE]$LOCALIZE[298][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(215)">[UPPERCASE]$LOCALIZE[33061][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(500)">[UPPERCASE]$LOCALIZE[250][/UPPERCASE]</value>
 		<value condition="Control.HasFocus(701)">[UPPERCASE]$LOCALIZE[24013][/UPPERCASE]</value>
