@@ -174,42 +174,6 @@ class FileLruCache(object):
             return list(self._items.items())
 
 
-class OutputSlots(object):
-    """Two atomic output files; the active path is never replaced."""
-
-    def __init__(self, root, revision):
-        os.makedirs(root, exist_ok=True)
-        self.paths = (
-            os.path.join(root, "preview-a-r%d.jpg" % int(revision)),
-            os.path.join(root, "preview-b-r%d.jpg" % int(revision)),
-        )
-        self.active_path = None
-        self._lock = threading.RLock()
-
-    def stage(self, source_path):
-        with self._lock:
-            destination = (
-                self.paths[1] if self.active_path == self.paths[0] else self.paths[0]
-            )
-            temporary = "%s.tmp-%s" % (
-                destination,
-                threading.current_thread().ident or 0,
-            )
-            shutil.copyfile(source_path, temporary)
-            os.replace(temporary, destination)
-            return destination
-
-    def activate(self, path):
-        with self._lock:
-            if path not in self.paths:
-                raise ValueError("output path is not a managed slot")
-            self.active_path = path
-
-    def clear(self):
-        with self._lock:
-            self.active_path = None
-
-
 class LatestRequestSlot(object):
     """One replaceable job plus the newest metadata for its work identity."""
 
@@ -1023,8 +987,7 @@ class TrickplayPreviewManager(object):
     ):
         frame_root = os.path.join(cache_root, "frames")
         chapter_root = os.path.join(cache_root, "chapters")
-        output_root = os.path.join(cache_root, "output")
-        for path in (frame_root, chapter_root, output_root):
+        for path in (frame_root, chapter_root):
             os.makedirs(path, exist_ok=True)
         current_seconds = 0.0
         try:
@@ -1070,7 +1033,6 @@ class TrickplayPreviewManager(object):
                 sprite_order(info, current_frame) if info else []
             ),
             "warmed_sprites": set(),
-            "output_slots": OutputSlots(output_root, revision),
             "exact_session": self._new_session(client),
             "prefetch_session": self._new_session(client),
             "chapter_session": self._new_session(client),

@@ -140,7 +140,6 @@ class TrickplayTest(unittest.TestCase):
         return request
 
     def make_process_state(self, root, request, chapters=None):
-        output_root = os.path.join(root, "output")
         state = {
             "playback_token": request["token"]["playback"],
             "revision": request["token"]["revision"],
@@ -151,7 +150,6 @@ class TrickplayTest(unittest.TestCase):
             "chapters": chapters or [],
             "request_slot": trickplay.LatestRequestSlot(),
             "prefetch_slot": trickplay.LatestRequestSlot(),
-            "output_slots": trickplay.OutputSlots(output_root, 3),
             "publish_lock": threading.RLock(),
             "preview_failure_diagnostics": {},
             "frame_cache": trickplay.PlaybackFrameCache(
@@ -1392,26 +1390,6 @@ class TrickplayTest(unittest.TestCase):
 
             self.assertEqual(results, [False])
             self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
-
-    def test_output_slots_double_buffer_and_pin_active_path(self):
-        with tempfile.TemporaryDirectory() as root:
-            first = self.write_file(os.path.join(root, "first"), b"first")
-            second = self.write_file(os.path.join(root, "second"), b"second")
-            third = self.write_file(os.path.join(root, "third"), b"third")
-            slots = trickplay.OutputSlots(os.path.join(root, "output"), 2)
-
-            path_a = slots.stage(first)
-            slots.activate(path_a)
-            path_b = slots.stage(second)
-            self.assertNotEqual(path_a, path_b)
-            with open(path_a, "rb") as active:
-                self.assertEqual(active.read(), b"first")
-
-            slots.activate(path_b)
-            path_a_again = slots.stage(third)
-            self.assertEqual(path_a_again, path_a)
-            with open(path_b, "rb") as active:
-                self.assertEqual(active.read(), b"second")
 
     def test_sprite_and_file_caches_are_strictly_bounded(self):
         byte_cache = trickplay.ByteLruCache(5)
