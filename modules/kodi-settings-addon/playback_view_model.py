@@ -528,7 +528,7 @@ class PlaybackViewModel(object):
             "preview_status": self.preview_status,
             "preview_path": (
                 self.preview_path
-                if self.preview_status == "ready"
+                if self.preview_status in ("ready", "loading")
                 else ""
             ),
             "hold_active": self.hold_active,

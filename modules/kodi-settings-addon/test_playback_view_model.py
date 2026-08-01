@@ -708,7 +708,7 @@ class PlaybackViewModelTest(unittest.TestCase):
         self.assertEqual(handoff["phase"], "settling")
         self.assertEqual(handoff["target_seconds"], 120)
         self.assertEqual(handoff["preview_status"], "loading")
-        self.assertEqual(handoff["preview_path"], "")
+        self.assertEqual(handoff["preview_path"], "/tmp/110.jpg")
         self.assertEqual(view.preview_started_at, 0.1)
 
     def test_preview_status_does_not_regress_if_clock_moves_backwards(self):

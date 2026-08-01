@@ -1145,7 +1145,15 @@ class TrickplayPreviewManager(object):
                             "coordinator_origin",
                             payload,
                         )
-                        if not abort.wait(PREVIEW_RETRY_BACKOFFS[attempt]):
+                        if (
+                            not abort.wait(PREVIEW_RETRY_BACKOFFS[attempt])
+                            and self._latest_current_request(
+                                state,
+                                payload,
+                                abort,
+                            )
+                            is not None
+                        ):
                             state["work_queue"].submit_request(
                                 retry,
                                 sprite_for_frame(

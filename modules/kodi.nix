@@ -303,6 +303,7 @@ in
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
   system.build.kodiAddonReconciler = kodiAddonReconciler;
+  system.build.kodiCore = kodiCore;
   system.build.kodiBingieDependenciesCheck =
     kodiBingieDependenciesCheck;
   system.build.kodiBingieHelper = bingieHelper;
