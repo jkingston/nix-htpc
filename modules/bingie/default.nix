@@ -43,8 +43,13 @@ kodiPackages.buildKodiAddon {
 
     xmllint --noout \
       addon.xml \
+      1080i/Startup.xml \
+      1080i/Custom_1101_StartUp.xml \
+      1080i/Custom_1102_StartUp2.xml \
+      1080i/Custom_1103_StartUpMask.xml \
       1080i/Home.xml \
       1080i/Includes.xml \
+      1080i/IncludesVariables.xml \
       1080i/IncludesBingie.xml \
       1080i/IncludesHomeBingie.xml \
       1080i/IncludesHTPCPlayback.xml \
@@ -89,6 +94,10 @@ kodiPackages.buildKodiAddon {
     addon_dir="$out/share/kodi/addons/skin.bingie"
     for required_file in \
       addon.xml \
+      1080i/Startup.xml \
+      1080i/Custom_1101_StartUp.xml \
+      1080i/Custom_1102_StartUp2.xml \
+      1080i/Custom_1103_StartUpMask.xml \
       1080i/Home.xml \
       1080i/DialogSeekBar.xml \
       1080i/Includes.xml \
