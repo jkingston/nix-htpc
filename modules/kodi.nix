@@ -45,6 +45,7 @@ let
     inherit lib pkgs;
     screenshotPath = kodiScreenshotPath;
   };
+  kodiContentRoutes = import ./kodi-content-routes { inherit pkgs; };
   simplejson = kodiPackages.simplejson;
   bingieHelper = import ./bingie-helper {
     inherit kodiPackages lib pkgs;
@@ -298,10 +299,12 @@ let
 in
 {
   environment.systemPackages = [
+    kodiContentRoutes
     kodiScreenshotEvidence
     kodiSettingsWatchdog
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
+  system.build.kodiContentRoutes = kodiContentRoutes;
   system.build.kodiAddonReconciler = kodiAddonReconciler;
   system.build.kodiCore = kodiCore;
   system.build.kodiBingieDependenciesCheck =
@@ -341,6 +344,12 @@ in
       set -eu
 
       find /run/htpc-trickplay -mindepth 1 -delete
+
+      if ! ${kodiContentRoutes}/bin/kodi-content-routes \
+        --library-root /home/htpc/.kodi/userdata/library/video
+      then
+        echo "Kodi content aliases were not updated; retaining prior routes" >&2
+      fi
 
       ${kodiAddonReconciler}/bin/kodi-addon-reconciler
 
