@@ -57,7 +57,6 @@ SCENARIOS = (
     "seek-forward-unavailable",
     "seek-forward-slot-b",
     "seek-end",
-    "top-stop",
 )
 EXPECTED_FOCUS = {
     "transport-playing": "9201",
@@ -73,7 +72,6 @@ EXPECTED_FOCUS = {
     "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
     "seek-end": "9300",
-    "top-stop": "9101",
 }
 
 def _marker_value(percent, precision):

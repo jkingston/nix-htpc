@@ -507,7 +507,6 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             set(ids),
             {
                 "9100",
-                "9101",
                 "9102",
                 "9103",
                 "9104",
@@ -1281,7 +1280,6 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
 
     def test_top_actions_are_video_only_and_bookmark_modal_is_absent(self):
         expected = {
-            "9101": "PlayerControl(Stop)",
             "9102": "ActivateWindow(osdsubtitlesettings)",
             "9103": "ActivateWindow(osdaudiosettings)",
             "9104": "ActivateWindow(osdvideosettings)",
@@ -1298,6 +1296,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertNotIn(">bookmarks<", serialized)
         self.assertNotIn("playercontrol(previous)", serialized)
         self.assertNotIn("playercontrol(next)", serialized)
+        self.assertNotIn("playercontrol(stop)", serialized)
         self.assertNotIn("stop_fo.png", serialized)
         self.assertNotIn("dvd_fo.png", serialized)
 
@@ -1335,7 +1334,6 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(ungated, [])
 
         for control_id in (
-            "9101",
             "9102",
             "9103",
             "9104",

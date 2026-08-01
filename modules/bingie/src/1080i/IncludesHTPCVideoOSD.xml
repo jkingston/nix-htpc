@@ -14,7 +14,6 @@
 -->
 <includes>
 	<variable name="HTPCVideoOSDTopActionLabel">
-		<value condition="Control.HasFocus(9101)">$LOCALIZE[36044]</value>
 		<value condition="Control.HasFocus(9102)">$LOCALIZE[24012]</value>
 		<value condition="Control.HasFocus(9103)">$LOCALIZE[292]</value>
 		<value condition="Control.HasFocus(9104)">$LOCALIZE[291]</value>
@@ -110,7 +109,7 @@
 					<texture background="true">overlays/osd_gradient.png</texture>
 				</control>
 
-				<!-- Top actions. Stop is explicit; Back remains one UI level. -->
+				<!-- Video-specific settings remain reachable above the timeline. -->
 				<control type="grouplist" id="9100">
 					<description>HTPC video OSD top actions</description>
 					<left>$PARAM[top_left]</left>
@@ -171,17 +170,6 @@
 						<onclick condition="$PARAM[production_actions]">PlayerControl(ShowVideoMenu)</onclick>
 						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 						<visible>VideoPlayer.HasMenu</visible>
-					</control>
-					<control type="button" id="9101">
-						<description>HTPC stop playback</description>
-						<width>$PARAM[top_size]</width>
-						<height>$PARAM[top_size]</height>
-						<label />
-						<font />
-						<texturefocus colordiffuse="ffffffff">special://skin/resources/htpc/osd/stop-focused.png</texturefocus>
-						<texturenofocus colordiffuse="ccffffff">special://skin/resources/htpc/osd/stop.png</texturenofocus>
-						<onclick condition="$PARAM[production_actions]">PlayerControl(Stop)</onclick>
-						<onclick condition="$PARAM[inert_actions]">noop</onclick>
 					</control>
 				</control>
 				<control type="label">

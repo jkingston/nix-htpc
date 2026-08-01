@@ -138,10 +138,6 @@ kodiPackages.buildKodiAddon {
 
     test -f "$addon_dir/resources/review/seek-25.png"
     test -f "$addon_dir/resources/review/seek-75.png"
-    test -f "$addon_dir/resources/htpc/osd/stop.svg"
-    test -f "$addon_dir/resources/htpc/osd/stop-focused.svg"
-    test -f "$addon_dir/resources/htpc/osd/stop.png"
-    test -f "$addon_dir/resources/htpc/osd/stop-focused.png"
     test -f "$addon_dir/resources/htpc/osd/timeline-marker.svg"
     test -f "$addon_dir/resources/htpc/osd/timeline-marker.png"
     test -f "$addon_dir/resources/htpc/osd/chapter-up.svg"

@@ -17,7 +17,6 @@ XML_ROOT = SKIN_ROOT / "1080i"
 REVIEW_XML = XML_ROOT / "Custom_1192_HTPCVideoOSDReview.xml"
 REVIEW_ASSETS = SKIN_ROOT / "resources" / "review"
 VIDEO_OSD_XML = XML_ROOT / "IncludesHTPCVideoOSD.xml"
-OSD_ICON_ASSETS = SKIN_ROOT / "resources" / "htpc" / "osd"
 
 EXPECTED_FOCUS = {
     "transport-playing": "9201",
@@ -33,7 +32,6 @@ EXPECTED_FOCUS = {
     "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
     "seek-end": "9300",
-    "top-stop": "9101",
 }
 EXPECTED_CLEANUP = {
     "htpc.review.ready",
@@ -79,14 +77,6 @@ def _png_dimensions(path: Path) -> tuple[int, int]:
     if len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError(f"{path} is not a PNG")
     return struct.unpack(">II", header[16:24])
-
-
-def _png_bit_depth_and_color_type(path: Path) -> tuple[int, int]:
-    with path.open("rb") as source:
-        header = source.read(26)
-    if len(header) != 26 or header[:8] != b"\x89PNG\r\n\x1a\n":
-        raise ValueError(f"{path} is not a PNG")
-    return header[24], header[25]
 
 
 class HeadlessOsdReviewWindowTest(unittest.TestCase):
@@ -325,97 +315,6 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
                 )
                 self.assertTrue(path.with_suffix(".svg").is_file())
         self.assertTrue((REVIEW_ASSETS / "README.md").is_file())
-
-    def test_top_stop_uses_deterministic_fork_owned_icons(self):
-        osd_root = ET.parse(VIDEO_OSD_XML).getroot()
-        stop_controls = [
-            control
-            for control in osd_root.iter("control")
-            if control.get("id") == "9101"
-        ]
-        self.assertEqual(len(stop_controls), 1)
-        stop = stop_controls[0]
-        expected = {
-            "texturefocus": (
-                "special://skin/resources/htpc/osd/stop-focused.png"
-            ),
-            "texturenofocus": (
-                "special://skin/resources/htpc/osd/stop.png"
-            ),
-        }
-        expected_hashes = {
-            "stop.png": (
-                "5745cc4c7b70783973452a2025f89c70"
-                "09b073cc3b6a9dafb7f301af4ffe6c93"
-            ),
-            "stop-focused.png": (
-                "b676fc905f7e732db1c98b6966367bf5"
-                "281691e7a2d01b2e89f71fd69240880f"
-            ),
-        }
-        for texture_name, expected_path in expected.items():
-            texture = stop.find(texture_name)
-            self.assertIsNotNone(texture)
-            self.assertEqual((texture.text or "").strip(), expected_path)
-        self.assertEqual(
-            stop.find("texturefocus").get("colordiffuse"),
-            "ffffffff",
-        )
-        self.assertEqual(
-            stop.find("texturenofocus").get("colordiffuse"),
-            "ccffffff",
-        )
-
-        for filename, expected_hash in expected_hashes.items():
-            path = OSD_ICON_ASSETS / filename
-            with self.subTest(filename=filename):
-                self.assertEqual(_png_dimensions(path), (68, 68))
-                self.assertEqual(
-                    _png_bit_depth_and_color_type(path),
-                    (8, 6),
-                    "runtime OSD icons must be 8-bit RGBA PNGs",
-                )
-                self.assertEqual(
-                    hashlib.sha256(path.read_bytes()).hexdigest(),
-                    expected_hash,
-                )
-                self.assertTrue(path.with_suffix(".svg").is_file())
-        self.assertTrue((OSD_ICON_ASSETS / "README.md").is_file())
-
-        namespace = {"svg": "http://www.w3.org/2000/svg"}
-        idle_source = ET.parse(OSD_ICON_ASSETS / "stop.svg").getroot()
-        idle_glyph = idle_source.find("svg:rect", namespace)
-        self.assertIsNotNone(idle_glyph)
-        self.assertEqual(
-            {
-                attribute: idle_glyph.get(attribute)
-                for attribute in ("x", "y", "width", "height")
-            },
-            {"x": "18", "y": "18", "width": "32", "height": "32"},
-        )
-
-        focused_source = ET.parse(
-            OSD_ICON_ASSETS / "stop-focused.svg"
-        ).getroot()
-        focus_disc = focused_source.find("svg:circle", namespace)
-        focus_glyph = focused_source.find("svg:rect", namespace)
-        self.assertIsNotNone(focus_disc)
-        self.assertIsNotNone(focus_glyph)
-        self.assertEqual(
-            {
-                attribute: focus_disc.get(attribute)
-                for attribute in ("cx", "cy", "r")
-            },
-            {"cx": "34", "cy": "34", "r": "33"},
-        )
-        self.assertEqual(
-            {
-                attribute: focus_glyph.get(attribute)
-                for attribute in ("x", "y", "width", "height")
-            },
-            {"x": "19", "y": "19", "width": "30", "height": "30"},
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

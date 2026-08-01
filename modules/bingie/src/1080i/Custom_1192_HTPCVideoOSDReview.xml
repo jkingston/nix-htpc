@@ -20,8 +20,6 @@
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-unavailable)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-forward-slot-b)">SetFocus(9300)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),seek-end)">SetFocus(9300)</onload>
-	<onload condition="String.IsEqual(Window(Home).Property(htpc.review.scenario),top-stop)">SetFocus(9101)</onload>
-
 	<onunload>ClearProperty(htpc.review.ready,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.scenario,Home)</onunload>
 	<onunload>ClearProperty(htpc.review.revision,Home)</onunload>

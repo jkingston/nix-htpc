@@ -7,8 +7,6 @@ adjacent SVG files are the readable sources.
 Render the runtime assets with:
 
 ```bash
-magick -background none stop.svg -depth 8 PNG32:stop.png
-magick -background none stop-focused.svg -depth 8 PNG32:stop-focused.png
 magick -background none timeline-marker.svg -depth 8 -strip PNG32:timeline-marker.png
 magick -background none chapter-up.svg -depth 8 -strip PNG32:chapter-up.png
 ```

@@ -190,7 +190,6 @@ class ReviewContractTest(unittest.TestCase):
             "timeline-playing",
             "timeline-idle",
             "timeline-chapters",
-            "top-stop",
         ):
             values = scenario_properties(scenario)
             self.assertEqual(
