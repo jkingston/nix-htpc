@@ -135,7 +135,6 @@
       "script.skin.helper.colorpicker",
       "script.skin.helper.skinbackup",
       "script.tv.show.next.aired",
-      "service.openelec.settings",
       "service.upnext"
     ],
     "resource_families": [
@@ -150,8 +149,8 @@
   "schema_version": 1,
   "subject": {
     "addon_id": "skin.bingie",
-    "addon_version": "2.0.2.11",
+    "addon_version": "2.0.2.12",
     "declaration": "addon.xml",
-    "declaration_sha256": "c5ccdc2f411fe9fa015104db1fda4b7e3bbbaa2b5c08f51103eeeb3ad2e1a28e"
+    "declaration_sha256": "5ff3eb9d560ff15219f653bf21d84e1072b9dbd941807a786046f3e0c8c8af97"
   }
 }

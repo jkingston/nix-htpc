@@ -24,7 +24,6 @@ in
     "resources"
     "extras/media/backgrounds"
     "extras/media/snow"
-    "extras/openelec"
     "extras/viewthumbs"
     "extras/skinthemes/Reset.jpg"
   ];

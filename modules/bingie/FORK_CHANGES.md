@@ -66,3 +66,9 @@ reused.
   trailer timing branches.
 - Exclude the two upstream intro videos and splash image from the assembled
   add-on while retaining independently used backgrounds and snow artwork.
+
+## Version 2.0.2.12
+
+- Remove the inherited OpenELEC and LibreELEC settings windows and their
+  exclusive image payload. Those platform add-ons are outside this NixOS
+  appliance's runtime closure.
