@@ -105,6 +105,7 @@ from chapter_dialog import (
     ACTION_PREVIOUS_MENU,
     CHAPTER_LIST_ID,
     ChapterDialogManager,
+    ChapterNavigationFilter,
     ChapterRail,
 )
 from input_quarantine import INPUT_WATERMARK_PAYLOAD_KEY
@@ -298,6 +299,7 @@ class FakeChapters(object):
         self.close_calls = 0
         self.provider = FakeProvider()
         self.accept_events = True
+        self.pending_tick = None
 
     def available(self):
         return self.is_available
@@ -313,6 +315,17 @@ class FakeChapters(object):
 
     def accepts_event(self, _payload):
         return self.accept_events
+
+    def navigate(self, payload, _timestamp):
+        position = 1 if payload.get("physical_direction") == "right" else 0
+        chapter = dict(self.provider.chapters[position])
+        chapter["physical_direction"] = payload.get("physical_direction")
+        return chapter
+
+    def tick(self, _timestamp):
+        chapter = self.pending_tick
+        self.pending_tick = None
+        return chapter
 
 
 class FakePlayer(object):
@@ -1168,8 +1181,8 @@ class InputRouterTest(unittest.TestCase):
 
         for action, payload in (
             (
-                "chapter-focus",
-                {"index": 1, "start_seconds": 600.0},
+                "chapter-navigate",
+                {"physical_direction": "right"},
             ),
             (
                 "chapter-select",
@@ -1220,7 +1233,7 @@ class InputRouterTest(unittest.TestCase):
         self.assertEqual(self.presenter.calls, ["timeline"])
         self.assertEqual(self.controller.ends, 0)
 
-    def test_chapter_focus_updates_target_and_select_commits(self):
+    def test_chapter_navigation_updates_target_and_select_commits(self):
         self.controller.state = "pause-pending"
         self.controller.source = "chapter"
         chapter = {
@@ -1228,13 +1241,17 @@ class InputRouterTest(unittest.TestCase):
             "start_seconds": 600.0,
             "playback_token": "playback-one",
         }
-        self.router.handle("chapter-focus", 1.0, chapter)
+        self.router.handle(
+            "chapter-navigate",
+            1.0,
+            {"physical_direction": "right"},
+        )
         self.router.handle("chapter-select", 1.1, chapter)
         self.assertEqual(self.controller.targets, [600.0, 600.0])
         self.assertEqual(self.controller.confirms, [None])
         self.assertEqual(self.router.pending_transition, "transport")
 
-    def test_physical_chapter_focus_is_quarantined_before_target_update(self):
+    def test_physical_chapter_navigation_is_quarantined_before_update(self):
         self.controller.state = "pause-pending"
         self.controller.source = "chapter"
         chapter = {
@@ -1243,33 +1260,30 @@ class InputRouterTest(unittest.TestCase):
             "playback_token": "playback-one",
             "physical_direction": "right",
         }
-        self.router.handle("chapter-focus", 1.0, chapter)
+        self.router.handle("chapter-navigate", 1.0, chapter)
         self.assertEqual(self.controller.targets, [600.0])
 
         self.router.on_playback_boundary(1.1)
         self.controller.state = "pause-pending"
         self.controller.source = "chapter"
         self.controller.targets = []
-        self.router.handle("chapter-focus", 1.2, chapter)
+        self.router.handle("chapter-navigate", 1.2, chapter)
 
         self.assertEqual(self.controller.targets, [])
 
-    def test_synthetic_chapter_focus_remains_nonphysical(self):
+    def test_settled_chapter_navigation_updates_target_on_tick(self):
         self.router.handle("right", 1.0)
         self.router.on_playback_boundary(1.1)
         self.controller.state = "pause-pending"
         self.controller.source = "chapter"
         self.controller.targets = []
 
-        self.router.handle(
-            "chapter-focus",
-            1.2,
-            {
-                "index": 1,
-                "start_seconds": 600.0,
-                "playback_token": "playback-one",
-            },
-        )
+        self.chapters.pending_tick = {
+            "index": 1,
+            "start_seconds": 600.0,
+            "playback_token": "playback-one",
+        }
+        self.router.tick()
 
         self.assertEqual(self.controller.targets, [600.0])
 
@@ -2424,6 +2438,7 @@ class FakeDialog(object):
         self.kwargs = kwargs
         self.shown = False
         self.closed = False
+        self.selections = []
         self.__class__.instances.append(self)
 
     def show(self):
@@ -2431,6 +2446,10 @@ class FakeDialog(object):
 
     def close_without_event(self):
         self.closed = True
+
+    def select_position(self, position):
+        self.selections.append(position)
+        return True
 
 
 class FakeChapterControl(object):
@@ -2463,7 +2482,7 @@ class FakeAction(object):
 
 class ChapterRailTest(unittest.TestCase):
     def _rail(self, selected):
-        focus_events = []
+        navigation_events = []
         exit_events = []
         control = FakeChapterControl(selected)
         rail = ChapterRail(
@@ -2476,14 +2495,14 @@ class ChapterRailTest(unittest.TestCase):
                 {"index": 1, "start_seconds": 600.0},
                 {"index": 2, "start_seconds": 1200.0},
             ],
-            focus_callback=focus_events.append,
+            navigate_callback=navigation_events.append,
             exit_callback=lambda destination, direction: exit_events.append(
                 (destination, direction)
             ),
         )
         rail.getControl = lambda _control_id: control
         rail._selected_position = selected
-        return rail, control, focus_events, exit_events
+        return rail, control, navigation_events, exit_events
 
     def test_init_publishes_only_visible_item_fields_and_selects_current(self):
         control = FakeChapterControl(0)
@@ -2533,43 +2552,27 @@ class ChapterRailTest(unittest.TestCase):
         self.assertEqual(rail._selected_position, 1)
         self.assertEqual(focus_ids, [CHAPTER_LIST_ID])
 
-    def test_right_observes_native_selection_and_emits_one_focus_event(self):
+    def test_right_repairs_native_selection_and_emits_direction(self):
         rail, control, events, _exit_events = self._rail(0)
         control.simulate_native_navigation(1)
 
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
-        self.assertEqual(control.selections, [])
-        self.assertEqual(
-            events,
-            [
-                {
-                    "index": 1,
-                    "start_seconds": 600.0,
-                    "physical_direction": "right",
-                }
-            ],
-        )
+        self.assertEqual(control.selections, [0])
+        self.assertEqual(control.selected, 0)
+        self.assertEqual(events, ["right"])
 
-    def test_left_observes_native_selection_and_emits_one_focus_event(self):
+    def test_left_repairs_native_selection_and_emits_direction(self):
         rail, control, events, _exit_events = self._rail(1)
         control.simulate_native_navigation(0)
 
         rail.onAction(FakeAction(ACTION_MOVE_LEFT))
 
-        self.assertEqual(control.selections, [])
-        self.assertEqual(
-            events,
-            [
-                {
-                    "index": 0,
-                    "start_seconds": 0.0,
-                    "physical_direction": "left",
-                }
-            ],
-        )
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selected, 1)
+        self.assertEqual(events, ["left"])
 
-    def test_repeated_right_actions_follow_each_native_position_once(self):
+    def test_repeated_native_overruns_never_change_accepted_position(self):
         rail, control, events, _exit_events = self._rail(0)
 
         control.simulate_native_navigation(1)
@@ -2577,45 +2580,32 @@ class ChapterRailTest(unittest.TestCase):
         control.simulate_native_navigation(2)
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
-        self.assertEqual(control.selections, [])
-        self.assertEqual(
-            [event["index"] for event in events],
-            [1, 2],
-        )
+        self.assertEqual(control.selections, [0, 0])
+        self.assertEqual(control.selected, 0)
+        self.assertEqual(rail._selected_position, 0)
+        self.assertEqual(events, ["right", "right"])
 
-    def test_native_overrun_is_corrected_to_one_chapter(self):
+    def test_native_overrun_is_repaired_to_last_accepted_chapter(self):
         rail, control, events, _exit_events = self._rail(0)
         control.simulate_native_navigation(2)
 
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
-        self.assertEqual(control.selections, [1])
-        self.assertEqual(control.selected, 1)
-        self.assertEqual(rail._selected_position, 1)
-        self.assertEqual([event["index"] for event in events], [1])
+        self.assertEqual(control.selections, [0])
+        self.assertEqual(control.selected, 0)
+        self.assertEqual(rail._selected_position, 0)
+        self.assertEqual(events, ["right"])
 
-    def test_queued_direction_callback_advances_from_cached_position(self):
+    def test_select_position_is_the_only_navigation_commit(self):
         rail, control, events, _exit_events = self._rail(1)
 
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        self.assertTrue(rail.select_position(2))
 
         self.assertEqual(control.selections, [2])
         self.assertEqual(rail._selected_position, 2)
-        self.assertEqual([event["index"] for event in events], [2])
+        self.assertEqual(events, [])
 
-    def test_queued_same_direction_callback_survives_overrun_correction(self):
-        rail, control, events, _exit_events = self._rail(0)
-        control.simulate_native_navigation(2)
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
-
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
-
-        self.assertEqual(control.selections, [1, 2])
-        self.assertEqual(control.selected, 2)
-        self.assertEqual(rail._selected_position, 2)
-        self.assertEqual([event["index"] for event in events], [1, 2])
-
-    def test_end_stops_correct_native_wrap_without_focus_event(self):
+    def test_end_repairs_native_wrap_and_still_reports_direction(self):
         cases = (
             (0, 2, ACTION_MOVE_LEFT),
             (2, 0, ACTION_MOVE_RIGHT),
@@ -2630,22 +2620,10 @@ class ChapterRailTest(unittest.TestCase):
                 self.assertEqual(control.selections, [selected])
                 self.assertEqual(control.selected, selected)
                 self.assertEqual(rail._selected_position, selected)
-                self.assertEqual(events, [])
+                expected = "left" if action_id == ACTION_MOVE_LEFT else "right"
+                self.assertEqual(events, [expected])
 
-    def test_reversal_after_correction_uses_last_accepted_position(self):
-        rail, control, events, _exit_events = self._rail(0)
-        control.simulate_native_navigation(2)
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
-        control.simulate_native_navigation(0)
-
-        rail.onAction(FakeAction(ACTION_MOVE_LEFT))
-
-        self.assertEqual(control.selections, [1])
-        self.assertEqual(control.selected, 0)
-        self.assertEqual(rail._selected_position, 0)
-        self.assertEqual([event["index"] for event in events], [1, 0])
-
-    def test_click_uses_position_corrected_after_native_overrun(self):
+    def test_click_uses_accepted_position_during_native_overrun(self):
         rail, control, _events, _exit_events = self._rail(0)
         selected_chapters = []
         rail.select_callback = selected_chapters.append
@@ -2656,7 +2634,7 @@ class ChapterRailTest(unittest.TestCase):
 
         self.assertEqual(
             [chapter["index"] for chapter in selected_chapters],
-            [1],
+            [0],
         )
 
     def test_vertical_and_back_actions_request_exit_without_closing(self):
@@ -2691,13 +2669,16 @@ class ChapterDialogManagerTest(unittest.TestCase):
             window=self.window,
         )
 
-    def test_open_focus_select_and_close_publish_layer_state(self):
+    def test_open_navigate_select_and_close_publish_layer_state(self):
         self.assertTrue(self.manager.open(100))
         self.assertEqual(self.window.getProperty(CHAPTER_OPEN), "true")
         dialog = FakeDialog.instances[-1]
-        dialog.kwargs["focus_callback"](dict(self.provider.chapters[1]))
+        dialog.kwargs["navigate_callback"]("right")
+        self.assertEqual(self.events[0][0], "chapter-navigate")
+        chapter = self.manager.navigate(self.events[0][1], 0.0)
+        self.assertEqual(chapter["index"], 1)
+        self.assertEqual(dialog.selections, [1])
         dialog.kwargs["select_callback"](dict(self.provider.chapters[1]))
-        self.assertEqual(self.events[0][0], "chapter-focus")
         self.assertEqual(self.events[1][0], "chapter-select")
         self.assertEqual(
             self.events[1][1]["playback_token"],
@@ -2735,26 +2716,21 @@ class ChapterDialogManagerTest(unittest.TestCase):
     def test_physical_direction_survives_manager_routing(self):
         self.manager.open()
         dialog = FakeDialog.instances[-1]
-        chapter = dict(self.provider.chapters[1])
-        chapter["physical_direction"] = "right"
-
-        dialog.kwargs["focus_callback"](chapter)
+        dialog.kwargs["navigate_callback"]("right")
 
         self.assertEqual(
             self.events,
             [
                 (
-                    "chapter-focus",
+                    "chapter-navigate",
                     {
-                        "index": 1,
-                        "start_seconds": 600.0,
-                        "playback_token": "playback-one",
                         "physical_direction": "right",
                         "dialog_generation": 1,
                     },
                 )
             ],
         )
+
 
     def test_exit_request_keeps_dialog_open_until_router_closes_it(self):
         self.manager.open()
@@ -2860,6 +2836,48 @@ class ChapterDialogManagerTest(unittest.TestCase):
         )
 
 
+class ChapterNavigationFilterTest(unittest.TestCase):
+    def setUp(self):
+        self.navigation = ChapterNavigationFilter()
+
+    def test_isolated_and_rapid_taps_each_move_once(self):
+        self.assertEqual(self.navigation.feed(1, 0.0), 1)
+        self.assertEqual(self.navigation.feed(1, 0.1), 1)
+        self.assertEqual(self.navigation.feed(1, 0.2), 1)
+        self.assertEqual(self.navigation.tick(0.5), 0)
+
+    def test_hold_onset_is_delayed_then_consumed_as_one_gesture(self):
+        outputs = [
+            self.navigation.feed(1, 0.0),
+            self.navigation.feed(1, 0.4),
+            self.navigation.feed(1, 0.508),
+            self.navigation.feed(1, 0.616),
+            self.navigation.feed(1, 0.724),
+        ]
+        self.assertEqual(outputs, [1, 0, 0, 0, 0])
+        self.assertTrue(self.navigation.hold_active)
+
+    def test_spaced_second_tap_settles_after_probe_window(self):
+        self.assertEqual(self.navigation.feed(1, 0.0), 1)
+        self.assertEqual(self.navigation.feed(1, 0.4), 0)
+        self.assertEqual(self.navigation.tick(0.58), 0)
+        self.assertEqual(self.navigation.tick(0.581), 1)
+
+    def test_release_rearms_next_press(self):
+        self.navigation.feed(1, 0.0)
+        self.navigation.feed(1, 0.4)
+        self.navigation.feed(1, 0.508)
+        self.navigation.feed(1, 0.616)
+        self.navigation.tick(1.0)
+        self.assertEqual(self.navigation.feed(1, 1.1), 1)
+
+    def test_reversal_settles_probe_and_moves_opposite_direction(self):
+        self.assertEqual(self.navigation.feed(1, 0.0), 1)
+        self.assertEqual(self.navigation.feed(1, 0.4), 0)
+        self.assertEqual(self.navigation.feed(-1, 0.5), 0)
+        self.assertEqual(self.navigation.tick(0.7), 0)
+
+
 class ServiceMonitorTest(unittest.TestCase):
     def test_only_htpc_seek_notifications_enter_input_queue(self):
         monitor = ServiceMonitor()
@@ -2870,7 +2888,7 @@ class ServiceMonitorTest(unittest.TestCase):
         )
         monitor.onNotification(
             "htpc.chapter",
-            "Other.chapter-focus",
+            "Other.chapter-navigate",
             '{"index":1}',
         )
         monitor.onNotification("other.addon", "Other.timeline-right", "{}")
@@ -2883,7 +2901,7 @@ class ServiceMonitorTest(unittest.TestCase):
     def test_boundary_purges_old_physical_and_chapter_inputs_only(self):
         monitor = ServiceMonitor()
         monitor.post_input("right", {"source": "physical"})
-        monitor.post_input("chapter-focus", {"source": "chapter"})
+        monitor.post_input("chapter-navigate", {"source": "chapter"})
         monitor.post_player("paused", {"operation": "pause-one"})
         monitor.post_player("started", {"identity": "new-media"})
         monitor.post_input("left", {"source": "current"})
@@ -3106,8 +3124,8 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
         self.monitor.drain()
         self.monitor.post_input("left", {"source": "physical"})
         self.monitor.post_input(
-            "chapter-focus",
-            {"source": "chapter", "index": 2},
+            "chapter-navigate",
+            {"source": "chapter", "physical_direction": "right"},
         )
         events = self.monitor.drain()
 
@@ -3124,9 +3142,9 @@ class SeekServiceGenerationFenceTest(unittest.TestCase):
                     input_generation=events[0][4],
                 ),
                 mock.call(
-                    "chapter-focus",
+                    "chapter-navigate",
                     events[1][3],
-                    {"source": "chapter", "index": 2},
+                    {"source": "chapter", "physical_direction": "right"},
                     input_generation=events[1][4],
                 ),
             ],

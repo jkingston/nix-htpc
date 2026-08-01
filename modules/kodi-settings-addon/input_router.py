@@ -171,10 +171,13 @@ class InputRouter(object):
             self.chapters.close()
             return self._select_chapter(payload, input_generation)
 
-        if action == "chapter-focus":
+        if action == "chapter-navigate":
             if not self.chapters.accepts_event(payload):
                 return True
-            return self._focus_chapter(payload)
+            chapter = self.chapters.navigate(payload, timestamp)
+            if chapter is not None:
+                return self._focus_chapter(chapter)
+            return True
 
         if action == "chapter-exit":
             if not self.chapters.accepts_event(payload):
@@ -314,6 +317,9 @@ class InputRouter(object):
         return False
 
     def tick(self):
+        chapter = self.chapters.tick(self.clock())
+        if chapter is not None:
+            self._focus_chapter(chapter)
         if self.pending_transition and not self.controller.active:
             transition = self.pending_transition
             transition_key = self.pending_transition_key

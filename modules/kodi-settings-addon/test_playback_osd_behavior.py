@@ -84,6 +84,10 @@ class FakePublisherBoundary(object):
 class FakeChapterBoundary(object):
     is_open = False
 
+    @staticmethod
+    def tick(_timestamp):
+        return None
+
 
 class PlaybackOsdHarness(object):
     def __init__(self):

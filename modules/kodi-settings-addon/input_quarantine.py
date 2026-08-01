@@ -27,7 +27,7 @@ PHYSICAL_KEYS = {
 
 
 def canonical_physical_key(action, payload=None):
-    if action == "chapter-focus":
+    if action == "chapter-navigate":
         direction = (payload or {}).get("physical_direction")
         return direction if direction in DIRECTION_KEYS else None
     if action == "chapter-exit":

@@ -21,12 +21,12 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
             ("timeline-up", {}, "up"),
             ("timeline-down", {}, "down"),
             (
-                "chapter-focus",
+                "chapter-navigate",
                 {"physical_direction": "left"},
                 "left",
             ),
             (
-                "chapter-focus",
+                "chapter-navigate",
                 {"physical_direction": "right"},
                 "right",
             ),
@@ -58,8 +58,8 @@ class CanonicalPhysicalKeyTest(unittest.TestCase):
         cases = (
             ("timeline-confirm", {}),
             ("timeline-cancel", {}),
-            ("chapter-focus", {}),
-            ("chapter-focus", {"physical_direction": "invalid"}),
+            ("chapter-navigate", {}),
+            ("chapter-navigate", {"physical_direction": "invalid"}),
             ("chapter-exit", {"arm_back": False}),
             ("chapter-exit", {"physical_direction": "invalid"}),
             ("chapter-exit", {}),

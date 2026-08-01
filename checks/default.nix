@@ -383,7 +383,7 @@ in
       "service.libreelec.settings"
       (map (addon: addon.namespace) kodiWithAddons.kodiRuntimeAddons));
     assert kodiSettingsAddon.namespace == "service.htpc.settings";
-    assert kodiSettingsAddon.version == "2.1.19";
+    assert kodiSettingsAddon.version == "2.1.20";
     assert kodiOsdReviewAddon.namespace == "script.htpc.osd-review";
     assert kodiOsdReviewAddon.version == "0.1.3";
     assert builtins.elem kodiSettingsAddon greetdRestartTriggers;
@@ -399,7 +399,7 @@ in
       }
       {
         addonId = "service.htpc.settings";
-        version = "2.1.19";
+        version = "2.1.20";
       }
       {
         addonId = "script.htpc.osd-review";
@@ -409,7 +409,7 @@ in
     assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
       enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
       enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
-      enable_managed_addon service.htpc.settings 2.1.19 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
+      enable_managed_addon service.htpc.settings 2.1.20 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
       enable_managed_addon script.htpc.osd-review 0.1.3 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
     '') kodiSettingsServiceScriptText;
     assert lib.hasInfix

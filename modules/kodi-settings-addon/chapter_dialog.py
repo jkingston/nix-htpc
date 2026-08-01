@@ -17,6 +17,14 @@ from media_contract import (
     parse_chapter_payload,
 )
 from seek_controller import format_time
+from seek_controller import (
+    HOLD_CONFIRM_EVENTS,
+    HOLD_ONSET_MAX,
+    HOLD_ONSET_MIN,
+    HOLD_PROBE_IDLE,
+    HOLD_RELEASE_IDLE,
+    HOLD_REPEAT_MAX,
+)
 
 
 CHAPTER_LIST_ID = 11
@@ -26,6 +34,82 @@ ACTION_MOVE_LEFT = 1
 ACTION_MOVE_RIGHT = 2
 ACTION_MOVE_UP = 3
 ACTION_MOVE_DOWN = 4
+
+
+class ChapterNavigationFilter(object):
+    """Classify stock-Kodi chapter callbacks without core extensions.
+
+    Kodi moves a focused panel before WindowXML delivers ``onAction`` and its
+    Python Action wrapper omits CAction's hold time. The dialog therefore
+    restores its accepted selection immediately while this pure classifier
+    distinguishes rapid taps from the measured CEC hold cadence. A proven
+    hold is one chapter gesture; an incomplete probe settles as discrete taps.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.last_input = None
+        self.direction = 0
+        self.probe_count = 0
+        self.hold_active = False
+
+    def feed(self, direction, now):
+        direction = -1 if int(direction) < 0 else 1
+        now = float(now)
+
+        if self.hold_active:
+            gap = now - self.last_input
+            if gap <= HOLD_RELEASE_IDLE and direction == self.direction:
+                self.last_input = now
+                return 0
+            self.reset()
+
+        settled = 0
+        if self.probe_count:
+            gap = now - self.last_input
+            if direction == self.direction and gap <= HOLD_REPEAT_MAX:
+                self.probe_count += 1
+                self.last_input = now
+                if self.probe_count >= HOLD_CONFIRM_EVENTS:
+                    self.probe_count = 0
+                    self.hold_active = True
+                return 0
+            settled = self.direction * self.probe_count
+            self.probe_count = 0
+
+        if self.last_input is None:
+            self.direction = direction
+            self.last_input = now
+            return settled + direction
+
+        gap = now - self.last_input
+        if direction != self.direction:
+            self.direction = direction
+            step = direction
+        elif HOLD_ONSET_MIN <= gap <= HOLD_ONSET_MAX:
+            self.probe_count = 1
+            step = 0
+        else:
+            step = direction
+        self.last_input = now
+        return settled + step
+
+    def tick(self, now):
+        if self.last_input is None:
+            return 0
+        now = float(now)
+        gap = now - self.last_input
+        if self.hold_active:
+            if gap > HOLD_RELEASE_IDLE:
+                self.reset()
+            return 0
+        if self.probe_count and gap > HOLD_PROBE_IDLE:
+            settled = self.direction * self.probe_count
+            self.probe_count = 0
+            return settled
+        return 0
 
 
 class ChapterPropertyProvider(object):
@@ -67,8 +151,9 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
         self.chapters = kwargs.pop("chapters", [])
         self.current_seconds = float(kwargs.pop("current_seconds", 0.0))
         self.select_callback = kwargs.pop("select_callback", None)
-        self.focus_callback = kwargs.pop("focus_callback", None)
+        self.navigate_callback = kwargs.pop("navigate_callback", None)
         self.exit_callback = kwargs.pop("exit_callback", None)
+        self.initial_position = kwargs.pop("initial_position", None)
         self._closing = False
         self._selected_position = None
         super(ChapterRail, self).__init__(*args, **kwargs)
@@ -89,6 +174,11 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             items.append(item)
             if chapter["start_seconds"] <= self.current_seconds:
                 focus_position = position
+        if self.initial_position is not None:
+            focus_position = max(
+                0,
+                min(len(self.chapters) - 1, int(self.initial_position)),
+            )
         control.addItems(items)
         try:
             control.selectItem(focus_position)
@@ -100,8 +190,9 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
     def onClick(self, control_id):
         if control_id != CHAPTER_LIST_ID or self._closing:
             return
-        control = self.getControl(CHAPTER_LIST_ID)
-        position = control.getSelectedPosition()
+        position = self._selected_position
+        if position is None:
+            return
         if not 0 <= position < len(self.chapters):
             return
         chapter = dict(self.chapters[position])
@@ -119,34 +210,17 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             if previous_position is None:
                 self._selected_position = native_position
                 return
-            # WindowXML callbacks can queue behind several native panel moves.
-            # An earlier callback may already have corrected the live control,
-            # so each callback advances from our accepted position and the
-            # native position is used only to repair the panel when necessary.
-            delta = -1 if action_id == ACTION_MOVE_LEFT else 1
-            selected = max(
-                0,
-                min(len(self.chapters) - 1, previous_position + delta),
-            )
-            if selected == previous_position:
-                if native_position != selected:
-                    try:
-                        control.selectItem(selected)
-                    except AttributeError:
-                        pass
-                return
-            if native_position != selected:
+            if native_position != previous_position:
                 try:
-                    control.selectItem(selected)
+                    control.selectItem(previous_position)
                 except AttributeError:
                     return
-            self._selected_position = selected
-            if self.focus_callback:
-                chapter = dict(self.chapters[selected])
-                chapter["physical_direction"] = (
-                    "left" if action_id == ACTION_MOVE_LEFT else "right"
+            if self.navigate_callback:
+                self.navigate_callback(
+                    "left"
+                    if action_id == ACTION_MOVE_LEFT
+                    else "right"
                 )
-                self.focus_callback(chapter)
         elif action_id == ACTION_MOVE_UP:
             self._request_exit("top", "up")
         elif action_id == ACTION_MOVE_DOWN:
@@ -165,6 +239,20 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             return
         self._closing = True
         self.close()
+
+    def select_position(self, position):
+        if self._closing:
+            return False
+        position = int(position)
+        if not 0 <= position < len(self.chapters):
+            return False
+        control = self.getControl(CHAPTER_LIST_ID)
+        try:
+            control.selectItem(position)
+        except AttributeError:
+            return False
+        self._selected_position = position
+        return True
 
 
 class ChapterDialogManager(object):
@@ -186,6 +274,9 @@ class ChapterDialogManager(object):
         self.dialog_generation = 0
         self.active_dialog_generation = None
         self.pending_synthetic_generation = None
+        self.chapter_snapshot = []
+        self.selected_position = None
+        self.navigation = ChapterNavigationFilter()
 
     @property
     def is_open(self):
@@ -201,6 +292,12 @@ class ChapterDialogManager(object):
         if len(chapters) < 2:
             return False
         self.token = token
+        self.chapter_snapshot = list(chapters)
+        self.selected_position = 0
+        for position, chapter in enumerate(chapters):
+            if chapter["start_seconds"] <= float(current_seconds):
+                self.selected_position = position
+        self.navigation.reset()
         self.dialog_generation += 1
         generation = self.dialog_generation
         self.active_dialog_generation = generation
@@ -212,8 +309,9 @@ class ChapterDialogManager(object):
             "1080i",
             chapters=chapters,
             current_seconds=current_seconds,
+            initial_position=self.selected_position,
             select_callback=partial(self._selected, generation),
-            focus_callback=partial(self._focused, generation),
+            navigate_callback=partial(self._navigated, generation),
             exit_callback=partial(self._exit, generation),
         )
         self.dialog.show()
@@ -225,10 +323,42 @@ class ChapterDialogManager(object):
         chapter["dialog_generation"] = generation
         self.event_sink("chapter-select", chapter)
 
-    def _focused(self, generation, chapter):
+    def _navigated(self, generation, direction):
+        self.event_sink(
+            "chapter-navigate",
+            {
+                "dialog_generation": generation,
+                "physical_direction": direction,
+            },
+        )
+
+    def navigate(self, payload, timestamp):
+        direction = -1 if payload.get("physical_direction") == "left" else 1
+        return self._move(self.navigation.feed(direction, timestamp))
+
+    def tick(self, timestamp):
+        return self._move(self.navigation.tick(timestamp))
+
+    def _move(self, delta):
+        if not delta or self.dialog is None or self.selected_position is None:
+            return None
+        selected = max(
+            0,
+            min(
+                len(self.chapter_snapshot) - 1,
+                self.selected_position + int(delta),
+            ),
+        )
+        if selected == self.selected_position:
+            return None
+        if not self.dialog.select_position(selected):
+            return None
+        self.selected_position = selected
+        chapter = dict(self.chapter_snapshot[selected])
         chapter["playback_token"] = self.token
-        chapter["dialog_generation"] = generation
-        self.event_sink("chapter-focus", chapter)
+        chapter["dialog_generation"] = self.active_dialog_generation
+        chapter["physical_direction"] = "left" if delta < 0 else "right"
+        return chapter
 
     def _exit(self, generation, destination, physical_direction=None):
         payload = {
@@ -260,6 +390,9 @@ class ChapterDialogManager(object):
         generation = self.active_dialog_generation
         self.dialog = None
         self.token = None
+        self.chapter_snapshot = []
+        self.selected_position = None
+        self.navigation.reset()
         self.active_dialog_generation = None
         self.pending_synthetic_generation = None
         self.window.clearProperty(CHAPTER_OPEN)
