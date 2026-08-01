@@ -394,7 +394,7 @@ class ServiceMonitor(xbmc.Monitor):
 class SeekService(object):
     def __init__(self, monitor, addon_path=None):
         self.monitor = monitor
-        self.publisher = KodiPropertyPublisher()
+        self.publisher = KodiPropertyPublisher(logger=log)
         self.presenter = BingiePresenter(logger=log)
         self.lease = ServiceLease()
         self.player = KodiPlayerAdapter(event_sink=monitor.post_player, logger=log)

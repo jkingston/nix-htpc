@@ -208,20 +208,24 @@ def chapter_contract_available(properties, minimum=2):
     return all(chapter["image_path"] for chapter in chapters)
 
 
-def validated_preview(properties, seek_snapshot):
-    """Return an exact preview path only after the JSON commit token matches."""
+def preview_validation(properties, seek_snapshot):
+    """Return ``(path, reason)`` for the exact-preview contract.
+
+    Reason codes are deliberately value-free so they can be logged without
+    exposing a server, token, item id, or generated filesystem path.
+    """
     if not seek_snapshot.get("active"):
-        return ""
+        return "", "idle"
     path = properties.get(PREVIEW_PATH) or ""
     serialized = properties.get(PREVIEW_TOKEN) or ""
     if not path or not serialized:
-        return ""
+        return "", "producer-empty"
     try:
         token = json.loads(serialized)
     except (TypeError, ValueError):
-        return ""
+        return "", "token-json"
     if not isinstance(token, dict) or token.get("schema") != 1:
-        return ""
+        return "", "token-schema"
     try:
         generation = int(token.get("seek_generation"))
         target = int(token.get("target_seconds"))
@@ -229,40 +233,45 @@ def validated_preview(properties, seek_snapshot):
         revision = int(token.get("revision"))
         float(token.get("sample_seconds"))
     except (TypeError, ValueError):
-        return ""
+        return "", "token-fields"
     if generation != int(seek_snapshot.get("generation", -1)):
-        return ""
+        return "", "generation"
     if target != int(seek_snapshot.get("target_seconds", -1)):
-        return ""
+        return "", "target"
     if frame < 0 or revision < 0 or not _text(token.get("playback")):
-        return ""
+        return "", "token-fields"
     if _text(properties.get(PREVIEW_PLAYBACK)) != _text(
         token.get("playback")
     ):
-        return ""
+        return "", "playback-component"
     if not _same_integer(
         properties.get(PREVIEW_GENERATION),
         token.get("seek_generation"),
     ):
-        return ""
+        return "", "generation-component"
     if not _same_number(
         properties.get(PREVIEW_TARGET),
         token.get("target_seconds"),
     ):
-        return ""
+        return "", "target-component"
     if not _same_number(
         properties.get(PREVIEW_SAMPLE),
         token.get("sample_seconds"),
     ):
-        return ""
+        return "", "sample-component"
     if not _same_integer(
         properties.get(PREVIEW_FRAME),
         token.get("frame_index"),
     ):
-        return ""
+        return "", "frame-component"
     if not _same_integer(
         properties.get(PREVIEW_REVISION),
         token.get("revision"),
     ):
-        return ""
-    return path
+        return "", "revision-component"
+    return path, "ready"
+
+
+def validated_preview(properties, seek_snapshot):
+    """Return an exact preview path only after the JSON commit token matches."""
+    return preview_validation(properties, seek_snapshot)[0]

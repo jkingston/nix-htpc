@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -45,6 +46,25 @@ def load_module():
 
 
 trickplay = load_module()
+
+
+def load_media_contract():
+    root = pathlib.Path(
+        os.environ.get(
+            "HTPC_SETTINGS_ROOT",
+            pathlib.Path(__file__).parents[1] / "kodi-settings-addon",
+        )
+    )
+    spec = importlib.util.spec_from_file_location(
+        "htpc_media_contract",
+        root / "media_contract.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+media_contract = load_media_contract()
 
 INFO = {
     "Interval": 10000,
@@ -126,7 +146,7 @@ class TrickplayTest(unittest.TestCase):
             "prefetch_slot": trickplay.LatestRequestSlot(),
             "output_slots": trickplay.OutputSlots(output_root, 3),
             "publish_lock": threading.RLock(),
-            "last_preview_failure_log": None,
+            "preview_failure_diagnostics": {},
         }
         state["request_slot"].submit(request)
         return state
@@ -308,6 +328,105 @@ class TrickplayTest(unittest.TestCase):
             (139, 1, (2880, 720, 3200, 960)),
         )
 
+    def test_real_pillow_sprite_crop_publishes_valid_consumer_contract(self):
+        from PIL import Image
+
+        info = {
+            "Interval": 1000,
+            "ThumbnailCount": 2,
+            "TileWidth": 2,
+            "TileHeight": 1,
+            "Width": 10,
+            "Height": 10,
+        }
+        sprite = Image.new("RGB", (20, 10), (255, 0, 0))
+        sprite.paste((0, 0, 255), (10, 0, 20, 10))
+        encoded = io.BytesIO()
+        sprite.save(encoded, "JPEG", quality=100, subsampling=0)
+        sprite.close()
+
+        with tempfile.TemporaryDirectory() as root:
+            request = trickplay.make_preview_request(
+                "playback-1",
+                3,
+                "7",
+                "1",
+                info,
+                1,
+            )
+            state = self.make_process_state(root, request)
+            frame_root = os.path.join(root, "frames")
+            os.makedirs(frame_root)
+            state.update(
+                {
+                    "info": info,
+                    "item_id": "private-item",
+                    "media_source_id": "private-source",
+                    "width": 10,
+                    "client": object(),
+                    "frame_root": frame_root,
+                    "sprite_cache": trickplay.ByteLruCache(1024 * 1024),
+                    "frame_cache": trickplay.FileLruCache(4),
+                    "sprite_condition": threading.Condition(threading.RLock()),
+                    "inflight_sprites": set(),
+                    "background_network_lock": threading.Lock(),
+                    "decoded_sprites": trickplay.OrderedDict(),
+                    "decode_lock": threading.RLock(),
+                    "exact_session": object(),
+                    "prefetch_session": object(),
+                }
+            )
+            store = PropertyStore(
+                {
+                    trickplay.SEEK_ACTIVE: "true",
+                    trickplay.SEEK_GENERATION: "7",
+                    trickplay.SEEK_TARGET: "1",
+                }
+            )
+            messages = []
+            trickplay.window = store.window
+            trickplay.LOG = types.SimpleNamespace(
+                debug=lambda *_args: None,
+                info=lambda message, *args: messages.append(
+                    message % args if args else message
+                ),
+                warning=lambda *_args: None,
+            )
+            manager = trickplay.TrickplayPreviewManager(None)
+            manager._download = lambda *_args, **_kwargs: encoded.getvalue()
+
+            pending = state["request_slot"].take(threading.Event())
+            self.assertTrue(
+                manager._process_preview_request(
+                    state,
+                    pending,
+                    threading.Event(),
+                )
+            )
+
+            published = store.values[trickplay.PREVIEW_PATH]
+            with Image.open(published) as cropped:
+                self.assertEqual(cropped.size, (10, 10))
+                red, _green, blue = cropped.getpixel((5, 5))
+                self.assertGreater(blue, red)
+
+            self.assertEqual(
+                media_contract.validated_preview(
+                    store.values,
+                    {"active": True, "generation": 7, "target_seconds": 1},
+                ),
+                published,
+            )
+            diagnostics = "\n".join(messages)
+            for stage in ("download", "decode", "crop", "publication"):
+                self.assertIn("stage=%s outcome=ready" % stage, diagnostics)
+            for private_value in (
+                "private-item",
+                "private-source",
+                published,
+            ):
+                self.assertNotIn(private_value, diagnostics)
+
     def test_selects_nearest_complete_trickplay_resolution(self):
         metadata = {
             "source": {
@@ -324,6 +443,43 @@ class TrickplayTest(unittest.TestCase):
             trickplay.select_trickplay({"source": {"320": {}}}, "source"),
             (None, None, None),
         )
+
+    def test_diagnostic_media_kind_is_allowlisted(self):
+        self.assertEqual(trickplay._media_kind("Movie"), "Movie")
+        self.assertEqual(trickplay._media_kind("Episode"), "Episode")
+        self.assertEqual(trickplay._media_kind("private-title"), "unknown")
+
+    def test_success_diagnostic_never_breaks_a_preview(self):
+        original_log = trickplay.LOG
+        calls = []
+
+        def broken_logger(*_args):
+            calls.append("attempted")
+            raise RuntimeError("logger unavailable")
+
+        try:
+            trickplay.LOG = types.SimpleNamespace(info=broken_logger)
+            state = {}
+            self.assertTrue(
+                trickplay._log_stage_once(
+                    state,
+                    "publication",
+                    "ready",
+                    "contract",
+                )
+            )
+            self.assertFalse(
+                trickplay._log_stage_once(
+                    state,
+                    "publication",
+                    "ready",
+                    "contract",
+                )
+            )
+            self.assertEqual(calls, ["attempted"])
+            self.assertIn("diagnostics_lock", state)
+        finally:
+            trickplay.LOG = original_log
 
     def test_fallback_manifest_replaces_stale_playback_source(self):
         manifest = {
@@ -444,6 +600,47 @@ class TrickplayTest(unittest.TestCase):
             manager._clear_if_owned = lambda _state: None
             manager._run(item, 3, "playback-1", abort, root)
             self.assertEqual(selected_sources, ["manifest-source"])
+
+    def test_missing_manifest_diagnostic_is_structured_and_private(self):
+        with tempfile.TemporaryDirectory() as root:
+            item = {
+                "Id": "private-item-id",
+                "MediaSourceId": "private-source-id",
+                "Type": "Episode",
+                "Server": object(),
+            }
+            abort = threading.Event()
+            messages = []
+            trickplay.LOG = types.SimpleNamespace(
+                warning=lambda *_args: None,
+                info=lambda message, *args: messages.append(
+                    message % args if args else message
+                ),
+            )
+            manager = trickplay.TrickplayPreviewManager(None)
+            manager._load_metadata = lambda _item, _abort: {"Trickplay": {}}
+
+            def new_state(*_args):
+                abort.set()
+                return {}
+
+            manager._new_state = new_state
+            manager._close_state = lambda _state: None
+            manager._clear_if_owned = lambda _state: None
+            manager._run(item, 3, "private-playback", abort, root)
+
+            diagnostics = "\n".join(messages)
+            self.assertIn(
+                "stage=metadata outcome=unavailable reason=no-manifest "
+                "media=Episode",
+                diagnostics,
+            )
+            for private_value in (
+                "private-item-id",
+                "private-source-id",
+                "private-playback",
+            ):
+                self.assertNotIn(private_value, diagnostics)
 
     def test_metadata_startup_retries_then_recovers(self):
         metadata = {"Trickplay": {"source": {"320": INFO}}}
@@ -568,8 +765,14 @@ class TrickplayTest(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(calls, ["item-1"])
         self.assertEqual(len(warnings), 1)
-        self.assertIn("terminal failure", warnings[0][0])
-        self.assertIn(404, warnings[0])
+        message = warnings[0][0] % warnings[0][1:]
+        self.assertEqual(
+            message,
+            "HTPC trickplay stage=metadata outcome=unavailable "
+            "reason=http-404",
+        )
+        self.assertNotIn("item-1", message)
+        self.assertNotIn("not found", message)
 
     def test_metadata_failure_finishing_after_abort_is_not_logged(self):
         started = threading.Event()
@@ -1307,12 +1510,32 @@ class TrickplayTest(unittest.TestCase):
             self.assertTrue(manager._log_preview_failure(state, request, error))
             self.assertFalse(manager._log_preview_failure(state, request, error))
             self.assertEqual(len(warnings), 1)
+            message = warnings[0][0] % warnings[0][1:]
+            self.assertEqual(
+                message,
+                "HTPC trickplay stage=producer outcome=unavailable "
+                "reason=unavailable transient=True",
+            )
+            self.assertNotIn("offline", message)
 
-            state["last_preview_failure_log"] -= (
+            state["preview_failure_diagnostics"][("producer", "unavailable")] -= (
                 trickplay.PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS + 1
             )
             self.assertTrue(manager._log_preview_failure(state, request, error))
             self.assertEqual(len(warnings), 2)
+
+            different_stage = trickplay.PreviewFailure(
+                "private path detail",
+                True,
+                stage="decode",
+                reason="invalid-image",
+            )
+            self.assertTrue(
+                manager._log_preview_failure(state, request, different_stage)
+            )
+            different_message = warnings[-1][0] % warnings[-1][1:]
+            self.assertIn("stage=decode", different_message)
+            self.assertNotIn("private path detail", different_message)
 
     def test_published_preview_has_complete_token_and_commit_order(self):
         with tempfile.TemporaryDirectory() as root:

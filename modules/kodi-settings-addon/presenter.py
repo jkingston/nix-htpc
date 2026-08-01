@@ -23,7 +23,7 @@ from media_contract import (
     PREVIEW_SAMPLE,
     PREVIEW_FRAME,
     PREVIEW_REVISION,
-    validated_preview,
+    preview_validation,
 )
 
 
@@ -36,11 +36,15 @@ TIMELINE_MARKER_CONTROL_WIDTH = (
 
 
 class KodiPropertyPublisher(object):
-    def __init__(self, window=None):
+    def __init__(self, window=None, logger=None):
         self.window = window or xbmcgui.Window(HOME_WINDOW_ID)
+        self.logger = logger
         self.last = {}
         self.view_slot = None
         self.view_signature = None
+        self.preview_diagnostic_generation = None
+        self.preview_diagnostics_seen = set()
+        self.texture_handoff_generation = None
 
     def publish(self, snapshot):
         values = {
@@ -73,7 +77,25 @@ class KodiPropertyPublisher(object):
             (key, self.window.getProperty(key))
             for key in keys
         )
-        return validated_preview(properties, snapshot)
+        path, reason = preview_validation(properties, snapshot)
+        generation = snapshot.get("generation") if snapshot.get("active") else None
+        if generation != self.preview_diagnostic_generation:
+            self.preview_diagnostic_generation = generation
+            self.preview_diagnostics_seen = set()
+            self.texture_handoff_generation = None
+        outcome = "ready" if path else "rejected"
+        diagnostic = (outcome, reason)
+        if (
+            generation is not None
+            and diagnostic not in self.preview_diagnostics_seen
+        ):
+            self.preview_diagnostics_seen.add(diagnostic)
+            if self.logger is not None:
+                self.logger(
+                    "trickplay stage=validator outcome=%s reason=%s"
+                    % diagnostic
+                )
+        return path
 
     @staticmethod
     def _safe_percent(value):
@@ -191,6 +213,22 @@ class KodiPropertyPublisher(object):
         self.view_slot = next_slot
         self.view_signature = signature
 
+        generation = view.get("controller_generation")
+        if (
+            self.logger is not None
+            and view.get("preview_status") == "ready"
+            and view.get("preview_path")
+            and generation is not None
+            and generation != self.texture_handoff_generation
+        ):
+            # Kodi offers no texture-loaded callback. This records the final
+            # property handoff to the skin; a screenshot verifies rendering.
+            self.logger(
+                "trickplay stage=texture-handoff outcome=ready "
+                "reason=property-commit"
+            )
+            self.texture_handoff_generation = generation
+
         value = "true" if active else ""
         if self.last.get("viewactive") != value:
             if value:
@@ -205,6 +243,9 @@ class KodiPropertyPublisher(object):
         self.last = {}
         self.view_slot = None
         self.view_signature = None
+        self.preview_diagnostic_generation = None
+        self.preview_diagnostics_seen = set()
+        self.texture_handoff_generation = None
 
     def clear_controller(self):
         """Clear the transaction contract without tearing the latched view."""

@@ -13,7 +13,7 @@ let
     ];
   });
   kodiPackages = kodiCore.packages;
-  kodiSettingsAddonVersion = "2.1.18";
+  kodiSettingsAddonVersion = "2.1.19";
   kodiOsdReviewAddonVersion = "0.1.3";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   simplejsonIdentity = {
@@ -178,7 +178,7 @@ let
     '';
   };
   jellyfinHtpc = import ./jellyfin {
-    inherit kodiPackages;
+    inherit kodiPackages pkgs;
   };
   baseKodiAddonRoots = [
     jellyfinHtpc
@@ -217,6 +217,9 @@ let
       == kodiAddonReconciler.managedAddons;
     assert builtins.elem bingieHelper kodiRuntimeAddons;
     assert builtins.elem simplejson kodiRuntimeAddons;
+    assert builtins.elem
+      kodiCore.pythonPackages.pillow
+      jellyfinHtpc.propagatedBuildInputs;
     pkgs.runCommand "kodi-bingie-dependencies-check" {
       nativeBuildInputs = [
         pkgs.coreutils
@@ -229,6 +232,9 @@ let
       helper_manifest=${
         bingieHelper
       }/share/kodi/addons/script.bingie.helper/addon.xml
+      pil_manifest=${
+        kodiCore
+      }/share/kodi/addons/script.module.pil/addon.xml
 
       check_manifest() {
         manifest="$1"
@@ -252,6 +258,10 @@ let
         script.bingie.helper \
         ${lib.escapeShellArg bingieHelperIdentity.version} \
         ${lib.escapeShellArg bingieHelperIdentity.manifestSha256}
+      test "$(xmllint --xpath 'string(/addon/@id)' "$pil_manifest")" = \
+        script.module.pil
+      test "$(xmllint --xpath 'string(/addon/@version)' "$pil_manifest")" = \
+        5.1.0
 
       test -f "${
         kodiWithAddons
@@ -275,6 +285,15 @@ let
         ${kodiWithAddons}/bin/kodi
       grep -Fq \
         ${lib.escapeShellArg "${kodiCore}/bin/kodi"} \
+        ${kodiWithAddons}/bin/kodi
+      test -d ${
+        kodiCore.pythonPackages.pillow
+      }/${kodiCore.pythonPackages.python.sitePackages}/PIL
+      grep -Fq \
+        ${lib.escapeShellArg "${kodiCore.pythonPackages.pillow}"} \
+        ${jellyfinHtpc}/nix-support/propagated-build-inputs
+      grep -Fq \
+        ${lib.escapeShellArg "${kodiCore.pythonPackages.pillow}/"} \
         ${kodiWithAddons}/bin/kodi
       test "$(
         sha256sum ${kodiTcpServerRaceBackport} | cut -d ' ' -f 1

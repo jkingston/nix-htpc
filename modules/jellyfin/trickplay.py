@@ -64,9 +64,17 @@ CHAPTER_RETRY_BACKOFFS = (0.20, 0.60)
 
 
 class PreviewFailure(Exception):
-    def __init__(self, message, transient=True):
+    def __init__(
+        self,
+        message,
+        transient=True,
+        stage="producer",
+        reason="unavailable",
+    ):
         super(PreviewFailure, self).__init__(message)
         self.transient = bool(transient)
+        self.stage = str(stage)
+        self.reason = str(reason)
 
 
 class ByteLruCache(object):
@@ -547,6 +555,46 @@ def _http_status(error):
     return None
 
 
+def _request_failure_reason(error):
+    status = _http_status(error)
+    if status is not None:
+        return "http-%d" % status
+    timeout_type = getattr(requests, "Timeout", ())
+    if timeout_type and isinstance(error, timeout_type):
+        return "timeout"
+    connection_type = getattr(requests, "ConnectionError", ())
+    if connection_type and isinstance(error, connection_type):
+        return "connection"
+    return "request-error"
+
+
+def _media_kind(value):
+    """Return a small diagnostic category, never an arbitrary metadata value."""
+    kind = str(value or "")
+    return kind if kind in ("Movie", "Episode", "Video") else "unknown"
+
+
+def _log_stage_once(state, stage, outcome, reason):
+    diagnostic = (str(stage), str(outcome), str(reason))
+    lock = state.setdefault("diagnostics_lock", threading.Lock())
+    with lock:
+        seen = state.setdefault("diagnostics_seen", set())
+        if diagnostic in seen:
+            return False
+        seen.add(diagnostic)
+    try:
+        LOG.info(
+            "HTPC trickplay stage=%s outcome=%s reason=%s",
+            diagnostic[0],
+            diagnostic[1],
+            diagnostic[2],
+        )
+    except Exception:
+        # Diagnostics must never turn a valid preview into a failed request.
+        pass
+    return True
+
+
 def sanitize_chapters(chapters, duration_seconds):
     """Return finite, in-range, sorted and meaningfully distinct chapters."""
     try:
@@ -740,10 +788,22 @@ class TrickplayPreviewManager(object):
                 item.get("MediaSourceId"),
             )
             if info is None:
+                reason = (
+                    "no-manifest"
+                    if not metadata.get("Trickplay")
+                    else "unsupported-manifest"
+                )
                 LOG.info(
-                    "HTPC trickplay manifest unavailable item=%s source=%s",
-                    item.get("Id"),
-                    item.get("MediaSourceId"),
+                    "HTPC trickplay stage=metadata outcome=unavailable "
+                    "reason=%s media=%s",
+                    reason,
+                    _media_kind(item.get("Type")),
+                )
+            else:
+                LOG.info(
+                    "HTPC trickplay stage=metadata outcome=ready "
+                    "reason=manifest media=%s",
+                    _media_kind(item.get("Type")),
                 )
             duration = media_duration_seconds(item, metadata, self.player)
             chapters = sanitize_chapters(metadata.get("Chapters") or [], duration)
@@ -832,11 +892,20 @@ class TrickplayPreviewManager(object):
                     continue
 
                 state["request_slot"].submit(request)
+                _log_stage_once(
+                    state,
+                    "request",
+                    "ready",
+                    "seek-target",
+                )
                 last_observed = observed
                 last_target = numeric_target
-        except Exception as error:
+        except Exception:
             if not abort.is_set():
-                LOG.warning("HTPC preview bridge unavailable: %s", error)
+                LOG.warning(
+                    "HTPC trickplay stage=lifecycle outcome=failed "
+                    "reason=unexpected"
+                )
         finally:
             abort.set()
             if state is not None:
@@ -865,8 +934,8 @@ class TrickplayPreviewManager(object):
                     return None
                 if failures:
                     LOG.info(
-                        "HTPC preview metadata recovered item=%s attempts=%s",
-                        item.get("Id"),
+                        "HTPC trickplay stage=metadata outcome=recovered "
+                        "reason=retry attempts=%s",
                         failures + 1,
                     )
                 return metadata
@@ -877,11 +946,9 @@ class TrickplayPreviewManager(object):
                 status = _http_status(error)
                 if status in METADATA_TERMINAL_HTTP_STATUSES:
                     LOG.warning(
-                        "HTPC preview metadata terminal failure item=%s "
-                        "status=%s: %s",
-                        item.get("Id"),
+                        "HTPC trickplay stage=metadata outcome=unavailable "
+                        "reason=http-%s",
                         status,
-                        error,
                     )
                     return None
 
@@ -900,12 +967,11 @@ class TrickplayPreviewManager(object):
                     >= METADATA_DIAGNOSTIC_INTERVAL_SECONDS
                 ):
                     LOG.warning(
-                        "HTPC preview metadata transient failure item=%s "
-                        "attempt=%s retry_seconds=%s: %s",
-                        item.get("Id"),
+                        "HTPC trickplay stage=metadata outcome=retry "
+                        "reason=%s attempt=%s retry_seconds=%s",
+                        _request_failure_reason(error),
                         failures,
                         delay,
-                        error,
                     )
                     last_diagnostic = now
                 if abort.wait(max(0.0, float(delay))):
@@ -958,7 +1024,9 @@ class TrickplayPreviewManager(object):
             "prefetch_session": self._new_session(client),
             "chapter_session": self._new_session(client),
             "manifest_revision": 0,
-            "last_preview_failure_log": None,
+            "preview_failure_diagnostics": {},
+            "diagnostics_lock": threading.Lock(),
+            "diagnostics_seen": set(),
             "workers": [],
         }
 
@@ -971,7 +1039,10 @@ class TrickplayPreviewManager(object):
                 self._process_preview_request(state, request, abort)
             except Exception as error:
                 if not abort.is_set():
-                    LOG.warning("Exact trickplay request failed: %s", error)
+                    LOG.warning(
+                        "HTPC trickplay stage=producer outcome=failed "
+                        "reason=unexpected"
+                    )
 
     def _process_preview_request(self, state, request, abort):
         attempts = len(PREVIEW_RETRY_BACKOFFS) + 1
@@ -984,6 +1055,14 @@ class TrickplayPreviewManager(object):
                     request["frame"],
                     abort,
                     foreground=True,
+                )
+                if self._latest_current_request(state, request, abort) is None:
+                    return False
+                published = self._publish_preview(
+                    state,
+                    request,
+                    source_path,
+                    abort,
                 )
             except PreviewFailure as error:
                 retry = error.transient and attempt < len(PREVIEW_RETRY_BACKOFFS)
@@ -1010,14 +1089,6 @@ class TrickplayPreviewManager(object):
                     return False
                 continue
 
-            if self._latest_current_request(state, request, abort) is None:
-                return False
-            published = self._publish_preview(
-                state,
-                request,
-                source_path,
-                abort,
-            )
             if published is None:
                 return False
             state["request_slot"].discard_pending(published)
@@ -1028,22 +1099,21 @@ class TrickplayPreviewManager(object):
     @staticmethod
     def _log_preview_failure(state, request, error):
         now = time.monotonic()
-        previous = state.get("last_preview_failure_log")
+        diagnostic = (error.stage, error.reason)
+        diagnostics = state.setdefault("preview_failure_diagnostics", {})
+        previous = diagnostics.get(diagnostic)
         if (
             previous is not None
             and now - previous < PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS
         ):
             return False
-        state["last_preview_failure_log"] = now
+        diagnostics[diagnostic] = now
         LOG.warning(
-            "HTPC exact preview unavailable item=%s source=%s width=%s "
-            "frame=%s transient=%s: %s",
-            state.get("item_id"),
-            state.get("media_source_id"),
-            state.get("width"),
-            request.get("frame"),
+            "HTPC trickplay stage=%s outcome=unavailable reason=%s "
+            "transient=%s",
+            error.stage,
+            error.reason,
             error.transient,
-            error,
         )
         return True
 
@@ -1073,29 +1143,53 @@ class TrickplayPreviewManager(object):
 
     def _publish_preview(self, state, request, source_path, abort):
         """Commit this sampled frame for the exact latest matching target."""
-        staged_path = state["output_slots"].stage(source_path)
-        with self._property_lock:
-            latest = self._latest_current_request(state, request, abort)
-            if latest is None:
-                return None
-            payload = latest["token"]
-            token_json = json.dumps(
-                payload,
-                sort_keys=True,
-                separators=(",", ":"),
+        try:
+            staged_path = state["output_slots"].stage(source_path)
+        except Exception:
+            raise PreviewFailure(
+                "preview publication failed",
+                True,
+                stage="publication",
+                reason="file-io",
             )
-            # Install path and component fields first. The token and exact
-            # target are the final consistency fields validated by readers.
-            window(PREVIEW_PATH, staged_path)
-            state["output_slots"].activate(staged_path)
-            window(PREVIEW_PLAYBACK, payload["playback"])
-            window(PREVIEW_GENERATION, payload["seek_generation"])
-            window(PREVIEW_SAMPLE, str(payload["sample_seconds"]))
-            window(PREVIEW_FRAME, str(payload["frame_index"]))
-            window(PREVIEW_REVISION, str(payload["revision"]))
-            window(PREVIEW_TOKEN, token_json)
-            window(PREVIEW_TARGET, latest["target_text"])
-        return latest
+        try:
+            with self._property_lock:
+                latest = self._latest_current_request(state, request, abort)
+                if latest is None:
+                    return None
+                payload = latest["token"]
+                token_json = json.dumps(
+                    payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                # Install path and component fields first. The token and exact
+                # target are the final consistency fields validated by readers.
+                window(PREVIEW_PATH, staged_path)
+                state["output_slots"].activate(staged_path)
+                window(PREVIEW_PLAYBACK, payload["playback"])
+                window(PREVIEW_GENERATION, payload["seek_generation"])
+                window(PREVIEW_SAMPLE, str(payload["sample_seconds"]))
+                window(PREVIEW_FRAME, str(payload["frame_index"]))
+                window(PREVIEW_REVISION, str(payload["revision"]))
+                window(PREVIEW_TOKEN, token_json)
+                window(PREVIEW_TARGET, latest["target_text"])
+                _log_stage_once(
+                    state,
+                    "publication",
+                    "ready",
+                    "contract",
+                )
+                return latest
+        except PreviewFailure:
+            raise
+        except Exception:
+            raise PreviewFailure(
+                "preview property publication failed",
+                True,
+                stage="publication",
+                reason="property-write",
+            )
 
     def _clear_preview_if_current(self, state, request, abort):
         with self._property_lock:
@@ -1141,9 +1235,10 @@ class TrickplayPreviewManager(object):
             except PreviewFailure as error:
                 if not abort.is_set():
                     LOG.debug(
-                        "Directional trickplay neighbor %s unavailable: %s",
-                        request["frame"],
-                        error,
+                        "HTPC trickplay stage=%s outcome=unavailable "
+                        "reason=%s lane=neighbor",
+                        error.stage,
+                        error.reason,
                     )
 
     def _resolve_frame_path(self, state, frame, abort, foreground):
@@ -1151,9 +1246,19 @@ class TrickplayPreviewManager(object):
         if cached is not None:
             return cached
         if state["info"] is None:
-            raise PreviewFailure("exact trickplay metadata is unavailable", False)
+            raise PreviewFailure(
+                "exact trickplay metadata is unavailable",
+                False,
+                stage="metadata",
+                reason="no-manifest",
+            )
         if abort.is_set():
-            raise PreviewFailure("preview aborted", False)
+            raise PreviewFailure(
+                "preview aborted",
+                False,
+                stage="request",
+                reason="aborted",
+            )
 
         frame, sprite, box = tile_for_frame(frame, state["info"])
         sprite_data = self._load_sprite_data(
@@ -1169,17 +1274,41 @@ class TrickplayPreviewManager(object):
                 return cached
             image = state["decoded_sprites"].pop(sprite, None)
             temporary = None
-            try:
-                if image is None:
+            if image is None:
+                try:
                     from PIL import Image
-
+                except ImportError:
+                    raise PreviewFailure(
+                        "Pillow is unavailable",
+                        False,
+                        stage="decode",
+                        reason="dependency",
+                    )
+                image = None
+                try:
                     image = Image.open(io.BytesIO(sprite_data))
                     image.load()
-                state["decoded_sprites"][sprite] = image
-                while len(state["decoded_sprites"]) > DECODED_SPRITE_LIMIT:
-                    _, old_image = state["decoded_sprites"].popitem(last=False)
-                    old_image.close()
+                except Exception:
+                    if image is not None:
+                        try:
+                            image.close()
+                        except Exception:
+                            pass
+                    state["sprite_cache"].remove(sprite)
+                    raise PreviewFailure(
+                        "sprite decode failed",
+                        True,
+                        stage="decode",
+                        reason="invalid-image",
+                    )
+                _log_stage_once(state, "decode", "ready", "jpeg")
 
+            state["decoded_sprites"][sprite] = image
+            while len(state["decoded_sprites"]) > DECODED_SPRITE_LIMIT:
+                _, old_image = state["decoded_sprites"].popitem(last=False)
+                old_image.close()
+
+            try:
                 path = os.path.join(state["frame_root"], "frame-%06d.jpg" % frame)
                 temporary = "%s.tmp-%s" % (
                     path,
@@ -1191,9 +1320,7 @@ class TrickplayPreviewManager(object):
                 finally:
                     cropped.close()
                 os.replace(temporary, path)
-            except ImportError as error:
-                raise PreviewFailure("Pillow is unavailable: %s" % error, False)
-            except Exception as error:
+            except Exception:
                 bad_image = state["decoded_sprites"].pop(sprite, None)
                 if bad_image is not None:
                     try:
@@ -1206,7 +1333,13 @@ class TrickplayPreviewManager(object):
                         os.unlink(temporary)
                     except OSError:
                         pass
-                raise PreviewFailure("frame %s decode: %s" % (frame, error), True)
+                raise PreviewFailure(
+                    "frame crop failed",
+                    True,
+                    stage="crop",
+                    reason="file-io",
+                )
+            _log_stage_once(state, "crop", "ready", "frame")
             state["frame_cache"].put(frame, path)
             return path
 
@@ -1250,7 +1383,12 @@ class TrickplayPreviewManager(object):
             if sprite_data is not None:
                 return sprite_data
             if abort.is_set():
-                raise PreviewFailure("preview aborted", False)
+                raise PreviewFailure(
+                    "preview aborted",
+                    False,
+                    stage="download",
+                    reason="aborted",
+                )
             state["inflight_sprites"].add(sprite)
 
         try:
@@ -1271,14 +1409,27 @@ class TrickplayPreviewManager(object):
                 )
             except Exception as error:
                 raise PreviewFailure(
-                    "sprite %s: %s" % (sprite, error),
+                    "sprite download failed",
                     self._is_transient_download_error(error),
+                    stage="download",
+                    reason=_request_failure_reason(error),
                 )
             if not isinstance(sprite_data, (bytes, bytearray)) or not sprite_data:
-                raise PreviewFailure("sprite %s was empty" % sprite, True)
+                raise PreviewFailure(
+                    "sprite response was empty",
+                    True,
+                    stage="download",
+                    reason="empty-response",
+                )
             if abort.is_set():
-                raise PreviewFailure("preview aborted", False)
+                raise PreviewFailure(
+                    "preview aborted",
+                    False,
+                    stage="download",
+                    reason="aborted",
+                )
             state["sprite_cache"].put(sprite, sprite_data)
+            _log_stage_once(state, "download", "ready", "sprite")
             return sprite_data
         finally:
             with condition:
@@ -1347,9 +1498,10 @@ class TrickplayPreviewManager(object):
                 transient = self._is_transient_download_error(error)
                 if not transient or attempt >= len(CHAPTER_RETRY_BACKOFFS):
                     LOG.debug(
-                        "Chapter image %s unavailable, trying trickplay: %s",
+                        "HTPC trickplay stage=chapter-download "
+                        "outcome=unavailable reason=%s chapter=%s",
+                        _request_failure_reason(error),
                         entry["index"],
-                        error,
                     )
                     return self._chapter_from_trickplay(
                         state,
@@ -1385,10 +1537,12 @@ class TrickplayPreviewManager(object):
             state["chapter_cache"].put(entry["id"], path)
             return path
         except Exception as error:
+            reason = getattr(error, "reason", "unexpected")
             LOG.debug(
-                "Trickplay fallback for chapter %s unavailable: %s",
+                "HTPC trickplay stage=chapter-fallback "
+                "outcome=unavailable reason=%s chapter=%s",
+                reason,
                 entry["index"],
-                error,
             )
             if temporary is not None:
                 try:

@@ -134,6 +134,7 @@ from media_contract import (
     SERVICE_READY,
     chapter_contract_available,
     parse_chapter_payload,
+    preview_validation,
     validated_preview,
 )
 from presenter import (
@@ -1646,6 +1647,10 @@ class MediaContractTest(unittest.TestCase):
             validated_preview(properties, snapshot),
             "/tmp/frame-10.jpg",
         )
+        self.assertEqual(
+            preview_validation(properties, snapshot),
+            ("/tmp/frame-10.jpg", "ready"),
+        )
 
         for key in (
             PREVIEW_TOKEN,
@@ -1659,6 +1664,11 @@ class MediaContractTest(unittest.TestCase):
             incomplete = dict(properties)
             incomplete.pop(key)
             self.assertEqual(validated_preview(incomplete, snapshot), "")
+
+        self.assertEqual(
+            preview_validation({}, snapshot),
+            ("", "producer-empty"),
+        )
 
     def test_preview_rejects_old_media_generation_and_target(self):
         properties = {
@@ -1687,6 +1697,13 @@ class MediaContractTest(unittest.TestCase):
                 {"active": True, "generation": 7, "target_seconds": 110},
             ),
             "",
+        )
+        self.assertEqual(
+            preview_validation(
+                properties,
+                {"active": True, "generation": 7, "target_seconds": 110},
+            ),
+            ("", "generation"),
         )
 
 
@@ -1806,6 +1823,89 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertEqual(window.operations, [])
         self.assertEqual(window.getProperty("htpc.seek.previewready"), "")
         self.assertEqual(window.getProperty("htpc.seek.previewpath"), "")
+
+    def test_preview_diagnostics_are_private_and_once_per_generation(self):
+        window = FakeWindow()
+        messages = []
+        publisher = KodiPropertyPublisher(window, logger=messages.append)
+        snapshot = {"active": True, "generation": 7, "target_seconds": 110}
+
+        self.assertEqual(publisher.refresh_preview(snapshot), "")
+        self.assertEqual(publisher.refresh_preview(snapshot), "")
+        self.assertEqual(
+            messages,
+            [
+                "trickplay stage=validator outcome=rejected "
+                "reason=producer-empty"
+            ],
+        )
+
+        window.properties.update(
+            {
+                PREVIEW_PATH: "/private/generated/frame.jpg",
+                PREVIEW_TOKEN: json.dumps(
+                    {
+                        "schema": 1,
+                        "playback": "private-playback-token",
+                        "seek_generation": 7,
+                        "target_seconds": 110,
+                        "sample_seconds": 100,
+                        "frame_index": 10,
+                        "revision": 4,
+                    }
+                ),
+                PREVIEW_PLAYBACK: "private-playback-token",
+                PREVIEW_GENERATION: "7",
+                PREVIEW_TARGET: "110",
+                PREVIEW_SAMPLE: "100",
+                PREVIEW_FRAME: "10",
+                PREVIEW_REVISION: "4",
+            }
+        )
+        self.assertEqual(
+            publisher.refresh_preview(snapshot),
+            "/private/generated/frame.jpg",
+        )
+        self.assertEqual(
+            messages[-1],
+            "trickplay stage=validator outcome=ready reason=ready",
+        )
+        self.assertNotIn("private", "\n".join(messages))
+
+        view = {
+            "active": True,
+            "identity": "/private/movie.mkv",
+            "playback_epoch": 2,
+            "controller_generation": 7,
+            "target_revision": 1,
+            "phase": "ready",
+            "actual_percent": 10,
+            "target_valid": True,
+            "target_percent": 12.5,
+            "time": "2:05",
+            "delta": "+0:25",
+            "prompt": "OK Seek",
+            "preview_status": "ready",
+            "preview_path": "/private/generated/frame.jpg",
+        }
+        publisher.publish_view(view)
+        second_view = dict(view)
+        second_view.update(
+            {
+                "target_revision": 2,
+                "target_percent": 25,
+                "preview_path": "/private/generated/frame-2.jpg",
+            }
+        )
+        publisher.publish_view(second_view)
+        self.assertEqual(
+            messages.count(
+                "trickplay stage=texture-handoff outcome=ready "
+                "reason=property-commit"
+            ),
+            1,
+        )
+        self.assertNotIn("private", "\n".join(messages))
 
     def test_view_publisher_commits_complete_inactive_slot_then_flips(self):
         window = FakeWindow()
