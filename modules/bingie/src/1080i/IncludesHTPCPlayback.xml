@@ -204,7 +204,7 @@
 				</control>
 				<control type="group">
 					<description>HTPC trick-play ready state</description>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),ready) + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath))</visible>
+					<visible>[String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),ready) | String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),loading)] + !String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath))</visible>
 					<control type="image">
 						<width>380</width>
 						<height>214</height>
@@ -221,7 +221,7 @@
 					<aligny>center</aligny>
 					<textcolor>b3ffffff</textcolor>
 					<label>$PARAM[preview_loading_label]</label>
-					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),loading)</visible>
+					<visible>String.IsEqual(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewstatus),loading) + String.IsEmpty(Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath))</visible>
 				</control>
 				<control type="label">
 					<description>HTPC trick-play unavailable state</description>

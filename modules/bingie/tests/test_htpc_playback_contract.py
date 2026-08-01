@@ -2290,11 +2290,13 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         expected_visibility = {
             PREVIEW_READY_DESCRIPTION: (
-                f"String.IsEqual({status},ready) + "
+                f"[String.IsEqual({status},ready) | "
+                f"String.IsEqual({status},loading)] + "
                 f"!String.IsEmpty({path})"
             ),
             PREVIEW_LOADING_DESCRIPTION: (
-                f"String.IsEqual({status},loading)"
+                f"String.IsEqual({status},loading) + "
+                f"String.IsEmpty({path})"
             ),
             PREVIEW_UNAVAILABLE_DESCRIPTION: (
                 f"!String.IsEqual({status},none) + "
