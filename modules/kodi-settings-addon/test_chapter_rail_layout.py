@@ -70,7 +70,7 @@ class ChapterRailLayoutTest(unittest.TestCase):
         self.assertEqual(self._geometry(outline), (2, 2, 284, 165))
         self.assertEqual(
             outline.find("texture").get("colordiffuse"),
-            "$INFO[Skin.String(OSDBingieButtonsFocusColor)]",
+            "ffe50914",
         )
         self.assertNotIn(
             "f40612",

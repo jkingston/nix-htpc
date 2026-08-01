@@ -47,7 +47,7 @@
           <top>170</top>
           <width>190</width>
           <height>34</height>
-          <font>Reg22</font>
+          <font>font13</font>
           <align>left</align>
           <textcolor>ccffffff</textcolor>
           <label>$INFO[ListItem.Label]</label>
@@ -57,7 +57,7 @@
           <top>170</top>
           <width>78</width>
           <height>34</height>
-          <font>Reg22</font>
+          <font>font13</font>
           <align>right</align>
           <textcolor>99ffffff</textcolor>
           <label>$INFO[ListItem.Label2]</label>
@@ -69,7 +69,7 @@
           <top>2</top>
           <width>284</width>
           <height>165</height>
-          <texture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">colors/color_white.png</texture>
+          <texture colordiffuse="ffe50914">colors/color_white.png</texture>
         </control>
         <control type="image">
           <left>8</left>
@@ -84,7 +84,7 @@
           <top>170</top>
           <width>190</width>
           <height>34</height>
-          <font>Reg22</font>
+          <font>font13</font>
           <align>left</align>
           <textcolor>white</textcolor>
           <label>[B]$INFO[ListItem.Label][/B]</label>
@@ -94,7 +94,7 @@
           <top>170</top>
           <width>78</width>
           <height>34</height>
-          <font>Reg22</font>
+          <font>font13</font>
           <align>right</align>
           <textcolor>ccffffff</textcolor>
           <label>$INFO[ListItem.Label2]</label>

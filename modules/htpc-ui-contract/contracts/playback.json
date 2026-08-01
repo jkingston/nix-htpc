@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "protocol_version": "2",
+  "property_window": 10000,
+  "service": {
+    "ready": "htpc.service.ready",
+    "protocol": "htpc.service.protocol"
+  },
+  "seek": {
+    "prefix": "htpc.seek.",
+    "request": "htpc.seek.request.v1",
+    "request_schema": 1,
+    "controller_fields": ["active", "generation", "targetseconds", "modal"],
+    "view_fields": ["actualmarker", "viewactive", "viewslot"],
+    "slots": ["a", "b"],
+    "slot_fields": ["targetvalid", "targetfill", "targetmarker", "time", "delta", "prompt", "previewstatus", "previewpath", "previewanchor"],
+    "commit_property": "viewslot",
+    "events": ["left", "right", "primary", "fullscreen-up", "fullscreen-down", "fullscreen-back", "osd-primary", "osd-back", "transport-up", "transport-right", "transport-down", "timeline-focus", "timeline-blur", "timeline-left", "timeline-right", "timeline-up", "timeline-down", "timeline-confirm"]
+  },
+  "preview": {
+    "property": "jellyfin.htpc.preview.v2",
+    "schema": 2,
+    "statuses": ["initialising", "warming", "ready", "temporarily-failed", "unavailable"]
+  },
+  "chapters": {
+    "schema": 1,
+    "available": "jellyfin.htpc.chapters.available",
+    "manifest": "jellyfin.htpc.chapters.manifest",
+    "token": "jellyfin.htpc.chapters.token",
+    "playback": "jellyfin.htpc.chapters.playback",
+    "revision": "jellyfin.htpc.chapters.revision",
+    "ui_available": "htpc.chapter.available",
+    "ui_open": "htpc.chapter.open"
+  },
+  "controls": {
+    "top_bar_group": 9100,
+    "top_bar": 9102,
+    "play_pause": 9201,
+    "timeline": 9300
+  },
+  "publication": {
+    "inactive_slot_first": true,
+    "commit_last": true,
+    "chapter_available_last": true,
+    "preview_response_atomic": true
+  }
+}

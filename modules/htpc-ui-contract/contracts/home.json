@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "owner": "htpc-ui",
+  "window": {
+    "id": 10000,
+    "controls": {
+      "bootstrap": 1000,
+      "sidebar": 900,
+      "spotlight": 1508,
+      "widget_group": 77777
+    }
+  },
+  "focus": {
+    "default_control": "spotlight",
+    "spotlight_primary_action": "play",
+    "restore_sidebar_selection": true,
+    "restore_destination_item": true
+  },
+  "sidebar": [
+    {"label": "Search", "destination": {"kind": "route", "target": "search"}},
+    {"label": "Home", "destination": {"kind": "window", "target": "home"}},
+    {"label": "Anime", "destination": {"kind": "route", "target": "library.anime"}},
+    {"label": "Movies", "destination": {"kind": "route", "target": "library.movies"}},
+    {"label": "TV Shows", "destination": {"kind": "route", "target": "library.tvshows"}},
+    {"label": "Settings", "destination": {"kind": "window", "target": "settings"}},
+    {"label": "Power", "destination": {"kind": "window", "target": "shutdownmenu"}}
+  ],
+  "navigation": {
+    "sidebar_right_inactive": "activate_selected_destination",
+    "sidebar_right_active": "close_sidebar_and_restore_content_focus",
+    "submenus": false
+  },
+  "rows": [
+    {"key": "continue_watching_movies", "label": "Continue Watching Movies", "art": "landscape", "limit": 15, "route": "home.movies.continue", "empty": "omit"},
+    {"key": "next_anime_episodes", "label": "Next Anime Episodes", "art": "landscape", "limit": 15, "route": "home.anime.next", "empty": "omit"},
+    {"key": "next_tv_episodes", "label": "Next TV Episodes", "art": "landscape", "limit": 15, "route": "home.tvshows.next", "empty": "omit"},
+    {"key": "recently_added_movies", "label": "Recently Added Movies", "art": "poster", "limit": 15, "route": "home.movies.recent", "empty": "omit"},
+    {"key": "recently_added_anime", "label": "Recently Added Anime", "art": "poster", "limit": 15, "route": "home.anime.recent", "empty": "omit"},
+    {"key": "recently_added_tv_shows", "label": "Recently Added TV Shows", "art": "poster", "limit": 15, "route": "home.tvshows.recent", "empty": "omit"}
+  ],
+  "library_roles": {
+    "anime": {"route": "library.anime"},
+    "movies": {"route": "library.movies", "genre_route": "library.movies.genres"},
+    "tvshows": {"route": "library.tvshows", "genre_route": "library.tvshows.genres"}
+  }
+}
