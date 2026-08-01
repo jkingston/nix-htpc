@@ -1,0 +1,10 @@
+diff --git a/release.yaml b/release.yaml
+index 91880aa..ffbb872 100644
+--- a/release.yaml
++++ b/release.yaml
+@@ -51,3 +51,5 @@ dependencies:
+       version: '0.0.5+matrix.1'
+     - addon: 'script.module.websocket'
+       version: '1.6.4'
++    - addon: 'script.module.pil'
++      version: '5.1.0'
