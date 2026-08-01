@@ -1510,9 +1510,8 @@ class TrickplayPreviewManager(object):
                 foreground=True,
             )
 
-        # Neighbor trickplay and chapter art share the sole background network
-        # slot. Exact requests remain independent and always have a foreground
-        # lane available.
+        # Sequential coordinator warming uses one background network slot.
+        # An exact fallback can still use its independent foreground lane.
         with state["background_network_lock"]:
             sprite_data = state["sprite_cache"].get(sprite)
             if sprite_data is not None:

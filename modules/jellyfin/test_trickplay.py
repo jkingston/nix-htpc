@@ -1762,7 +1762,7 @@ class TrickplayTest(unittest.TestCase):
             "true",
         )
 
-    def test_exact_and_neighbor_deduplicate_same_inflight_sprite(self):
+    def test_exact_and_background_warm_deduplicate_inflight_sprite(self):
         manager = trickplay.TrickplayPreviewManager(None)
         state = {
             "sprite_cache": trickplay.ByteLruCache(1024),
