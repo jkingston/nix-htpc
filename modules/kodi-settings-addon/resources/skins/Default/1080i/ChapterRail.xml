@@ -11,14 +11,14 @@
       <top>0</top>
       <width>1920</width>
       <height>1080</height>
-      <texture colordiffuse="44000000">colors/color_white.png</texture>
+      <texture colordiffuse="44000000">white.svg</texture>
     </control>
     <control type="label">
       <left>384</left>
       <top>638</top>
       <width>1152</width>
       <height>42</height>
-      <font>Bold30</font>
+      <font>font13</font>
       <textcolor>white</textcolor>
       <label>Chapters</label>
     </control>
@@ -69,7 +69,7 @@
           <top>2</top>
           <width>284</width>
           <height>165</height>
-          <texture colordiffuse="ffe50914">colors/color_white.png</texture>
+          <texture colordiffuse="ffe50914">white.svg</texture>
         </control>
         <control type="image">
           <left>8</left>

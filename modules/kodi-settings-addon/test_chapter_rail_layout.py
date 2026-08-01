@@ -6,6 +6,7 @@ from pathlib import Path
 CHAPTER_RAIL = Path(__file__).resolve().parent / (
     "resources/skins/Default/1080i/ChapterRail.xml"
 )
+CHAPTER_MEDIA = CHAPTER_RAIL.parent.parent / "media"
 
 
 class ChapterRailLayoutTest(unittest.TestCase):
@@ -76,6 +77,19 @@ class ChapterRailLayoutTest(unittest.TestCase):
             "f40612",
             ET.tostring(self.root, encoding="unicode").lower(),
         )
+
+    def test_resources_and_fonts_are_independent_of_active_skin(self):
+        source = ET.tostring(self.root, encoding="unicode")
+        self.assertNotIn("Skin.String", source)
+        self.assertNotIn("Bingie", source)
+        self.assertEqual(
+            {node.text for node in self.root.findall(".//font")},
+            {"font13"},
+        )
+        for texture in self.root.findall(".//texture"):
+            value = (texture.text or "").strip()
+            if value and not value.startswith("$INFO["):
+                self.assertTrue((CHAPTER_MEDIA / value).is_file(), value)
 
 
 if __name__ == "__main__":
