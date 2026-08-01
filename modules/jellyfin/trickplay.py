@@ -44,7 +44,6 @@ CHAPTER_SCHEMA = 1
 SEEK_POLL_SECONDS = 0.05
 SPRITE_CACHE_BYTES = 16 * 1024 * 1024
 DECODED_SPRITE_LIMIT = 1
-FRAME_CACHE_LIMIT = 48
 CHAPTER_CACHE_LIMIT = 24
 MAX_CHAPTERS = CHAPTER_CACHE_LIMIT
 CHAPTER_MIN_SEPARATION_SECONDS = 1.0
@@ -56,7 +55,6 @@ PREVIEW_DIAGNOSTIC_INTERVAL_SECONDS = 30.0
 METADATA_TRANSIENT_RETRY_DELAYS = (0.25, 1.0, 3.0, 5.0)
 METADATA_DIAGNOSTIC_INTERVAL_SECONDS = 30.0
 METADATA_TERMINAL_HTTP_STATUSES = frozenset((400, 401, 403, 404))
-CHAPTER_RETRY_BACKOFFS = (0.20, 0.60)
 
 
 class PreviewFailure(Exception):
@@ -127,51 +125,6 @@ class ByteLruCache(object):
                 return False
             self._bytes -= len(value)
             return True
-
-
-class FileLruCache(object):
-    """A count-bounded LRU of immutable generated files."""
-
-    def __init__(self, entry_limit):
-        self.entry_limit = max(0, int(entry_limit))
-        self._items = OrderedDict()
-        self._lock = threading.RLock()
-
-    def __len__(self):
-        with self._lock:
-            return len(self._items)
-
-    def get(self, key):
-        with self._lock:
-            path = self._items.pop(key, None)
-            if path is None:
-                return None
-            if not os.path.exists(path):
-                return None
-            self._items[key] = path
-            return path
-
-    def put(self, key, path):
-        evicted = []
-        with self._lock:
-            previous = self._items.pop(key, None)
-            if previous is not None and previous != path:
-                evicted.append(previous)
-            self._items[key] = path
-            while len(self._items) > self.entry_limit:
-                _, old_path = self._items.popitem(last=False)
-                if old_path != path:
-                    evicted.append(old_path)
-
-        for old_path in evicted:
-            try:
-                os.unlink(old_path)
-            except OSError:
-                pass
-
-    def items(self):
-        with self._lock:
-            return list(self._items.items())
 
 
 class LatestRequestSlot(object):
@@ -296,31 +249,6 @@ class LatestRequestSlot(object):
             return True
 
 
-def parse_time_label(value):
-    """Convert a Kodi time label to seconds."""
-    if not value:
-        return None
-    try:
-        parts = [int(part) for part in value.strip().split(":")]
-    except (AttributeError, TypeError, ValueError):
-        return None
-    if not 1 <= len(parts) <= 3:
-        return None
-    seconds = 0
-    for part in parts:
-        seconds = (seconds * 60) + part
-    return seconds
-
-
-def format_time(seconds):
-    seconds = max(0, int(seconds))
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    if hours:
-        return "%d:%02d:%02d" % (hours, minutes, seconds)
-    return "%d:%02d" % (minutes, seconds)
-
-
 def frame_for_time(seconds, info):
     interval = max(1, int(info["Interval"]))
     count = max(1, int(info["ThumbnailCount"]))
@@ -350,10 +278,6 @@ def tile_for_frame(frame, info):
         (row + 1) * height,
     )
     return frame, sprite, box
-
-
-def tile_for_time(seconds, info):
-    return tile_for_frame(frame_for_time(seconds, info), info)
 
 
 TRICKPLAY_INFO_FIELDS = (
@@ -492,10 +416,6 @@ def _clean_number(value):
     if value.is_integer():
         return int(value)
     return round(value, 3)
-
-
-def _property_true(value):
-    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _http_status(error):
@@ -681,7 +601,12 @@ def make_preview_request(
 
 
 class TrickplayPreviewManager(object):
-    """Latest-target-wins exact previews plus an independent chapter contract."""
+    """Coordinate one immutable frame cache for previews and chapter art.
+
+    One worker prioritizes the latest seek target, then resumes sequential
+    sprite warming. Published preview and chapter contracts only reference
+    complete frame files owned by the byte-bounded playback cache.
+    """
 
     def __init__(self, player):
         self.player = player
@@ -986,9 +911,7 @@ class TrickplayPreviewManager(object):
         chapters,
     ):
         frame_root = os.path.join(cache_root, "frames")
-        chapter_root = os.path.join(cache_root, "chapters")
-        for path in (frame_root, chapter_root):
-            os.makedirs(path, exist_ok=True)
+        os.makedirs(frame_root, exist_ok=True)
         current_seconds = 0.0
         try:
             current_seconds = float(self.player.getTime())
@@ -1016,11 +939,9 @@ class TrickplayPreviewManager(object):
             "revision": int(revision),
             "playback_token": playback_token,
             "frame_root": frame_root,
-            "chapter_root": chapter_root,
             "sprite_cache": ByteLruCache(SPRITE_CACHE_BYTES),
             "frame_cache": frame_cache,
             "chapter_frames": chapter_frames,
-            "chapter_cache": FileLruCache(CHAPTER_CACHE_LIMIT),
             "sprite_condition": threading.Condition(threading.RLock()),
             "inflight_sprites": set(),
             "background_network_lock": threading.Lock(),
@@ -1028,14 +949,12 @@ class TrickplayPreviewManager(object):
             "decode_lock": threading.RLock(),
             "chapter_lock": threading.RLock(),
             "request_slot": LatestRequestSlot(),
-            "prefetch_slot": LatestRequestSlot(),
             "work_queue": PlaybackWorkQueue(
                 sprite_order(info, current_frame) if info else []
             ),
             "warmed_sprites": set(),
             "exact_session": self._new_session(client),
             "prefetch_session": self._new_session(client),
-            "chapter_session": self._new_session(client),
             "manifest_revision": 0,
             "preview_failure_diagnostics": {},
             "diagnostics_lock": threading.Lock(),
@@ -1267,20 +1186,6 @@ class TrickplayPreviewManager(object):
             return self._publish_chapter_manifest(state)
         return complete
 
-    def _preview_worker(self, state, abort):
-        while not abort.is_set():
-            request = state["request_slot"].take(abort)
-            if request is None:
-                return
-            try:
-                self._process_preview_request(state, request, abort)
-            except Exception as error:
-                if not abort.is_set():
-                    LOG.warning(
-                        "HTPC trickplay stage=producer outcome=failed "
-                        "reason=unexpected"
-                    )
-
     def _process_preview_request(self, state, request, abort):
         attempts = len(PREVIEW_RETRY_BACKOFFS) + 1
         for attempt in range(attempts):
@@ -1491,45 +1396,6 @@ class TrickplayPreviewManager(object):
             )
             return True
 
-    def _queue_one_neighbor(self, state, request):
-        info = state["info"]
-        if info is None:
-            return
-        direction = request["direction"] or 1
-        neighbor = request["frame"] + direction
-        if not 0 <= neighbor < int(info["ThumbnailCount"]):
-            return
-        prefetch = {
-            "key": (
-                state["playback_token"],
-                state["revision"],
-                int(neighbor),
-            ),
-            "frame": int(neighbor),
-        }
-        state["prefetch_slot"].submit(prefetch)
-
-    def _prefetch_worker(self, state, abort):
-        while not abort.is_set():
-            request = state["prefetch_slot"].take(abort)
-            if request is None:
-                return
-            try:
-                self._resolve_frame_path(
-                    state,
-                    request["frame"],
-                    abort,
-                    foreground=False,
-                )
-            except PreviewFailure as error:
-                if not abort.is_set():
-                    LOG.debug(
-                        "HTPC trickplay stage=%s outcome=unavailable "
-                        "reason=%s lane=neighbor",
-                        error.stage,
-                        error.reason,
-                    )
-
     def _resolve_frame_path(self, state, frame, abort, foreground):
         cached = state["frame_cache"].get(int(frame))
         if cached is not None:
@@ -1732,114 +1598,6 @@ class TrickplayPreviewManager(object):
             return True
         return status in (408, 425, 429) or status >= 500
 
-    def _chapter_worker(self, state, abort):
-        # Chapter artwork has a separate cache, session and publication
-        # contract. It is never consulted by _process_preview_request().
-        for entry in list(state["chapters"])[:CHAPTER_CACHE_LIMIT]:
-            if abort.is_set():
-                return
-            path = self._download_chapter_image(state, entry, abort)
-            if path is None or abort.is_set():
-                continue
-            with state["chapter_lock"]:
-                entry["image"] = path
-                state["manifest_revision"] += 1
-                self._publish_chapter_manifest(state)
-
-    def _download_chapter_image(self, state, entry, abort):
-        cached = state["chapter_cache"].get(entry["id"])
-        if cached is not None:
-            return cached
-        path = os.path.join(state["chapter_root"], "%s.jpg" % entry["id"])
-        handler = "Items/%s/Images/Chapter/%s" % (
-            state["item_id"],
-            entry["index"],
-        )
-        attempts = len(CHAPTER_RETRY_BACKOFFS) + 1
-        for attempt in range(attempts):
-            if abort.is_set():
-                return None
-            try:
-                with state["background_network_lock"]:
-                    if abort.is_set():
-                        return None
-                    data = self._download(
-                        state["client"],
-                        handler,
-                        {"MaxWidth": 320, "format": "jpg"},
-                        session=state["chapter_session"],
-                    )
-                if not isinstance(data, (bytes, bytearray)) or not data:
-                    raise PreviewFailure(
-                        "chapter image %s was empty" % entry["index"],
-                        True,
-                    )
-                temporary = "%s.tmp-%s" % (
-                    path,
-                    threading.current_thread().ident or 0,
-                )
-                with open(temporary, "wb") as output:
-                    output.write(data)
-                os.replace(temporary, path)
-                state["chapter_cache"].put(entry["id"], path)
-                return path
-            except Exception as error:
-                transient = self._is_transient_download_error(error)
-                if not transient or attempt >= len(CHAPTER_RETRY_BACKOFFS):
-                    LOG.debug(
-                        "HTPC trickplay stage=chapter-download "
-                        "outcome=unavailable reason=%s chapter=%s",
-                        _request_failure_reason(error),
-                        entry["index"],
-                    )
-                    return self._chapter_from_trickplay(
-                        state,
-                        entry,
-                        path,
-                        abort,
-                    )
-                if abort.wait(CHAPTER_RETRY_BACKOFFS[attempt]):
-                    return None
-        return None
-
-    def _chapter_from_trickplay(self, state, entry, path, abort):
-        """Materialize an exact chapter-position frame when chapter art fails."""
-        if state.get("info") is None or abort.is_set():
-            return None
-        temporary = None
-        try:
-            frame = frame_for_time(entry["time_seconds"], state["info"])
-            source = self._resolve_frame_path(
-                state,
-                frame,
-                abort,
-                foreground=False,
-            )
-            if abort.is_set():
-                return None
-            temporary = "%s.tmp-%s" % (
-                path,
-                threading.current_thread().ident or 0,
-            )
-            shutil.copyfile(source, temporary)
-            os.replace(temporary, path)
-            state["chapter_cache"].put(entry["id"], path)
-            return path
-        except Exception as error:
-            reason = getattr(error, "reason", "unexpected")
-            LOG.debug(
-                "HTPC trickplay stage=chapter-fallback "
-                "outcome=unavailable reason=%s chapter=%s",
-                reason,
-                entry["index"],
-            )
-            if temporary is not None:
-                try:
-                    os.unlink(temporary)
-                except OSError:
-                    pass
-            return None
-
     def _publish_chapter_manifest(self, state):
         with state["chapter_lock"]:
             abort = state.get("abort")
@@ -1999,7 +1757,6 @@ class TrickplayPreviewManager(object):
     @staticmethod
     def _close_state(state):
         state["request_slot"].close()
-        state["prefetch_slot"].close()
         state["work_queue"].close()
         for worker in state["workers"]:
             if worker.is_alive():
@@ -2007,7 +1764,6 @@ class TrickplayPreviewManager(object):
         for session_name in (
             "exact_session",
             "prefetch_session",
-            "chapter_session",
         ):
             try:
                 state[session_name].close()

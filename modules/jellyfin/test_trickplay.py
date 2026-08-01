@@ -101,7 +101,6 @@ class TrickplayTest(unittest.TestCase):
         self.original_metadata_delays = (
             trickplay.METADATA_TRANSIENT_RETRY_DELAYS
         )
-        self.original_chapter_backoffs = trickplay.CHAPTER_RETRY_BACKOFFS
 
     def tearDown(self):
         trickplay.window = self.original_window
@@ -113,7 +112,6 @@ class TrickplayTest(unittest.TestCase):
         trickplay.METADATA_TRANSIENT_RETRY_DELAYS = (
             self.original_metadata_delays
         )
-        trickplay.CHAPTER_RETRY_BACKOFFS = self.original_chapter_backoffs
 
     def make_request(
         self,
@@ -149,7 +147,6 @@ class TrickplayTest(unittest.TestCase):
             "info": INFO,
             "chapters": chapters or [],
             "request_slot": trickplay.LatestRequestSlot(),
-            "prefetch_slot": trickplay.LatestRequestSlot(),
             "publish_lock": threading.RLock(),
             "preview_failure_diagnostics": {},
             "frame_cache": trickplay.PlaybackFrameCache(
@@ -319,19 +316,6 @@ class TrickplayTest(unittest.TestCase):
             },
             sort_keys=True,
             separators=(",", ":"),
-        )
-
-    def test_time_and_tile_helpers(self):
-        self.assertEqual(trickplay.parse_time_label("01:02:03"), 3723)
-        self.assertEqual(trickplay.format_time(3723), "1:02:03")
-        self.assertIsNone(trickplay.parse_time_label("bad"))
-        self.assertEqual(
-            trickplay.tile_for_time(110, INFO),
-            (11, 0, (320, 240, 640, 480)),
-        )
-        self.assertEqual(
-            trickplay.tile_for_time(99999, INFO),
-            (139, 1, (2880, 720, 3200, 960)),
         )
 
     def test_warm_sprite_decodes_once_and_extracts_every_frame(self):
@@ -1391,7 +1375,7 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(results, [False])
             self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
-    def test_sprite_and_file_caches_are_strictly_bounded(self):
+    def test_sprite_cache_is_strictly_bounded(self):
         byte_cache = trickplay.ByteLruCache(5)
         self.assertTrue(byte_cache.put("a", b"aaa"))
         self.assertTrue(byte_cache.put("b", b"bbb"))
@@ -1400,50 +1384,6 @@ class TrickplayTest(unittest.TestCase):
         self.assertFalse(byte_cache.put("huge", b"123456"))
         self.assertTrue(byte_cache.remove("b"))
         self.assertEqual(byte_cache.byte_size, 0)
-
-        with tempfile.TemporaryDirectory() as root:
-            paths = [
-                self.write_file(os.path.join(root, str(index)), b"x")
-                for index in range(3)
-            ]
-            frame_cache = trickplay.FileLruCache(1)
-            chapter_cache = trickplay.FileLruCache(2)
-            frame_cache.put("frame-a", paths[0])
-            chapter_cache.put("chapter-a", paths[1])
-            chapter_cache.put("chapter-b", paths[2])
-            self.assertEqual(len(frame_cache), 1)
-            self.assertEqual(len(chapter_cache), 2)
-            self.assertEqual(frame_cache.get("frame-a"), paths[0])
-
-    def test_exact_preview_never_falls_back_to_chapter_artwork(self):
-        with tempfile.TemporaryDirectory() as root:
-            request = self.make_request()
-            store = PropertyStore()
-            self.activate_request(store, request)
-            trickplay.window = store.window
-            state = self.make_process_state(root, request)
-            manager = trickplay.TrickplayPreviewManager(None)
-            chapter_calls = []
-            manager._download_chapter_image = (
-                lambda *_args: chapter_calls.append(True)
-            )
-            manager._resolve_frame_path = lambda *_args, **_kwargs: (
-                (_ for _ in ()).throw(
-                    trickplay.PreviewFailure("no exact frame", False)
-                )
-            )
-
-            self.assertFalse(
-                manager._process_preview_request(
-                    state,
-                    request,
-                    threading.Event(),
-                )
-            )
-            self.assertEqual(chapter_calls, [])
-            contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
-            self.assertEqual(contract["status"], "temporarily-failed")
-            self.assertNotIn("path", contract)
 
     def test_stale_resolved_frame_is_rejected_before_publication(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1678,21 +1618,6 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(results, [False])
             self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
-    def test_only_one_directional_neighbor_is_queued(self):
-        slot = trickplay.LatestRequestSlot()
-        manager = trickplay.TrickplayPreviewManager(None)
-        state = {
-            "info": INFO,
-            "playback_token": "playback-1",
-            "revision": 3,
-            "prefetch_slot": slot,
-        }
-        manager._queue_one_neighbor(state, self.make_request(target="60", direction=1))
-        self.assertEqual(slot.pending_count, 1)
-        manager._queue_one_neighbor(state, self.make_request(target="90", direction=-1))
-        self.assertEqual(slot.pending_count, 1)
-        self.assertEqual(slot.take(threading.Event())["frame"], 8)
-
     def test_chapter_manifest_requires_two_and_is_tokened(self):
         with tempfile.TemporaryDirectory() as root:
             chapters = trickplay.sanitize_chapters(
@@ -1837,81 +1762,6 @@ class TrickplayTest(unittest.TestCase):
             "true",
         )
 
-    def test_chapter_download_has_separate_cache_and_bounded_retry(self):
-        with tempfile.TemporaryDirectory() as root:
-            state = {
-                "chapter_cache": trickplay.FileLruCache(2),
-                "chapter_root": root,
-                "item_id": "item",
-                "client": object(),
-                "chapter_session": object(),
-                "background_network_lock": threading.Lock(),
-            }
-            entry = {
-                "kind": "chapter",
-                "id": "chapter-0001",
-                "index": 1,
-            }
-            trickplay.CHAPTER_RETRY_BACKOFFS = (0,)
-            manager = trickplay.TrickplayPreviewManager(None)
-            calls = []
-
-            def download(*_args, **_kwargs):
-                calls.append(True)
-                if len(calls) == 1:
-                    raise OSError("temporary")
-                return b"chapter"
-
-            manager._download = download
-            path = manager._download_chapter_image(
-                state,
-                entry,
-                threading.Event(),
-            )
-            self.assertEqual(len(calls), 2)
-            self.assertEqual(state["chapter_cache"].get(entry["id"]), path)
-            with open(path, "rb") as image:
-                self.assertEqual(image.read(), b"chapter")
-
-    def test_failed_chapter_endpoint_uses_exact_trickplay_frame(self):
-        with tempfile.TemporaryDirectory() as root:
-            source = self.write_file(
-                os.path.join(root, "exact-frame.jpg"),
-                b"exact",
-            )
-            state = {
-                "chapter_cache": trickplay.FileLruCache(2),
-                "chapter_root": root,
-                "item_id": "item",
-                "client": object(),
-                "chapter_session": object(),
-                "background_network_lock": threading.Lock(),
-                "info": INFO,
-            }
-            entry = {
-                "kind": "chapter",
-                "id": "chapter-0001",
-                "index": 1,
-                "time_seconds": 30.0,
-            }
-            manager = trickplay.TrickplayPreviewManager(None)
-            manager._download = lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                RuntimeError("no chapter endpoint")
-            )
-            manager._resolve_frame_path = (
-                lambda *_args, **_kwargs: source
-            )
-
-            path = manager._download_chapter_image(
-                state,
-                entry,
-                threading.Event(),
-            )
-            self.assertIsNotNone(path)
-            self.assertEqual(state["chapter_cache"].get(entry["id"]), path)
-            with open(path, "rb") as image:
-                self.assertEqual(image.read(), b"exact")
-
     def test_exact_and_neighbor_deduplicate_same_inflight_sprite(self):
         manager = trickplay.TrickplayPreviewManager(None)
         state = {
@@ -1983,74 +1833,6 @@ class TrickplayTest(unittest.TestCase):
         self.assertTrue(raised.exception.transient)
         self.assertIsNone(state["sprite_cache"].get(2))
         self.assertEqual(state["inflight_sprites"], set())
-
-    def test_neighbor_and_chapter_share_one_background_network_slot(self):
-        with tempfile.TemporaryDirectory() as root:
-            manager = trickplay.TrickplayPreviewManager(None)
-            shared_lock = threading.Lock()
-            state = {
-                "sprite_cache": trickplay.ByteLruCache(1024),
-                "sprite_condition": threading.Condition(threading.RLock()),
-                "inflight_sprites": set(),
-                "background_network_lock": shared_lock,
-                "item_id": "item",
-                "width": 320,
-                "media_source_id": "source",
-                "client": object(),
-                "exact_session": object(),
-                "prefetch_session": object(),
-                "chapter_session": object(),
-                "chapter_cache": trickplay.FileLruCache(2),
-                "chapter_root": root,
-            }
-            first_started = threading.Event()
-            release_first = threading.Event()
-            count_lock = threading.Lock()
-            counters = {"calls": 0, "active": 0, "maximum": 0}
-
-            def download(*_args, **_kwargs):
-                with count_lock:
-                    counters["calls"] += 1
-                    counters["active"] += 1
-                    counters["maximum"] = max(
-                        counters["maximum"],
-                        counters["active"],
-                    )
-                    call_number = counters["calls"]
-                if call_number == 1:
-                    first_started.set()
-                    release_first.wait(1)
-                with count_lock:
-                    counters["active"] -= 1
-                return b"image"
-
-            manager._download = download
-            abort = threading.Event()
-            neighbor = threading.Thread(
-                target=lambda: manager._load_sprite_data(
-                    state,
-                    1,
-                    abort,
-                    False,
-                )
-            )
-            chapter = threading.Thread(
-                target=lambda: manager._download_chapter_image(
-                    state,
-                    {"id": "chapter-0000", "index": 0},
-                    abort,
-                )
-            )
-            neighbor.start()
-            self.assertTrue(first_started.wait(1))
-            chapter.start()
-            chapter.join(0.05)
-            self.assertTrue(chapter.is_alive())
-            release_first.set()
-            neighbor.join(1)
-            chapter.join(1)
-            self.assertEqual(counters["calls"], 2)
-            self.assertEqual(counters["maximum"], 1)
 
     def test_tile_request_uses_selected_manifest_media_source(self):
         calls = []
