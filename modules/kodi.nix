@@ -111,7 +111,8 @@ let
         playback_view_model.py \
         media_contract.py \
         chapter_dialog.py \
-        resources/skins/Default/1080i/ChapterRail.xml
+        resources/skins/Default/1080i/ChapterRail.xml \
+        resources/skins/Default/media/white.svg
       do
         test -f "$addon_dir/$runtime_file"
       done
@@ -323,6 +324,34 @@ in
     "d ${kodiAddonReconciler.backupRoot} 0700 root root - -"
   ];
 
+  systemd.services.kodi-content-routes = {
+    description = "Publish stable Kodi aliases for Jellyfin libraries";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "greetd.service" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      User = "htpc";
+      Group = "users";
+      ExecStart = "${kodiContentRoutes}/bin/kodi-content-routes --library-root /home/htpc/.kodi/userdata/library/video";
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/htpc/.kodi/userdata/library/video" ];
+    };
+  };
+
+  systemd.timers.kodi-content-routes = {
+    description = "Refresh stable Kodi content aliases";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "30s";
+      OnUnitActiveSec = "60s";
+      Unit = "kodi-content-routes.service";
+    };
+  };
+
   # BINGIE must be writable because Skin Shortcuts generates an include inside
   # the skin directory. Install it from greetd's pre-start so Kodi is always
   # stopped while the staged, validated copy replaces managed skin files.
@@ -344,12 +373,6 @@ in
       set -eu
 
       find /run/htpc-trickplay -mindepth 1 -delete
-
-      if ! ${kodiContentRoutes}/bin/kodi-content-routes \
-        --library-root /home/htpc/.kodi/userdata/library/video
-      then
-        echo "Kodi content aliases were not updated; retaining prior routes" >&2
-      fi
 
       ${kodiAddonReconciler}/bin/kodi-addon-reconciler
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import stat
 import sys
 import xml.etree.ElementTree as ET
 
@@ -14,17 +15,36 @@ ROLE_TAGS = {
     "anime": "Anime",
     "tvshows": "Shows",
 }
+REQUIRED_ENDPOINTS = ("all.xml", "nextepisodes.xml", "recent.xml")
+MAX_NODE_BYTES = 64 * 1024
 
 
 class RouteError(RuntimeError):
     pass
 
 
-def node_tag(node_directory: Path) -> str | None:
+def _regular_node_file(path: Path) -> bytes:
     try:
-        root = ET.parse(node_directory / "all.xml").getroot()
-    except (OSError, ET.ParseError):
-        return None
+        metadata = path.lstat()
+    except OSError as error:
+        raise RouteError("missing content endpoint: %s" % path.name) from error
+    if not stat.S_ISREG(metadata.st_mode):
+        raise RouteError("content endpoint is not a regular file: %s" % path)
+    if metadata.st_size > MAX_NODE_BYTES:
+        raise RouteError("content endpoint is too large: %s" % path)
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise RouteError("unable to read content endpoint: %s" % path) from error
+
+
+def node_tag(node_directory: Path) -> str | None:
+    for endpoint in REQUIRED_ENDPOINTS:
+        _regular_node_file(node_directory / endpoint)
+    try:
+        root = ET.fromstring(_regular_node_file(node_directory / "all.xml"))
+    except ET.ParseError as error:
+        raise RouteError("invalid Kodi content node: %s" % node_directory) from error
     for rule in root.findall("rule"):
         if rule.get("field") == "tag" and rule.get("operator") == "is":
             value = rule.findtext("value")
@@ -36,7 +56,11 @@ def node_tag(node_directory: Path) -> str | None:
 def discover_routes(library_root: Path) -> dict[str, Path]:
     matches: dict[str, list[Path]] = {role: [] for role in ROLE_TAGS}
     for candidate in sorted(library_root.glob("jellyfintvshows*")):
-        if not candidate.is_dir():
+        try:
+            metadata = candidate.lstat()
+        except OSError:
+            continue
+        if not stat.S_ISDIR(metadata.st_mode):
             continue
         tag = node_tag(candidate)
         for role, expected_tag in ROLE_TAGS.items():
@@ -82,11 +106,21 @@ def publish_alias(alias: Path, target: Path) -> bool:
 def reconcile(library_root: Path) -> dict[str, str]:
     library_root.mkdir(parents=True, exist_ok=True)
     routes = discover_routes(library_root)
+    aliases = {
+        role: library_root / ("htpc-%s" % role) for role in ROLE_TAGS
+    }
+    for alias in aliases.values():
+        if alias.exists() and not alias.is_symlink():
+            raise RouteError("refusing to replace non-symlink route: %s" % alias)
     published: dict[str, str] = {}
     for role, target in sorted(routes.items()):
-        alias = library_root / ("htpc-%s" % role)
+        alias = aliases[role]
         publish_alias(alias, target)
         published[role] = alias.name
+    for role in sorted(set(aliases) - set(routes)):
+        alias = aliases[role]
+        if alias.is_symlink():
+            alias.unlink()
     return published
 
 
