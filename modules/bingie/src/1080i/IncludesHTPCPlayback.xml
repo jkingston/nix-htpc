@@ -18,6 +18,8 @@
 		<param name="marker_height" default="24" />
 		<param name="target_marker_top" default="957.5" />
 		<param name="target_marker_height" default="20" />
+		<param name="target_marker_left" default="374" />
+		<param name="target_marker_width" default="1172" />
 		<param name="preview_left" default="194" />
 		<param name="preview_top" default="650" />
 		<param name="preview_width" default="380" />
@@ -71,9 +73,9 @@
 			</control>
 			<control type="ranges">
 				<description>HTPC target position marker</description>
-				<posx>$PARAM[rail_left]</posx>
+				<posx>$PARAM[target_marker_left]</posx>
 				<posy>$PARAM[target_marker_top]</posy>
-				<width>$PARAM[rail_width]</width>
+				<width>$PARAM[target_marker_width]</width>
 				<height>$PARAM[target_marker_height]</height>
 				<texturebg colordiffuse="00ffffff">special://skin/resources/htpc/osd/timeline-marker.png</texturebg>
 				<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">special://skin/resources/htpc/osd/timeline-marker.png</lefttexture>

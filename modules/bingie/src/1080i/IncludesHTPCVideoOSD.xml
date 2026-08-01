@@ -33,6 +33,8 @@
 		<param name="marker_height" default="24" />
 		<param name="target_marker_top" default="957.5" />
 		<param name="target_marker_height" default="20" />
+		<param name="target_marker_left" default="374" />
+		<param name="target_marker_width" default="1172" />
 		<param name="timeline_hit_top" default="922" />
 		<param name="timeline_hit_height" default="80" />
 		<param name="transport_left" default="112" />
@@ -52,7 +54,6 @@
 		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
 		<param name="timeline_chapter_hint_top" default="906" />
 		<param name="timeline_chapter_hint_height" default="42" />
-		<param name="timeline_chapter_hint_arrow_label" default="↑" />
 		<param name="timeline_chapter_hint_label" default="$LOCALIZE[31581]" />
 		<param name="chapter_available_condition" default="!String.IsEmpty(Window(Home).Property(htpc.chapter.available))" />
 		<param name="time_top" default="948" />
@@ -357,9 +358,9 @@
 					</control>
 					<control type="ranges">
 						<description>HTPC video OSD focused actual playhead</description>
-						<posx>$PARAM[rail_left]</posx>
+						<posx>$PARAM[target_marker_left]</posx>
 						<posy>$PARAM[target_marker_top]</posy>
-						<width>$PARAM[rail_width]</width>
+						<width>$PARAM[target_marker_width]</width>
 						<height>$PARAM[target_marker_height]</height>
 						<texturebg colordiffuse="00ffffff">special://skin/resources/htpc/osd/timeline-marker.png</texturebg>
 						<lefttexture colordiffuse="$INFO[Skin.String(OSDBingieButtonsFocusColor)]">special://skin/resources/htpc/osd/timeline-marker.png</lefttexture>
@@ -380,6 +381,8 @@
 					<param name="marker_height" value="$PARAM[marker_height]" />
 					<param name="target_marker_top" value="$PARAM[target_marker_top]" />
 					<param name="target_marker_height" value="$PARAM[target_marker_height]" />
+					<param name="target_marker_left" value="$PARAM[target_marker_left]" />
+					<param name="target_marker_width" value="$PARAM[target_marker_width]" />
 					<param name="preview_left" value="$PARAM[preview_left]" />
 					<param name="preview_top" value="$PARAM[preview_top]" />
 					<param name="preview_width" value="$PARAM[preview_width]" />
@@ -404,6 +407,8 @@
 					<param name="marker_height" value="$PARAM[marker_height]" />
 					<param name="target_marker_top" value="$PARAM[target_marker_top]" />
 					<param name="target_marker_height" value="$PARAM[target_marker_height]" />
+					<param name="target_marker_left" value="$PARAM[target_marker_left]" />
+					<param name="target_marker_width" value="$PARAM[target_marker_width]" />
 					<param name="preview_left" value="$PARAM[preview_left]" />
 					<param name="preview_top" value="$PARAM[preview_top]" />
 					<param name="preview_width" value="$PARAM[preview_width]" />
@@ -455,17 +460,14 @@
 					<visible>$PARAM[presentation_ready] + $PARAM[seekable_condition] + Control.HasFocus(9300) + $PARAM[chapter_available_condition] + $PARAM[view_inactive_condition] + ![$PARAM[modal_condition]]</visible>
 					<animation effect="fade" time="120">Visible</animation>
 					<animation effect="fade" time="120">Hidden</animation>
-					<control type="label">
+					<control type="image">
 						<description>HTPC video OSD chapter arrow</description>
 						<left>0</left>
 						<top>0</top>
 						<width>$PARAM[rail_width]</width>
 						<height>18</height>
-						<font>Reg18</font>
-						<align>center</align>
-						<aligny>center</aligny>
-						<textcolor>b3ffffff</textcolor>
-						<label>$PARAM[timeline_chapter_hint_arrow_label]</label>
+						<texture colordiffuse="b3ffffff">special://skin/resources/htpc/osd/chapter-up.png</texture>
+						<aspectratio align="center" aligny="center">keep</aspectratio>
 					</control>
 					<control type="label">
 						<description>HTPC video OSD chapter label</description>

@@ -7,6 +7,7 @@ import struct
 import sys
 import unittest
 import xml.etree.ElementTree as ET
+import zlib
 from pathlib import Path
 
 
@@ -119,6 +120,74 @@ def _png_contract(path: Path) -> tuple[int, int, int, int]:
         raise ValueError(f"{path} is not a PNG")
     width, height = struct.unpack(">II", header[16:24])
     return width, height, header[24], header[25]
+
+
+def _png_rgba_alpha(path: Path) -> tuple[tuple[int, ...], ...]:
+    """Decode alpha rows from the small, non-interlaced RGBA OSD assets."""
+    payload = path.read_bytes()
+    if payload[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path} is not a PNG")
+    offset = 8
+    header = None
+    compressed = []
+    while offset < len(payload):
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        kind = payload[offset + 4 : offset + 8]
+        value = payload[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+        if kind == b"IHDR":
+            header = struct.unpack(">IIBBBBB", value)
+        elif kind == b"IDAT":
+            compressed.append(value)
+        elif kind == b"IEND":
+            break
+    if header is None:
+        raise ValueError(f"{path} has no IHDR")
+    width, height, depth, color, compression, filtering, interlace = header
+    if (depth, color, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+        raise ValueError(f"{path} is not an 8-bit non-interlaced RGBA PNG")
+
+    raw = zlib.decompress(b"".join(compressed))
+    stride = width * 4
+    previous = bytearray(stride)
+    cursor = 0
+    rows = []
+
+    def paeth(left, above, upper_left):
+        estimate = left + above - upper_left
+        distances = (
+            abs(estimate - left),
+            abs(estimate - above),
+            abs(estimate - upper_left),
+        )
+        return (left, above, upper_left)[distances.index(min(distances))]
+
+    for _row in range(height):
+        filter_type = raw[cursor]
+        cursor += 1
+        scanline = bytearray(raw[cursor : cursor + stride])
+        cursor += stride
+        for index in range(stride):
+            left = scanline[index - 4] if index >= 4 else 0
+            above = previous[index]
+            upper_left = previous[index - 4] if index >= 4 else 0
+            if filter_type == 1:
+                scanline[index] = (scanline[index] + left) & 0xFF
+            elif filter_type == 2:
+                scanline[index] = (scanline[index] + above) & 0xFF
+            elif filter_type == 3:
+                scanline[index] = (
+                    scanline[index] + ((left + above) // 2)
+                ) & 0xFF
+            elif filter_type == 4:
+                scanline[index] = (
+                    scanline[index] + paeth(left, above, upper_left)
+                ) & 0xFF
+            elif filter_type != 0:
+                raise ValueError(f"{path} uses unknown PNG filter {filter_type}")
+        rows.append(tuple(scanline[3::4]))
+        previous = scanline
+    return tuple(rows)
 
 
 def _literal_texture_paths(root: ET.Element):
@@ -908,21 +977,30 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             ),
         )
         arrow, label = hint.findall("control")
-        for control in (arrow, label):
-            with self.subTest(description=_description(control)):
-                self.assertEqual(control.get("type"), "label")
-                self.assertEqual(control.findtext("left"), "0")
-                self.assertEqual(
-                    control.findtext("width"),
-                    "$PARAM[rail_width]",
-                )
-                self.assertEqual(control.findtext("align"), "center")
-                self.assertEqual(control.findtext("aligny"), "center")
-                self.assertEqual(control.findtext("textcolor"), "b3ffffff")
+        self.assertEqual(arrow.get("type"), "image")
+        self.assertEqual(arrow.findtext("left"), "0")
+        self.assertEqual(arrow.findtext("width"), "$PARAM[rail_width]")
+        arrow_texture = arrow.find("texture")
+        self.assertIsNotNone(arrow_texture)
         self.assertEqual(
-            arrow.findtext("label"),
-            "$PARAM[timeline_chapter_hint_arrow_label]",
+            (arrow_texture.text or "").strip(),
+            "special://skin/resources/htpc/osd/chapter-up.png",
         )
+        self.assertEqual(arrow_texture.get("colordiffuse"), "b3ffffff")
+        self.assertEqual(
+            arrow.findtext("aspectratio"),
+            "keep",
+        )
+        self.assertEqual(
+            arrow.find("aspectratio").attrib,
+            {"align": "center", "aligny": "center"},
+        )
+        self.assertEqual(label.get("type"), "label")
+        self.assertEqual(label.findtext("left"), "0")
+        self.assertEqual(label.findtext("width"), "$PARAM[rail_width]")
+        self.assertEqual(label.findtext("align"), "center")
+        self.assertEqual(label.findtext("aligny"), "center")
+        self.assertEqual(label.findtext("textcolor"), "b3ffffff")
         self.assertEqual(
             label.findtext("label"),
             "$PARAM[timeline_chapter_hint_label]",
@@ -931,9 +1009,8 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             (
                 arrow.findtext("top"),
                 arrow.findtext("height"),
-                arrow.findtext("font"),
             ),
-            ("0", "18", "Reg18"),
+            ("0", "18"),
         )
         self.assertEqual(
             (
@@ -981,7 +1058,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         hint_bottom = hint_top + int(parameters["timeline_chapter_hint_height"])
         self.assertLess(hint_bottom, int(parameters["timeline_focus_rail_top"]))
 
-        self.assertEqual(parameters["timeline_chapter_hint_arrow_label"], "↑")
+        self.assertNotIn("timeline_chapter_hint_arrow_label", parameters)
         self.assertEqual(
             parameters["timeline_chapter_hint_label"],
             "$LOCALIZE[31581]",
@@ -1375,6 +1452,8 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 "marker_height": "24",
                 "target_marker_top": "957.5",
                 "target_marker_height": "20",
+                "target_marker_left": "374",
+                "target_marker_width": "1172",
                 "preview_left": "194",
                 "preview_top": "650",
                 "preview_width": "380",
@@ -1400,7 +1479,12 @@ class PlaybackXmlContractTest(unittest.TestCase):
             node.get("name"): node.get("default")
             for node in self.video_osd_surface.findall("param")
         }
-        for parameter in ("target_marker_top", "target_marker_height"):
+        for parameter in (
+            "target_marker_top",
+            "target_marker_height",
+            "target_marker_left",
+            "target_marker_width",
+        ):
             with self.subTest(parameter=parameter):
                 self.assertEqual(
                     slot_defaults[parameter],
@@ -1533,6 +1617,14 @@ class PlaybackXmlContractTest(unittest.TestCase):
     def test_target_marker_geometry_and_texture_are_canonical(self):
         marker = self._one_slot_control(TARGET_MARKER_DESCRIPTION)
         self.assertEqual(
+            marker.findtext("posx"),
+            "$PARAM[target_marker_left]",
+        )
+        self.assertEqual(
+            marker.findtext("width"),
+            "$PARAM[target_marker_width]",
+        )
+        self.assertEqual(
             marker.findtext("posy"),
             "$PARAM[target_marker_top]",
         )
@@ -1547,6 +1639,37 @@ class PlaybackXmlContractTest(unittest.TestCase):
         self.assertEqual(
             marker.findtext("lefttexture"),
             TIMELINE_MARKER_TEXTURE,
+        )
+
+    def test_target_marker_uses_one_radius_padded_ranges_control(self):
+        marker = self._one_slot_control(TARGET_MARKER_DESCRIPTION)
+        defaults = {
+            node.get("name"): node.get("default")
+            for node in next(
+                include
+                for include in self.playback_root.findall("include")
+                if include.get("name") == "HTPCPlaybackPresentationSlot"
+            ).findall("param")
+        }
+        self.assertEqual(defaults["target_marker_left"], "374")
+        self.assertEqual(defaults["target_marker_width"], "1172")
+        self.assertEqual(marker.get("type"), "ranges")
+        self.assertEqual(marker.findtext("posx"), "$PARAM[target_marker_left]")
+        self.assertEqual(marker.findtext("width"), "$PARAM[target_marker_width]")
+        self.assertEqual(
+            _visible_text(marker),
+            "!String.IsEmpty(" + _slot_info("targetvalid") + ")",
+        )
+
+        rail_left = int(defaults["rail_left"])
+        rail_width = int(defaults["rail_width"])
+        marker_left = int(defaults["target_marker_left"])
+        marker_width = int(defaults["target_marker_width"])
+        texture_half_width = int(defaults["target_marker_height"]) // 2
+        self.assertEqual(marker_left + texture_half_width, rail_left)
+        self.assertEqual(
+            marker_width,
+            rail_width + 2 * texture_half_width,
         )
 
     def test_timeline_marker_asset_is_square_and_matches_control_height(self):
@@ -1572,9 +1695,16 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(
             hashlib.sha256(marker_png.read_bytes()).hexdigest(),
-            "993969e6046ad66f33ae139a4da957d1"
-            "f215f315d6ff0095cbc30fd36438bd9a",
+            "815d92ef4d3934d806ebe91a47a1891e"
+            "f427517ef7b85cb25f5f2d709ca20477",
         )
+        alpha = _png_rgba_alpha(marker_png)
+        self.assertGreater(sum(sum(row) for row in alpha), 255 * 200)
+        horizontal = tuple(sum(row[x] for row in alpha) for x in range(20))
+        vertical = tuple(sum(row) for row in alpha)
+        self.assertEqual(horizontal, tuple(reversed(horizontal)))
+        self.assertEqual(vertical, tuple(reversed(vertical)))
+        self.assertEqual(horizontal, vertical)
 
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         source = ET.parse(marker_svg).getroot()
@@ -1589,12 +1719,54 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 for attribute in ("cx", "cy", "r", "fill")
             },
             {
-                "cx": "10",
-                "cy": "10",
-                "r": "5.25",
+                "cx": "9.5",
+                "cy": "9.5",
+                "r": "9.25",
                 "fill": "#ffffff",
             },
         )
+
+    def test_chapter_arrow_asset_is_symmetric_and_centerable(self):
+        arrow_png = OSD_ASSETS / "chapter-up.png"
+        arrow_svg = OSD_ASSETS / "chapter-up.svg"
+        self.assertEqual(_png_contract(arrow_png), (24, 14, 8, 6))
+        self.assertEqual(
+            hashlib.sha256(arrow_png.read_bytes()).hexdigest(),
+            "a7188cf682f5bcd11cd50017fa7d3897"
+            "8290cf5585d23169610bfcd54f8a9035",
+        )
+        alpha = _png_rgba_alpha(arrow_png)
+        opaque = [
+            (x, y)
+            for y, row in enumerate(alpha)
+            for x, value in enumerate(row)
+            if value
+        ]
+        self.assertGreater(len(opaque), 80)
+        self.assertEqual(
+            (
+                min(x for x, _y in opaque),
+                max(x for x, _y in opaque),
+                min(y for _x, y in opaque),
+                max(y for _x, y in opaque),
+            ),
+            (1, 22, 0, 13),
+        )
+        self.assertEqual(
+            tuple(sum(row[x] for row in alpha) for x in range(24)),
+            tuple(
+                reversed(
+                    tuple(sum(row[x] for row in alpha) for x in range(24))
+                )
+            ),
+            "the runtime alpha centroid must remain horizontally symmetric",
+        )
+        source = ET.parse(arrow_svg).getroot()
+        self.assertEqual(source.get("viewBox"), "0 0 24 14")
+        path = source.find("{http://www.w3.org/2000/svg}path")
+        self.assertIsNotNone(path)
+        self.assertEqual(path.get("fill"), "#ffffff")
+        self.assertIn("Q11.5 0 13.25 1.25", path.get("d"))
 
     def test_marker_layers_preserve_exact_native_order(self):
         expected = (

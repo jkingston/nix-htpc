@@ -25,12 +25,14 @@ EXPECTED_FOCUS = {
     "timeline-playing": "9300",
     "timeline-idle": "9300",
     "timeline-chapters": "9300",
+    "seek-start": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
     "seek-forward-modal": "9300",
     "seek-forward-loading": "9300",
     "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
+    "seek-end": "9300",
     "top-stop": "9101",
 }
 EXPECTED_CLEANUP = {
@@ -176,10 +178,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
             "String.IsEqual(Window(Home).Property("
             "htpc.review.scenario),timeline-chapters)",
         )
-        self.assertEqual(
-            parameters["timeline_chapter_hint_arrow_label"],
-            "↑",
-        )
+        self.assertNotIn("timeline_chapter_hint_arrow_label", parameters)
         self.assertEqual(
             parameters["timeline_chapter_hint_label"],
             "Chapters",

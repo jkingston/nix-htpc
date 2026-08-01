@@ -28,6 +28,11 @@ from media_contract import (
 
 
 LEASE_REFRESH_SECONDS = 0.75
+TIMELINE_RAIL_WIDTH = 1152.0
+TIMELINE_MARKER_HALF_WIDTH = 10.0
+TIMELINE_MARKER_CONTROL_WIDTH = (
+    TIMELINE_RAIL_WIDTH + (2.0 * TIMELINE_MARKER_HALF_WIDTH)
+)
 
 
 class KodiPropertyPublisher(object):
@@ -80,6 +85,20 @@ class KodiPropertyPublisher(object):
             numeric = 0.0
         return max(0.0, min(100.0, numeric))
 
+    @staticmethod
+    def _marker_percent(percent):
+        """Map rail progress into a radius-padded ranges control.
+
+        Kodi halves a ranges texture at exactly 0% and clamps near-zero
+        markers to the control's left edge. Padding the coordinate space by
+        one texture half-width on each side keeps the marker on the interior
+        path while its centre still lands on the true timeline position.
+        """
+        return 100.0 * (
+            TIMELINE_MARKER_HALF_WIDTH
+            + percent * TIMELINE_RAIL_WIDTH / 100.0
+        ) / TIMELINE_MARKER_CONTROL_WIDTH
+
     def publish_view(self, view):
         """Publish one coherent semantic frame through a double buffer.
 
@@ -98,7 +117,7 @@ class KodiPropertyPublisher(object):
             actual_percent = self._safe_percent(
                 view.get("actual_percent", 0.0)
             )
-            formatted_actual = "%.2f" % actual_percent
+            formatted_actual = "%.2f" % self._marker_percent(actual_percent)
             actual_marker = "%s,%s" % (
                 formatted_actual,
                 formatted_actual,
@@ -119,6 +138,7 @@ class KodiPropertyPublisher(object):
 
         percent = self._safe_percent(view.get("target_percent", 0.0))
         formatted = "%.4f" % percent
+        formatted_marker = "%.4f" % self._marker_percent(percent)
         if not active and self.last.get("viewactive"):
             self.window.clearProperty(SEEK_PREFIX + "viewactive")
             self.last["viewactive"] = ""
@@ -126,7 +146,10 @@ class KodiPropertyPublisher(object):
         values = (
             ("targetvalid", "true" if view.get("target_valid") else ""),
             ("targetfill", "0.0000,%s" % formatted),
-            ("targetmarker", "%s,%s" % (formatted, formatted)),
+            (
+                "targetmarker",
+                "%s,%s" % (formatted_marker, formatted_marker),
+            ),
             ("time", str(view.get("time", ""))),
             ("delta", str(view.get("delta", ""))),
             ("prompt", str(view.get("prompt", ""))),

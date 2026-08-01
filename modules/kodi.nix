@@ -13,8 +13,8 @@ let
     ];
   });
   kodiPackages = kodiCore.packages;
-  kodiSettingsAddonVersion = "2.1.17";
-  kodiOsdReviewAddonVersion = "0.1.2";
+  kodiSettingsAddonVersion = "2.1.18";
+  kodiOsdReviewAddonVersion = "0.1.3";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   simplejsonIdentity = {
     version = "3.19.1+matrix.1";

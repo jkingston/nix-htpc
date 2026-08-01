@@ -49,12 +49,14 @@ SCENARIOS = (
     "timeline-playing",
     "timeline-idle",
     "timeline-chapters",
+    "seek-start",
     "seek-backward",
     "seek-forward",
     "seek-forward-modal",
     "seek-forward-loading",
     "seek-forward-unavailable",
     "seek-forward-slot-b",
+    "seek-end",
     "top-stop",
 )
 EXPECTED_FOCUS = {
@@ -63,14 +65,22 @@ EXPECTED_FOCUS = {
     "timeline-playing": "9300",
     "timeline-idle": "9300",
     "timeline-chapters": "9300",
+    "seek-start": "9300",
     "seek-backward": "9300",
     "seek-forward": "9300",
     "seek-forward-modal": "9300",
     "seek-forward-loading": "9300",
     "seek-forward-unavailable": "9300",
     "seek-forward-slot-b": "9300",
+    "seek-end": "9300",
     "top-stop": "9101",
 }
+
+def _marker_value(percent, precision):
+    mapped = 100.0 * (10.0 + float(percent) * 1152.0 / 100.0) / 1172.0
+    formatted = ("%%.%df" % precision) % mapped
+    return "%s,%s" % (formatted, formatted)
+
 
 _COMMON = {
     "revision": "2",
@@ -79,7 +89,7 @@ _COMMON = {
     "subtitle": "Deterministic fixture",
     "elapsed": "40:00",
     "remaining": "\N{MINUS SIGN}1:00:00",
-    "seek.actualmarker": "40,40",
+    "seek.actualmarker": _marker_value(40, 2),
 }
 
 _PLAYBACK_STATE = {
@@ -92,12 +102,25 @@ _PLAYBACK_STATE = {
 }
 
 _SEEK = {
+    "seek-start": {
+        "seek.viewactive": "true",
+        "seek.viewslot": "a",
+        "seek.a.targetvalid": "true",
+        "seek.a.targetfill": "0.0000,0.0000",
+        "seek.a.targetmarker": _marker_value(0, 4),
+        "seek.a.time": "0:00",
+        "seek.a.delta": "\N{MINUS SIGN}40:00",
+        "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
+        "seek.a.previewstatus": "unavailable",
+        "seek.a.previewpath": "",
+        "seek.a.previewanchor": "0",
+    },
     "seek-backward": {
         "seek.viewactive": "true",
         "seek.viewslot": "a",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,25.0000",
-        "seek.a.targetmarker": "25.0000,25.0000",
+        "seek.a.targetmarker": _marker_value(25, 4),
         "seek.a.time": "25:00",
         "seek.a.delta": "\N{MINUS SIGN}15:00",
         "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
@@ -112,7 +135,7 @@ _SEEK = {
         "seek.viewslot": "a",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
-        "seek.a.targetmarker": "75.0000,75.0000",
+        "seek.a.targetmarker": _marker_value(75, 4),
         "seek.a.time": "1:15:00",
         "seek.a.delta": "+35:00",
         "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
@@ -127,7 +150,7 @@ _SEEK = {
         "seek.viewslot": "a",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
-        "seek.a.targetmarker": "75.0000,75.0000",
+        "seek.a.targetmarker": _marker_value(75, 4),
         "seek.a.time": "1:15:00",
         "seek.a.delta": "+35:00",
         "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
@@ -140,7 +163,7 @@ _SEEK = {
         "seek.viewslot": "a",
         "seek.a.targetvalid": "true",
         "seek.a.targetfill": "0.0000,75.0000",
-        "seek.a.targetmarker": "75.0000,75.0000",
+        "seek.a.targetmarker": _marker_value(75, 4),
         "seek.a.time": "1:15:00",
         "seek.a.delta": "+35:00",
         "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
@@ -153,7 +176,7 @@ _SEEK = {
         "seek.viewslot": "b",
         "seek.b.targetvalid": "true",
         "seek.b.targetfill": "0.0000,75.0000",
-        "seek.b.targetmarker": "75.0000,75.0000",
+        "seek.b.targetmarker": _marker_value(75, 4),
         "seek.b.time": "1:15:00",
         "seek.b.delta": "+35:00",
         "seek.b.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
@@ -162,6 +185,19 @@ _SEEK = {
             "special://skin/resources/review/seek-75.png"
         ),
         "seek.b.previewanchor": "75",
+    },
+    "seek-end": {
+        "seek.viewactive": "true",
+        "seek.viewslot": "a",
+        "seek.a.targetvalid": "true",
+        "seek.a.targetfill": "0.0000,100.0000",
+        "seek.a.targetmarker": _marker_value(100, 4),
+        "seek.a.time": "1:40:00",
+        "seek.a.delta": "+1:00:00",
+        "seek.a.prompt": "OK  Seek   \N{BULLET}   Back  Cancel",
+        "seek.a.previewstatus": "unavailable",
+        "seek.a.previewpath": "",
+        "seek.a.previewanchor": "100",
     },
 }
 

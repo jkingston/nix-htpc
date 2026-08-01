@@ -72,3 +72,12 @@ reused.
 - Remove the inherited OpenELEC and LibreELEC settings windows and their
   exclusive image payload. Those platform add-ons are outside this NixOS
   appliance's runtime closure.
+
+## Version 2.0.2.13
+
+- Enlarge the timeline playhead texture and map it through a texture-padded
+  ranges control, keeping one round playhead continuous from 0% through 100%.
+- Replace the font-dependent chapter arrow with a symmetric, centered skin
+  asset.
+- Extend the headless OSD review fixtures to cover exact 0% and 100% seek
+  positions.

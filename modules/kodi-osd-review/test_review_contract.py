@@ -76,7 +76,7 @@ class ReviewContractTest(unittest.TestCase):
                 values = scenario_properties(scenario)
                 self.assertEqual(
                     values["htpc.review.seek.actualmarker"],
-                    "40,40",
+                    "40.17,40.17",
                 )
 
     def test_seek_pair_proves_target_specific_preview_and_position(self):
@@ -199,7 +199,7 @@ class ReviewContractTest(unittest.TestCase):
                     for key, value in values.items()
                     if key.startswith("htpc.review.seek.")
                 },
-                {"htpc.review.seek.actualmarker": "40,40"},
+                {"htpc.review.seek.actualmarker": "40.17,40.17"},
             )
 
     def test_playing_fixtures_differ_only_by_playback_state(self):
@@ -270,14 +270,29 @@ class ReviewContractTest(unittest.TestCase):
             "String.IsEqual(Window(Home).Property("
             "htpc.review.scenario),timeline-chapters)",
         )
-        self.assertEqual(
-            parameters["timeline_chapter_hint_arrow_label"],
-            "↑",
-        )
+        self.assertNotIn("timeline_chapter_hint_arrow_label", parameters)
         self.assertEqual(
             parameters["timeline_chapter_hint_label"],
             "Chapters",
         )
+
+    def test_endpoint_scenarios_use_padded_interior_marker_coordinates(self):
+        start = scenario_properties("seek-start")
+        end = scenario_properties("seek-end")
+        self.assertEqual(
+            start["htpc.review.seek.a.targetmarker"],
+            "0.8532,0.8532",
+        )
+        self.assertEqual(
+            end["htpc.review.seek.a.targetmarker"],
+            "99.1468,99.1468",
+        )
+        for scenario in (start, end):
+            marker = float(
+                scenario["htpc.review.seek.a.targetmarker"].split(",")[0]
+            )
+            self.assertGreater(marker, 0.0)
+            self.assertLess(marker, 100.0)
 
     def test_driver_keys_and_focus_equal_the_skin_contract(self):
         root = ET.parse(REVIEW_WINDOW).getroot()

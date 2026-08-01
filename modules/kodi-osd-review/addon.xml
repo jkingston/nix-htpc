@@ -2,7 +2,7 @@
 <addon
   id="script.htpc.osd-review"
   name="HTPC OSD Review"
-  version="0.1.2"
+  version="0.1.3"
   provider-name="NixOS HTPC">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>

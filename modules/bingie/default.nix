@@ -2,7 +2,7 @@
 
 let
   upstream = import ./upstream-assets.nix { inherit pkgs; };
-  version = "2.0.2.12";
+  version = "2.0.2.13";
 
   # Keep reviewable skin source in this repository. Only the large immutable
   # payloads listed in upstream-assets.nix come from the hash-pinned archive.
@@ -144,6 +144,8 @@ kodiPackages.buildKodiAddon {
     test -f "$addon_dir/resources/htpc/osd/stop-focused.png"
     test -f "$addon_dir/resources/htpc/osd/timeline-marker.svg"
     test -f "$addon_dir/resources/htpc/osd/timeline-marker.png"
+    test -f "$addon_dir/resources/htpc/osd/chapter-up.svg"
+    test -f "$addon_dir/resources/htpc/osd/chapter-up.png"
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
     test -f "$addon_dir/extras/media/backgrounds/background.jpg"
