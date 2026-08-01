@@ -187,10 +187,6 @@ msgctxt "#31040"
 msgid "Now playing"
 msgstr ""
 
-msgctxt "#31041"
-msgid "Bingie splash image"
-msgstr ""
-
 msgctxt "#31042"
 msgid "Enable studio logo"
 msgstr ""
@@ -322,10 +318,6 @@ msgstr ""
 
 msgctxt "#31074"
 msgid "Unlock view"
-msgstr ""
-
-msgctxt "#31075"
-msgid "Enable startup animation in 4K"
 msgstr ""
 
 msgctxt "#31076"
@@ -636,16 +628,8 @@ msgctxt "#31151"
 msgid "Background overlay color"
 msgstr ""
 
-msgctxt "#31152"
-msgid "Bingie animation"
-msgstr ""
-
 msgctxt "#31153"
 msgid "Trakt"
-msgstr ""
-
-msgctxt "#31154"
-msgid "Startup animations"
 msgstr ""
 
 msgctxt "#31155"
@@ -730,10 +714,6 @@ msgstr ""
 
 msgctxt "#31175"
 msgid "Change shortcut"
-msgstr ""
-
-msgctxt "#31176"
-msgid "Splash screen settings"
 msgstr ""
 
 msgctxt "#31177"

@@ -5,7 +5,6 @@
 	<onload>SetProperty(shutdownmenuactive,true,Home)</onload>
 	<onunload>ClearProperty(shutdownmenuactive,Home)</onunload>
     <onload>Dialog.Close(busydialognocancel)</onload>
-	<onunload>ClearProperty(StartupMask,Home)</onunload>
     <controls>
 	
 		<control type="group">

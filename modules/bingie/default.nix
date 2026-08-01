@@ -2,7 +2,7 @@
 
 let
   upstream = import ./upstream-assets.nix { inherit pkgs; };
-  version = "2.0.2.9";
+  version = "2.0.2.11";
 
   # Keep reviewable skin source in this repository. Only the large immutable
   # payloads listed in upstream-assets.nix come from the hash-pinned archive.
@@ -47,14 +47,20 @@ kodiPackages.buildKodiAddon {
       1080i/Custom_1101_StartUp.xml \
       1080i/Custom_1102_StartUp2.xml \
       1080i/Custom_1103_StartUpMask.xml \
+      1080i/DialogBusy.xml \
+      1080i/DialogButtonMenu.xml \
       1080i/Home.xml \
       1080i/Includes.xml \
+      1080i/IncludesAnimations.xml \
       1080i/IncludesVariables.xml \
       1080i/IncludesBingie.xml \
+      1080i/IncludesDefaultSkinSettings.xml \
+      1080i/IncludesFunctions.xml \
       1080i/IncludesHomeBingie.xml \
       1080i/IncludesHTPCPlayback.xml \
       1080i/IncludesHTPCVideoOSD.xml \
       1080i/IncludesOSD.xml \
+      1080i/IncludesSkinSettings.xml \
       1080i/IncludesViewsLayoutLandscape.xml \
       1080i/IncludesViewsLayoutPoster.xml \
       1080i/IncludesViewsLayoutSquare.xml \
@@ -64,7 +70,8 @@ kodiPackages.buildKodiAddon {
       1080i/VideoOSD.xml \
       1080i/VideoOSDBookmarks.xml \
       1080i/Custom_1158_AutoCloseOSD.xml \
-      1080i/Custom_1192_HTPCVideoOSDReview.xml
+      1080i/Custom_1192_HTPCVideoOSDReview.xml \
+      extras/bingiesettings.xml
 
     test ! -e 1080i/script-skinshortcuts-includes.xml
     test "$(grep -c 'SetProperty(BingiePlaybackStarting' \
@@ -77,6 +84,15 @@ kodiPackages.buildKodiAddon {
       1080i/IncludesHomeBingie.xml)" -eq 2
     test "$(grep -c 'HTPC_TV_Genres_Row' \
       1080i/IncludesHomeBingie.xml)" -eq 2
+    for removed_asset in \
+      extras/media/bingie_intro_1080p.mp4 \
+      extras/media/bingie_intro_2160p.mp4 \
+      extras/media/bingie_splash.png
+    do
+      test ! -e "$removed_asset"
+    done
+    test -f extras/media/backgrounds/background.jpg
+    test -f extras/media/snow/snow.png
 
     BINGIE_SKIN_ROOT="$PWD" \
       BINGIE_TOOLS_ROOT=${./tools} \
@@ -121,6 +137,15 @@ kodiPackages.buildKodiAddon {
     test -f "$addon_dir/resources/htpc/osd/timeline-marker.png"
     test -f "$addon_dir/media/Textures.xbt"
     test -f "$addon_dir/resources/icon.png"
+    test -f "$addon_dir/extras/media/backgrounds/background.jpg"
+    test -f "$addon_dir/extras/media/snow/snow.png"
+    for removed_asset in \
+      bingie_intro_1080p.mp4 \
+      bingie_intro_2160p.mp4 \
+      bingie_splash.png
+    do
+      test ! -e "$addon_dir/extras/media/$removed_asset"
+    done
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"
   '';
 

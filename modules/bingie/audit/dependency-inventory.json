@@ -150,8 +150,8 @@
   "schema_version": 1,
   "subject": {
     "addon_id": "skin.bingie",
-    "addon_version": "2.0.2.9",
+    "addon_version": "2.0.2.11",
     "declaration": "addon.xml",
-    "declaration_sha256": "570681a2fe80e15084dd794f088106c4cb2764c54c1297026a19fabf1270e9d1"
+    "declaration_sha256": "c5ccdc2f411fe9fa015104db1fda4b7e3bbbaa2b5c08f51103eeeb3ad2e1a28e"
   }
 }

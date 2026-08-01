@@ -178,7 +178,6 @@
             <include>General_Header_Settings</include>
             <include>General_Indicators_Settings</include>
             <include>General_Resources_Settings</include>
-            <include>General_Splash_Screen_Settings</include>
             <include>General_Advanced_Settings</include>
         </include>
     </include>
@@ -2364,31 +2363,6 @@
             <label>$LOCALIZE[31308]</label>
             <label2>$INFO[Skin.String(moviegenrefanart.name)]</label2>
             <onclick>RunScript(script.bingie.toolbox,action=setresourceaddon,skinstring=moviegenrefanart,addontype=resource.images.moviegenrefanart)</onclick>
-        </control>
-    </include>
-
-    <!-- Splash Screen Settings -->
-    <include name="General_Splash_Screen_Settings">
-        <control type="label" id="31176">
-            <include>SkinSettings_Header</include>
-            <label>$LOCALIZE[31176]</label>
-        </control>		
-		<!-- Splash screen -->
-        <control type="button" id="31154">
-            <include>SkinSettings_Button</include>
-            <label>$LOCALIZE[31154]</label>
-            <label2>$INFO[Skin.String(splash_screen.label)]</label2>
-            <onclick>RunScript(script.bingie.toolbox,action=setskinsetting,setting=splash_screen,header=$LOCALIZE[31154])</onclick>
-        </control>
-		<control type="radiobutton" id="31075">
-            <!-- Enable 4k animations -->
-            <description/>
-            <include>SkinSettings_Button</include>
-            <label>$LOCALIZE[31075]</label>
-            <onclick condition="String.IsEqual(Skin.String(SplashAnimationResolution),2160p)">Skin.SetString(SplashAnimationResolution,1080p)</onclick>
-            <onclick condition="String.IsEqual(Skin.String(SplashAnimationResolution),1080p)">Skin.SetString(SplashAnimationResolution,2160p)</onclick>
-            <selected>String.IsEqual(Skin.String(SplashAnimationResolution),2160p)</selected>
-            <visible>!String.IsEqual(Skin.String(splash_screen),bingie_image) + !String.IsEqual(Skin.String(splash_screen),none)</visible>
         </control>
     </include>
 

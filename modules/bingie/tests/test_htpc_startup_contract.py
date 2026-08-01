@@ -19,6 +19,17 @@ HOME_XML = XML_ROOT / "Home.xml"
 FIRST_RUN_XML = XML_ROOT / "Custom_1101_StartUp.xml"
 SECOND_RUN_XML = XML_ROOT / "Custom_1102_StartUp2.xml"
 STARTUP_MASK_XML = XML_ROOT / "Custom_1103_StartUpMask.xml"
+TEXT_SOURCE_SUFFIXES = {
+    ".cfg",
+    ".ini",
+    ".json",
+    ".md",
+    ".nfo",
+    ".po",
+    ".py",
+    ".txt",
+    ".xml",
+}
 
 
 def _parse(path: Path) -> ET.Element:
@@ -59,6 +70,14 @@ def _button(root: ET.Element, control_id: int) -> ET.Element:
     return matches[0]
 
 
+def _text_sources() -> dict[Path, str]:
+    return {
+        path.relative_to(SKIN_ROOT): path.read_text(encoding="utf-8")
+        for path in SKIN_ROOT.rglob("*")
+        if path.is_file() and path.suffix.casefold() in TEXT_SOURCE_SUFFIXES
+    }
+
+
 class StartupLifecycleContractTest(unittest.TestCase):
     def test_startup_clears_mask_then_routes_without_media_side_effects(self):
         root = _parse(STARTUP_XML)
@@ -86,6 +105,46 @@ class StartupLifecycleContractTest(unittest.TestCase):
         self.assertNotIn("splash_screen", startup_source)
         self.assertNotIn("PlayerControl(Stop)", startup_source)
         self.assertEqual(_actions(root, "onunload"), [])
+
+    def test_removed_splash_feature_has_no_textual_source_references(self):
+        sources = _text_sources()
+        forbidden_markers = (
+            "splash_screen",
+            "SplashAnimationResolution",
+            "bingie_default",
+            "bingie_image",
+            "bingie_intro",
+            "bingie_splash",
+            "General_Splash_Screen_Settings",
+            "System.HasAlarm(startup)",
+            "AlarmClock(startup",
+            "Window.IsVisible(1103)",
+            "Bingie splash image",
+            "Enable startup animation in 4K",
+            "Splash screen settings",
+            'msgctxt "#31041"',
+            'msgctxt "#31075"',
+            'msgctxt "#31152"',
+            'msgctxt "#31154"',
+            'msgctxt "#31176"',
+        )
+        for path, source in sources.items():
+            for marker in forbidden_markers:
+                with self.subTest(path=str(path), marker=marker):
+                    self.assertNotIn(marker, source)
+
+        mask_sources = {
+            path
+            for path, source in sources.items()
+            if "StartupMask" in source
+        }
+        self.assertEqual(
+            mask_sources,
+            {
+                Path("1080i/Startup.xml"),
+                Path("1080i/Custom_1103_StartUpMask.xml"),
+            },
+        )
 
     def test_legacy_startup_mask_can_only_clear_itself(self):
         root = _parse(STARTUP_MASK_XML)

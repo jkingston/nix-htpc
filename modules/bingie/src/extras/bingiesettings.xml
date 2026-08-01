@@ -227,10 +227,6 @@
     <setting id="View_DisplayInfo" value="small_delayed" label="$LOCALIZE[31117]" condition="" icon="" description=""/>
 	<setting id="View_DisplayInfo" value="disable" label="$LOCALIZE[1223]" condition="" icon="" description=""/>
 	
-	<!-- splash screen -->
-	<setting id="splash_screen" value="bingie_default" label="$LOCALIZE[31152]" condition="" icon="" description=""/>
-	<setting id="splash_screen" value="bingie_image" label="$LOCALIZE[31041]" condition="" icon="" description=""/>
-	<setting id="splash_screen" value="none" label="$LOCALIZE[231]" condition="" icon="" description=""/>
 	
 	<!-- scrollbar visibility -->
 	<setting id="scrollbar_visibility" value="" label="$LOCALIZE[571]" condition="" icon="" description=""/>

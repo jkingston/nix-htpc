@@ -187,10 +187,6 @@ msgctxt "#31040"
 msgid "Now playing"
 msgstr "Reproduciendo ahora"
 
-msgctxt "#31041"
-msgid "Bingie splash image"
-msgstr "Imagen de bienvenida de Bingie"
-
 msgctxt "#31042"
 msgid "Enable studio logo"
 msgstr "Habilitar logo del estudio"
@@ -323,10 +319,6 @@ msgstr "Bloquear vista"
 msgctxt "#31074"
 msgid "Unlock view"
 msgstr "Desbloquear vista"
-
-msgctxt "#31075"
-msgid "Enable startup animation in 4K"
-msgstr "Habilitar animación de inicio en 4K"
 
 msgctxt "#31076"
 msgid "Switch Profiles"
@@ -636,17 +628,9 @@ msgctxt "#31151"
 msgid "Background overlay color"
 msgstr "Color de superposición de fondo"
 
-msgctxt "#31152"
-msgid "Bingie animation"
-msgstr "Animación de Bingie"
-
 msgctxt "#31153"
 msgid "Trakt"
 msgstr "Trakt"
-
-msgctxt "#31154"
-msgid "Startup animations"
-msgstr "Animaciones de inicio"
 
 msgctxt "#31155"
 msgid "Add/remove favorites"
@@ -731,10 +715,6 @@ msgstr "Color enfocado para mosaicos y widgets de inicio"
 msgctxt "#31175"
 msgid "Change shortcut"
 msgstr "Cambiar acceso directo"
-
-msgctxt "#31176"
-msgid "Splash screen settings"
-msgstr "Configuración de pantalla de bienvenida"
 
 msgctxt "#31177"
 msgid "Title/clearlogo animation when system is idle"

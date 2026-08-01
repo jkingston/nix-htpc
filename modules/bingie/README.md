@@ -5,9 +5,10 @@ It starts from upstream BINGIE 2.0.2 and keeps the add-on ID unchanged so Kodi
 retains the existing skin settings and generated menu shortcuts.
 
 `src/` is the authoritative XML, language, shortcut, and other textual source.
-`upstream-assets.nix` fetches only the large immutable fonts, compiled media,
-and raster/video assets from the hash-pinned upstream archive. `default.nix`
-assembles those two inputs without applying source patches or build-time text
+`upstream-assets.nix` fetches only explicitly allowlisted immutable fonts,
+compiled media, resources, and raster artwork from the hash-pinned upstream
+archive. The unused startup videos and splash image are not assembled.
+`default.nix` combines those inputs without source patches or build-time text
 rewrites.
 
 The greetd pre-start in `modules/kodi.nix` validates and synchronises the

@@ -186,10 +186,6 @@ msgctxt "#31040"
 msgid "Now playing"
 msgstr "正在播放"
 
-msgctxt "#31041"
-msgid "Bingie splash image"
-msgstr "Bingie 启动画面"
-
 msgctxt "#31042"
 msgid "Enable studio logo"
 msgstr "启用制片厂徽标"
@@ -322,10 +318,6 @@ msgstr "锁定视图"
 msgctxt "#31074"
 msgid "Unlock view"
 msgstr "解锁视图"
-
-msgctxt "#31075"
-msgid "Enable startup animation in 4K"
-msgstr "启用 4K 启动动画"
 
 msgctxt "#31076"
 msgid "Switch Profiles"
@@ -635,17 +627,9 @@ msgctxt "#31151"
 msgid "Background overlay color"
 msgstr "背景叠加层颜色"
 
-msgctxt "#31152"
-msgid "Bingie animation"
-msgstr "Bingie 动画"
-
 msgctxt "#31153"
 msgid "Trakt"
 msgstr "Trakt"
-
-msgctxt "#31154"
-msgid "Startup animations"
-msgstr "启动动画"
 
 msgctxt "#31155"
 msgid "Add/remove favorites"
@@ -730,10 +714,6 @@ msgstr "主界面磁贴及小组件的选中状态颜色"
 msgctxt "#31175"
 msgid "Change shortcut"
 msgstr "更改快捷方式"
-
-msgctxt "#31176"
-msgid "Splash screen settings"
-msgstr "启动画面设置"
 
 msgctxt "#31177"
 msgid "Title/clearlogo animation when system is idle"

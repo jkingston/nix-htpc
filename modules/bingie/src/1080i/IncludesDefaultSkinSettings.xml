@@ -98,8 +98,6 @@
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(EnableTop250)</onload>
 	<onload condition="!Skin.HasSetting(HomeMenuDefaults46)">Skin.SetBool(EnableSpotlightTop250)</onload>
 			
-		<!-- default splash resolution -->
-        <onload condition="String.IsEmpty(Skin.String(SplashAnimationResolution))">Skin.SetString(SplashAnimationResolution,1080p)</onload>
         <!-- default color settings -->
 		<onload condition="!Skin.String(LineUnderMenuIconsColor)">Skin.SetString(LineUnderMenuIconsColor,ffe50914)</onload>
         <onload condition="!Skin.String(LineUnderMenuIconsColor.name)">Skin.SetString(LineUnderMenuIconsColor.name,$LOCALIZE[13343])</onload>
@@ -368,8 +366,6 @@
         <onload condition="!Skin.String(View514_DisplayInfo.label)">Skin.SetString(View514_DisplayInfo.label,$LOCALIZE[1223])</onload>
 		<onload condition="!Skin.String(cast_number)">Skin.SetString(cast_number,20)</onload>
         <onload condition="!Skin.String(cast_number.label)">Skin.SetString(cast_number.label,20 [LOWERCASE]$LOCALIZE[29994][/LOWERCASE])</onload>
-		<onload condition="!Skin.String(splash_screen)">Skin.SetString(splash_screen,bingie_default)</onload>
-        <onload condition="!Skin.String(splash_screen.label)">Skin.SetString(splash_screen.label,$LOCALIZE[31152])</onload>
 		<onload condition="!Skin.String(scrollbar_visibility)">Skin.SetString(scrollbar_visibility,)</onload>
         <onload condition="!Skin.String(scrollbar_visibility.label)">Skin.SetString(scrollbar_visibility.label,$LOCALIZE[571])</onload>
 		<onload condition="!Skin.String(general_header)">Skin.SetString(general_header,disable)</onload>

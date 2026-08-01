@@ -54,3 +54,15 @@ behind each implementation revision.
   newer, still-optimistic gesture.
 - Keep the OSD open through visual settlement, while allowing Back to dismiss
   it after an already-issued short seek without misreporting cancellation.
+
+## Version 2.0.2.11
+
+Version `2.0.2.10` was a rejected deployment trial and is intentionally not
+reused.
+
+- Make the startup lifecycle media-free while preserving the first-run flow
+  and a self-clearing compatibility mask.
+- Remove the obsolete splash controls, settings, defaults, translations, and
+  trailer timing branches.
+- Exclude the two upstream intro videos and splash image from the assembled
+  add-on while retaining independently used backgrounds and snow artwork.

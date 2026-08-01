@@ -1722,7 +1722,6 @@
                 <height>656</height>
                 <orientation>vertical</orientation>
                 <itemgap>0</itemgap>
-				<onfocus>ClearProperty(StartupMask,Home)</onfocus>
 				<onunfocus>AlarmClock(CancelTrailerAlarm,CancelAlarm(preview_delay,silent),00:01,silent)</onunfocus>
                 <onright>ClearProperty(ShowViewSubMenu,Home)</onright>
                 <onright condition="!Window.IsActive(1109)">77777</onright>
