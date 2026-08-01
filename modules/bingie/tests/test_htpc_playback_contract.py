@@ -358,7 +358,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 "property_prefix": "htpc.seek",
                 "production_actions": "true",
                 "inert_actions": "false",
-                "preview_background_load": "true",
+                "preview_background_load": "false",
                 "preview_visible_condition": (
                     "String.IsEmpty(Window(Home).Property("
                     "htpc.chapter.open))"
