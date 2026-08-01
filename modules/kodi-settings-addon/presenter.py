@@ -46,6 +46,15 @@ class KodiPropertyPublisher(object):
         self.preview_diagnostics_seen = set()
         self.texture_handoff_generation = None
 
+    def _diagnose(self, message):
+        """Emit best-effort diagnostics without changing playback behavior."""
+        if self.logger is None:
+            return
+        try:
+            self.logger(message)
+        except Exception:
+            pass
+
     def publish(self, snapshot):
         values = {
             "active": "true" if snapshot["active"] else "",
@@ -90,11 +99,10 @@ class KodiPropertyPublisher(object):
             and diagnostic not in self.preview_diagnostics_seen
         ):
             self.preview_diagnostics_seen.add(diagnostic)
-            if self.logger is not None:
-                self.logger(
-                    "trickplay stage=validator outcome=%s reason=%s"
-                    % diagnostic
-                )
+            self._diagnose(
+                "trickplay stage=validator outcome=%s reason=%s"
+                % diagnostic
+            )
         return path
 
     @staticmethod
@@ -223,7 +231,7 @@ class KodiPropertyPublisher(object):
         ):
             # Kodi offers no texture-loaded callback. This records the final
             # property handoff to the skin; a screenshot verifies rendering.
-            self.logger(
+            self._diagnose(
                 "trickplay stage=texture-handoff outcome=ready "
                 "reason=property-commit"
             )

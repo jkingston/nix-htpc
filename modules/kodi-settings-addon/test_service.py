@@ -1907,6 +1907,28 @@ class PresenterAndLeaseTest(unittest.TestCase):
         )
         self.assertNotIn("private", "\n".join(messages))
 
+    def test_preview_diagnostic_logger_cannot_break_presentation(self):
+        def broken_logger(_message):
+            raise RuntimeError("logger unavailable")
+
+        window = FakeWindow()
+        publisher = KodiPropertyPublisher(window, logger=broken_logger)
+        snapshot = {"active": True, "generation": 7, "target_seconds": 110}
+        self.assertEqual(publisher.refresh_preview(snapshot), "")
+        publisher.publish_view(
+            {
+                "active": True,
+                "identity": "/media/movie.mkv",
+                "playback_epoch": 2,
+                "controller_generation": 7,
+                "target_valid": True,
+                "target_percent": 12.5,
+                "preview_status": "ready",
+                "preview_path": "/tmp/frame.jpg",
+            }
+        )
+        self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
+
     def test_view_publisher_commits_complete_inactive_slot_then_flips(self):
         window = FakeWindow()
         publisher = KodiPropertyPublisher(window)
