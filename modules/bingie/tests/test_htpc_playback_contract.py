@@ -358,7 +358,6 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
                 "property_prefix": "htpc.seek",
                 "production_actions": "true",
                 "inert_actions": "false",
-                "preview_background_load": "false",
                 "preview_visible_condition": (
                     "String.IsEmpty(Window(Home).Property("
                     "htpc.chapter.open))"
@@ -488,7 +487,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
         self.assertEqual(parameters["property_prefix"], "htpc.seek")
         self.assertEqual(parameters["production_actions"], "true")
         self.assertEqual(parameters["inert_actions"], "false")
-        self.assertEqual(parameters["preview_background_load"], "true")
+        self.assertNotIn("preview_background_load", parameters)
         self.assertEqual(parameters["preview_visible_condition"], "true")
         self.assertNotIn(
             "htpc.chapter.open",
@@ -1239,10 +1238,7 @@ class ForkOwnedVideoOsdContractTest(unittest.TestCase):
             passed_parameters["preview_unavailable_label"],
             "$PARAM[preview_unavailable_label]",
         )
-        self.assertEqual(
-            passed_parameters["preview_background_load"],
-            "$PARAM[preview_background_load]",
-        )
+        self.assertNotIn("preview_background_load", passed_parameters)
         self.assertEqual(
             passed_parameters["preview_visible_condition"],
             "$PARAM[preview_visible_condition]",
@@ -1461,7 +1457,6 @@ class PlaybackXmlContractTest(unittest.TestCase):
                 ),
                 "preview_loading_label": "$LOCALIZE[31582]",
                 "preview_unavailable_label": "$LOCALIZE[31583]",
-                "preview_background_load": "true",
                 "preview_visible_condition": "true",
                 "ready_condition": (
                     "!String.IsEmpty(Window(Home).Property("
@@ -2357,7 +2352,7 @@ class PlaybackXmlContractTest(unittest.TestCase):
         )
         self.assertEqual(
             ready_texture.get("background"),
-            "$PARAM[preview_background_load]",
+            "false",
         )
         path_textures = [
             texture

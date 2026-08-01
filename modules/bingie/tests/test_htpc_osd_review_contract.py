@@ -162,7 +162,7 @@ class HeadlessOsdReviewWindowTest(unittest.TestCase):
         self.assertEqual(parameters["production_actions"], "false")
         self.assertEqual(parameters["inert_actions"], "true")
         self.assertEqual(parameters["seekable_condition"], "true")
-        self.assertEqual(parameters["preview_background_load"], "false")
+        self.assertNotIn("preview_background_load", parameters)
         self.assertEqual(
             parameters["chapter_available_condition"],
             "String.IsEqual(Window(Home).Property("

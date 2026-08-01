@@ -27,7 +27,6 @@
 		<param name="target_fill_color" default="$INFO[Skin.String(BingieOSDProgressBarColor)]" />
 		<param name="preview_loading_label" default="$LOCALIZE[31582]" />
 		<param name="preview_unavailable_label" default="$LOCALIZE[31583]" />
-		<param name="preview_background_load" default="true" />
 		<param name="preview_visible_condition" default="true" />
 		<param name="ready_condition" default="!String.IsEmpty(Window(Home).Property(htpc.service.ready))" />
 		<param name="property_window" default="Home" />
@@ -208,7 +207,9 @@
 					<control type="image">
 						<width>380</width>
 						<height>214</height>
-						<texture background="$PARAM[preview_background_load]">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath)]</texture>
+						<!-- Small pre-extracted JPEGs live on tmpfs. Synchronous loading
+						     prevents Kodi exposing an empty async presentation slot. -->
+						<texture background="false">$INFO[Window($PARAM[property_window]).Property($PARAM[property_prefix].$PARAM[slot].previewpath)]</texture>
 						<aspectratio align="center" aligny="center">keep</aspectratio>
 					</control>
 				</control>

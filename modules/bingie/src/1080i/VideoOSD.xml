@@ -23,9 +23,6 @@
 				<param name="property_prefix" value="htpc.seek" />
 				<param name="production_actions" value="true" />
 				<param name="inert_actions" value="false" />
-				<!-- Frames are pre-extracted small JPEGs on tmpfs. Load synchronously
-				     so Kodi never exposes an empty async presentation slot. -->
-				<param name="preview_background_load" value="false" />
 				<param name="preview_visible_condition" value="String.IsEmpty(Window(Home).Property(htpc.chapter.open))" />
 			</include>
 		</control>

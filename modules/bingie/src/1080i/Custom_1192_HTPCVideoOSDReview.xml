@@ -86,7 +86,6 @@
 			<param name="property_prefix" value="htpc.review.seek" />
 			<param name="production_actions" value="false" />
 			<param name="inert_actions" value="true" />
-			<param name="preview_background_load" value="false" />
 		</include>
 	</controls>
 </window>
