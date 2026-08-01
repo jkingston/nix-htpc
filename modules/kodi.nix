@@ -314,6 +314,7 @@ in
 
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
+    "d /run/htpc-trickplay 0700 htpc users - -"
     "d /var/lib/nix-htpc 0755 root root - -"
     "d ${kodiAddonReconciler.backupRoot} 0700 root root - -"
   ];
@@ -406,7 +407,7 @@ in
     enable = true;
     settings = {
       default_session = {
-        command = "${kodiWithAddons}/bin/kodi-standalone";
+        command = "${pkgs.coreutils}/bin/env HTPC_TRICKPLAY_CACHE_ROOT=/run/htpc-trickplay ${kodiWithAddons}/bin/kodi-standalone";
         user = "htpc";
       };
     };
