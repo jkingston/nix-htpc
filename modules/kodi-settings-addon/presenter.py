@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import json
 import math
 import time
 
@@ -15,15 +16,10 @@ from media_contract import (
     SERVICE_PROTOCOL,
     SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
-    PREVIEW_PATH,
-    PREVIEW_TOKEN,
-    PREVIEW_PLAYBACK,
-    PREVIEW_GENERATION,
-    PREVIEW_TARGET,
-    PREVIEW_SAMPLE,
-    PREVIEW_FRAME,
-    PREVIEW_REVISION,
+    PREVIEW_CONTRACT,
+    SEEK_REQUEST,
     preview_validation,
+    preview_status,
 )
 
 
@@ -45,6 +41,7 @@ class KodiPropertyPublisher(object):
         self.preview_diagnostic_generation = None
         self.preview_diagnostics_seen = set()
         self.texture_handoff_generation = None
+        self.last_preview_status = "none"
 
     def _diagnose(self, message):
         """Emit best-effort diagnostics without changing playback behavior."""
@@ -70,23 +67,33 @@ class KodiPropertyPublisher(object):
             else:
                 self.window.clearProperty(SEEK_PREFIX + key)
         self.last.update(values)
+        request = ""
+        if snapshot.get("active"):
+            request = json.dumps(
+                {
+                    "schema": 1,
+                    "active": True,
+                    "generation": int(snapshot["generation"]),
+                    "target_seconds": int(snapshot["target_seconds"]),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        if self.last.get("seekrequest") != request:
+            if request:
+                self.window.setProperty(SEEK_REQUEST, request)
+            else:
+                self.window.clearProperty(SEEK_REQUEST)
+            self.last["seekrequest"] = request
 
     def refresh_preview(self, snapshot):
-        keys = (
-            PREVIEW_PATH,
-            PREVIEW_TOKEN,
-            PREVIEW_PLAYBACK,
-            PREVIEW_GENERATION,
-            PREVIEW_TARGET,
-            PREVIEW_SAMPLE,
-            PREVIEW_FRAME,
-            PREVIEW_REVISION,
-        )
+        keys = (PREVIEW_CONTRACT,)
         properties = dict(
             (key, self.window.getProperty(key))
             for key in keys
         )
         path, reason = preview_validation(properties, snapshot)
+        self.last_preview_status = preview_status(properties)
         generation = snapshot.get("generation") if snapshot.get("active") else None
         if generation != self.preview_diagnostic_generation:
             self.preview_diagnostic_generation = generation

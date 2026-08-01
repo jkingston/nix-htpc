@@ -53,36 +53,17 @@ CHAPTERS_PLAYBACK = "jellyfin.htpc.chapters.playback"
 CHAPTERS_REVISION = "jellyfin.htpc.chapters.revision"
 CHAPTER_CONTRACT_VERSION = 1
 
-# Exact preview producer writes path/component fields first and the JSON token
-# last. A chapter image is never valid for this namespace.
-PREVIEW_PATH = "jellyfin.htpc.seekpreview"
-PREVIEW_TOKEN = "jellyfin.htpc.seekpreviewtoken"
-PREVIEW_PLAYBACK = "jellyfin.htpc.seekpreviewplayback"
-PREVIEW_GENERATION = "jellyfin.htpc.seekpreviewgeneration"
-PREVIEW_TARGET = "jellyfin.htpc.seekpreviewtarget"
-PREVIEW_SAMPLE = "jellyfin.htpc.seekpreviewsample"
-PREVIEW_FRAME = "jellyfin.htpc.seekpreviewframe"
-PREVIEW_REVISION = "jellyfin.htpc.seekpreviewrevision"
+# Preview requests and responses each use one JSON property as their atomic
+# commit point. Chapter images are never valid for this namespace.
+PREVIEW_CONTRACT = "jellyfin.htpc.preview.v2"
+PREVIEW_CONTRACT_VERSION = 2
+SEEK_REQUEST = "htpc.seek.request.v1"
 
 
 def _text(value):
     if value is None:
         return ""
     return str(value)
-
-
-def _same_integer(left, right):
-    try:
-        return int(left) == int(right)
-    except (TypeError, ValueError):
-        return False
-
-
-def _same_number(left, right, tolerance=0.0005):
-    try:
-        return abs(float(left) - float(right)) <= tolerance
-    except (TypeError, ValueError):
-        return False
 
 
 def parse_chapter_payload(serialized, expected_token=None):
@@ -216,16 +197,20 @@ def preview_validation(properties, seek_snapshot):
     """
     if not seek_snapshot.get("active"):
         return "", "idle"
-    path = properties.get(PREVIEW_PATH) or ""
-    serialized = properties.get(PREVIEW_TOKEN) or ""
-    if not path or not serialized:
+    serialized = properties.get(PREVIEW_CONTRACT) or ""
+    if not serialized:
         return "", "producer-empty"
     try:
         token = json.loads(serialized)
     except (TypeError, ValueError):
         return "", "token-json"
-    if not isinstance(token, dict) or token.get("schema") != 1:
+    if not isinstance(token, dict) or token.get("schema") != PREVIEW_CONTRACT_VERSION:
         return "", "token-schema"
+    if token.get("status") != "ready":
+        return "", _text(token.get("status") or "producer-empty")
+    path = _text(token.get("path")).strip()
+    if not path:
+        return "", "producer-empty"
     try:
         generation = int(token.get("seek_generation"))
         target = int(token.get("target_seconds"))
@@ -240,36 +225,27 @@ def preview_validation(properties, seek_snapshot):
         return "", "target"
     if frame < 0 or revision < 0 or not _text(token.get("playback")):
         return "", "token-fields"
-    if _text(properties.get(PREVIEW_PLAYBACK)) != _text(
-        token.get("playback")
-    ):
-        return "", "playback-component"
-    if not _same_integer(
-        properties.get(PREVIEW_GENERATION),
-        token.get("seek_generation"),
-    ):
-        return "", "generation-component"
-    if not _same_number(
-        properties.get(PREVIEW_TARGET),
-        token.get("target_seconds"),
-    ):
-        return "", "target-component"
-    if not _same_number(
-        properties.get(PREVIEW_SAMPLE),
-        token.get("sample_seconds"),
-    ):
-        return "", "sample-component"
-    if not _same_integer(
-        properties.get(PREVIEW_FRAME),
-        token.get("frame_index"),
-    ):
-        return "", "frame-component"
-    if not _same_integer(
-        properties.get(PREVIEW_REVISION),
-        token.get("revision"),
-    ):
-        return "", "revision-component"
     return path, "ready"
+
+
+def preview_status(properties):
+    try:
+        contract = json.loads(properties.get(PREVIEW_CONTRACT) or "")
+    except (TypeError, ValueError):
+        return "none"
+    if (
+        not isinstance(contract, dict)
+        or contract.get("schema") != PREVIEW_CONTRACT_VERSION
+    ):
+        return "none"
+    status = _text(contract.get("status"))
+    return status if status in (
+        "initialising",
+        "warming",
+        "ready",
+        "temporarily-failed",
+        "unavailable",
+    ) else "none"
 
 
 def validated_preview(properties, seek_snapshot):

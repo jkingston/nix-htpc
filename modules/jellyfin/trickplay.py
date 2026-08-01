@@ -13,24 +13,24 @@ from collections import OrderedDict
 
 import requests
 import xbmc
+from PIL import Image
 
 from .helper import LazyLogger, window
 from .helper.utils import translate_path
+from .trickplay_cache import (
+    DEFAULT_FRAME_CACHE_BYTES,
+    PlaybackFrameCache,
+    PlaybackWorkQueue,
+    sprite_for_frame,
+    sprite_order,
+)
 
 
 LOG = LazyLogger(__name__)
 
-# Exact-preview component properties consumed by the settings service.
-PREVIEW_PATH = "jellyfin.htpc.seekpreview"
-PREVIEW_TARGET = "jellyfin.htpc.seekpreviewtarget"
-
-# Versioned exact-preview contract. PREVIEW_TOKEN is the commit marker.
-PREVIEW_TOKEN = "jellyfin.htpc.seekpreviewtoken"
-PREVIEW_PLAYBACK = "jellyfin.htpc.seekpreviewplayback"
-PREVIEW_GENERATION = "jellyfin.htpc.seekpreviewgeneration"
-PREVIEW_SAMPLE = "jellyfin.htpc.seekpreviewsample"
-PREVIEW_FRAME = "jellyfin.htpc.seekpreviewframe"
-PREVIEW_REVISION = "jellyfin.htpc.seekpreviewrevision"
+# Atomic exact-preview request and response contracts.
+PREVIEW_CONTRACT = "jellyfin.htpc.preview.v2"
+SEEK_REQUEST = "htpc.seek.request.v1"
 
 # Versioned chapter contract. Chapter images never satisfy exact preview jobs.
 CHAPTER_AVAILABLE = "jellyfin.htpc.chapters.available"
@@ -39,11 +39,7 @@ CHAPTER_TOKEN = "jellyfin.htpc.chapters.token"
 CHAPTER_PLAYBACK = "jellyfin.htpc.chapters.playback"
 CHAPTER_REVISION = "jellyfin.htpc.chapters.revision"
 
-SEEK_ACTIVE = "htpc.seek.active"
-SEEK_GENERATION = "htpc.seek.generation"
-SEEK_TARGET = "htpc.seek.targetseconds"
-
-PREVIEW_SCHEMA = 1
+PREVIEW_SCHEMA = 2
 CHAPTER_SCHEMA = 1
 SEEK_POLL_SECONDS = 0.05
 SPRITE_CACHE_BYTES = 16 * 1024 * 1024
@@ -745,9 +741,14 @@ class TrickplayPreviewManager(object):
             character if character.isalnum() or character in "-_" else "_"
             for character in str(item.get("Id") or "unknown")
         )[:80]
+        runtime_root = os.environ.get("HTPC_TRICKPLAY_CACHE_ROOT")
+        if not runtime_root:
+            runtime_root = os.path.join(
+                translate_path("special://temp"),
+                "jellyfin-trickplay",
+            )
         cache_root = os.path.join(
-            translate_path("special://temp"),
-            "jellyfin-trickplay",
+            runtime_root,
             safe_item,
             playback_token,
         )
@@ -779,6 +780,12 @@ class TrickplayPreviewManager(object):
         state = None
         try:
             os.makedirs(cache_root, exist_ok=True)
+            self._publish_preview_status(
+                playback_token,
+                revision,
+                "initialising",
+                "metadata",
+            )
             client = item["Server"]
             metadata = self._load_metadata(item, abort)
             if metadata is None:
@@ -799,11 +806,23 @@ class TrickplayPreviewManager(object):
                     reason,
                     _media_kind(item.get("Type")),
                 )
+                self._publish_preview_status(
+                    playback_token,
+                    revision,
+                    "unavailable",
+                    reason,
+                )
             else:
                 LOG.info(
                     "HTPC trickplay stage=metadata outcome=ready "
                     "reason=manifest media=%s",
                     _media_kind(item.get("Type")),
+                )
+                self._publish_preview_status(
+                    playback_token,
+                    revision,
+                    "warming",
+                    "cache",
                 )
             duration = media_duration_seconds(item, metadata, self.player)
             chapters = sanitize_chapters(metadata.get("Chapters") or [], duration)
@@ -826,24 +845,11 @@ class TrickplayPreviewManager(object):
 
             workers = [
                 threading.Thread(
-                    target=self._preview_worker,
+                    target=self._coordinator_worker,
                     args=(state, abort),
-                    name="jellyfin-preview-foreground",
-                ),
-                threading.Thread(
-                    target=self._prefetch_worker,
-                    args=(state, abort),
-                    name="jellyfin-preview-neighbor",
-                ),
-            ]
-            if len(chapters) >= 2:
-                workers.append(
-                    threading.Thread(
-                        target=self._chapter_worker,
-                        args=(state, abort),
-                        name="jellyfin-chapter-images",
-                    )
+                    name="jellyfin-trickplay-coordinator",
                 )
+            ]
             for worker in workers:
                 worker.daemon = True
                 worker.start()
@@ -852,17 +858,17 @@ class TrickplayPreviewManager(object):
             last_observed = None
             last_target = None
             while not abort.wait(SEEK_POLL_SECONDS):
-                if not _property_true(window(SEEK_ACTIVE)):
+                seek_request = self._read_seek_request()
+                if seek_request is None or not seek_request.get("active"):
                     if last_observed is not None:
                         state["request_slot"].clear()
-                        state["prefetch_slot"].clear()
                         self._clear_preview_properties(state)
                     last_observed = None
                     last_target = None
                     continue
 
-                generation = window(SEEK_GENERATION)
-                target_text = window(SEEK_TARGET)
+                generation = str(seek_request["generation"])
+                target_text = str(seek_request["target_seconds"])
                 observed = (generation, target_text)
                 if not generation or not target_text or observed == last_observed:
                     continue
@@ -892,6 +898,10 @@ class TrickplayPreviewManager(object):
                     continue
 
                 state["request_slot"].submit(request)
+                state["work_queue"].submit_request(
+                    request,
+                    sprite_for_frame(request["frame"], info),
+                )
                 _log_stage_once(
                     state,
                     "request",
@@ -996,6 +1006,22 @@ class TrickplayPreviewManager(object):
         output_root = os.path.join(cache_root, "output")
         for path in (frame_root, chapter_root, output_root):
             os.makedirs(path, exist_ok=True)
+        current_seconds = 0.0
+        try:
+            current_seconds = float(self.player.getTime())
+        except Exception:
+            pass
+        current_frame = frame_for_time(current_seconds, info) if info else 0
+        chapter_frames = set(
+            frame_for_time(entry["time_seconds"], info)
+            for entry in chapters
+            if info is not None
+        )
+        frame_cache = PlaybackFrameCache(
+            frame_root,
+            byte_limit=DEFAULT_FRAME_CACHE_BYTES,
+        )
+        frame_cache.pin(chapter_frames)
         return {
             "item_id": item["Id"],
             "media_source_id": media_source_id,
@@ -1009,7 +1035,7 @@ class TrickplayPreviewManager(object):
             "frame_root": frame_root,
             "chapter_root": chapter_root,
             "sprite_cache": ByteLruCache(SPRITE_CACHE_BYTES),
-            "frame_cache": FileLruCache(FRAME_CACHE_LIMIT),
+            "frame_cache": frame_cache,
             "chapter_cache": FileLruCache(CHAPTER_CACHE_LIMIT),
             "sprite_condition": threading.Condition(threading.RLock()),
             "inflight_sprites": set(),
@@ -1019,6 +1045,10 @@ class TrickplayPreviewManager(object):
             "chapter_lock": threading.RLock(),
             "request_slot": LatestRequestSlot(),
             "prefetch_slot": LatestRequestSlot(),
+            "work_queue": PlaybackWorkQueue(
+                sprite_order(info, current_frame) if info else []
+            ),
+            "warmed_sprites": set(),
             "output_slots": OutputSlots(output_root, revision),
             "exact_session": self._new_session(client),
             "prefetch_session": self._new_session(client),
@@ -1029,6 +1059,158 @@ class TrickplayPreviewManager(object):
             "diagnostics_seen": set(),
             "workers": [],
         }
+
+    def _coordinator_worker(self, state, abort):
+        """Own every decode/extraction so foreground work has no peer lock."""
+        while not abort.is_set():
+            job = state["work_queue"].take(abort)
+            if job is None:
+                return
+            kind, payload = job
+            try:
+                if kind == "request":
+                    sprite = sprite_for_frame(payload["frame"], state["info"])
+                    self._warm_sprite(
+                        state,
+                        sprite,
+                        abort,
+                        priority_frame=payload["frame"],
+                    )
+                    if self._latest_current_request(state, payload, abort):
+                        self._process_preview_request(state, payload, abort)
+                else:
+                    self._warm_sprite(state, payload, abort)
+                self._refresh_chapter_frames(state)
+            except PreviewFailure as error:
+                if kind == "request" and not abort.is_set():
+                    self._clear_preview_if_current(state, payload, abort)
+                    self._log_preview_failure(state, payload, error)
+            except Exception:
+                if not abort.is_set():
+                    LOG.warning(
+                        "HTPC trickplay stage=coordinator outcome=failed "
+                        "reason=unexpected"
+                    )
+
+    def _warm_sprite(
+        self,
+        state,
+        sprite,
+        abort,
+        priority_frame=None,
+    ):
+        sprite = int(sprite)
+        if sprite in state["warmed_sprites"]:
+            return False
+        started = time.monotonic()
+        sprite_data = self._load_sprite_data(
+            state,
+            sprite,
+            abort,
+            foreground=False,
+        )
+        if abort.is_set():
+            raise PreviewFailure(
+                "preview aborted",
+                False,
+                stage="warm",
+                reason="aborted",
+            )
+
+        decode_started = time.monotonic()
+        try:
+            image = Image.open(io.BytesIO(sprite_data))
+            image.load()
+        except Exception:
+            state["sprite_cache"].remove(sprite)
+            raise PreviewFailure(
+                "sprite decode failed",
+                True,
+                stage="decode",
+                reason="invalid-image",
+            )
+        decode_ms = (time.monotonic() - decode_started) * 1000.0
+
+        columns = max(1, int(state["info"]["TileWidth"]))
+        rows = max(1, int(state["info"]["TileHeight"]))
+        per_sprite = columns * rows
+        first = sprite * per_sprite
+        last = min(
+            first + per_sprite,
+            int(state["info"]["ThumbnailCount"]),
+        )
+        extracted = 0
+        frames = list(range(first, last))
+        if priority_frame is not None and int(priority_frame) in frames:
+            frames.remove(int(priority_frame))
+            frames.insert(0, int(priority_frame))
+        preempted = False
+        try:
+            for frame in frames:
+                if abort.is_set():
+                    break
+                if (
+                    extracted
+                    and state.get("work_queue") is not None
+                    and state["work_queue"].has_request
+                ):
+                    preempted = True
+                    break
+                if state["frame_cache"].get(frame) is not None:
+                    continue
+                _frame, _sprite, box = tile_for_frame(frame, state["info"])
+                path = os.path.join(
+                    state["frame_root"],
+                    "frame-%06d-r%d.jpg" % (frame, state["revision"]),
+                )
+                temporary = "%s.tmp-%s" % (
+                    path,
+                    threading.current_thread().ident or 0,
+                )
+                cropped = image.crop(box).convert("RGB")
+                try:
+                    cropped.save(temporary, "JPEG", quality=92)
+                finally:
+                    cropped.close()
+                os.replace(temporary, path)
+                state["frame_cache"].put(frame, path)
+                extracted += 1
+        finally:
+            image.close()
+            state["sprite_cache"].remove(sprite)
+
+        if abort.is_set() or preempted:
+            return False
+        state["warmed_sprites"].add(sprite)
+        LOG.info(
+            "HTPC trickplay stage=warm outcome=ready reason=sprite "
+            "decode_ms=%d total_ms=%d frames=%d",
+            int(round(decode_ms)),
+            int(round((time.monotonic() - started) * 1000.0)),
+            extracted,
+        )
+        return True
+
+    def _refresh_chapter_frames(self, state):
+        if len(state["chapters"]) < 2:
+            return False
+        complete = True
+        changed = False
+        with state["chapter_lock"]:
+            for entry in state["chapters"]:
+                frame = frame_for_time(entry["time_seconds"], state["info"])
+                path = state["frame_cache"].get(frame)
+                if path is None:
+                    complete = False
+                    continue
+                if entry.get("image") != path:
+                    entry["image"] = path
+                    changed = True
+            if complete and changed:
+                state["manifest_revision"] += 1
+        if complete and changed:
+            return self._publish_chapter_manifest(state)
+        return complete
 
     def _preview_worker(self, state, abort):
         while not abort.is_set():
@@ -1074,12 +1256,6 @@ class TrickplayPreviewManager(object):
                     )
                     if current:
                         self._log_preview_failure(state, request, error)
-                    if current and error.transient:
-                        state["request_slot"].retry_after(
-                            request,
-                            PREVIEW_STATIONARY_RETRY_SECONDS,
-                            abort,
-                        )
                     return False
                 if not state["request_slot"].wait_retry(
                     request["key"],
@@ -1092,7 +1268,6 @@ class TrickplayPreviewManager(object):
             if published is None:
                 return False
             state["request_slot"].discard_pending(published)
-            self._queue_one_neighbor(state, published)
             return True
         return False
 
@@ -1130,50 +1305,58 @@ class TrickplayPreviewManager(object):
         if latest is None:
             return None
         token = latest["token"]
+        seek_request = self._read_seek_request()
         if (
             token["playback"] != state["playback_token"]
             or token["revision"] != state["revision"]
             or latest["frame"] != request["frame"]
-            or not _property_true(window(SEEK_ACTIVE))
-            or window(SEEK_GENERATION) != token["seek_generation"]
-            or window(SEEK_TARGET) != latest["target_text"]
+            or seek_request is None
+            or not seek_request.get("active")
+            or str(seek_request.get("generation"))
+            != token["seek_generation"]
+            or int(seek_request.get("target_seconds", -1))
+            != int(round(latest["target_seconds"]))
         ):
             return None
         return latest
 
+    @staticmethod
+    def _read_seek_request():
+        try:
+            request = json.loads(window(SEEK_REQUEST) or "")
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(request, dict) or request.get("schema") != 1:
+            return None
+        try:
+            return {
+                "active": bool(request.get("active")),
+                "generation": int(request["generation"]),
+                "target_seconds": int(request["target_seconds"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def _publish_preview(self, state, request, source_path, abort):
         """Commit this sampled frame for the exact latest matching target."""
-        try:
-            staged_path = state["output_slots"].stage(source_path)
-        except Exception:
-            raise PreviewFailure(
-                "preview publication failed",
-                True,
-                stage="publication",
-                reason="file-io",
-            )
         try:
             with self._property_lock:
                 latest = self._latest_current_request(state, request, abort)
                 if latest is None:
                     return None
-                payload = latest["token"]
-                token_json = json.dumps(
+                payload = dict(latest["token"])
+                payload.update(
+                    {
+                        "status": "ready",
+                        "path": source_path,
+                    }
+                )
+                contract = json.dumps(
                     payload,
                     sort_keys=True,
                     separators=(",", ":"),
                 )
-                # Install path and component fields first. The token and exact
-                # target are the final consistency fields validated by readers.
-                window(PREVIEW_PATH, staged_path)
-                state["output_slots"].activate(staged_path)
-                window(PREVIEW_PLAYBACK, payload["playback"])
-                window(PREVIEW_GENERATION, payload["seek_generation"])
-                window(PREVIEW_SAMPLE, str(payload["sample_seconds"]))
-                window(PREVIEW_FRAME, str(payload["frame_index"]))
-                window(PREVIEW_REVISION, str(payload["revision"]))
-                window(PREVIEW_TOKEN, token_json)
-                window(PREVIEW_TARGET, latest["target_text"])
+                window(PREVIEW_CONTRACT, contract)
                 _log_stage_once(
                     state,
                     "publication",
@@ -1195,7 +1378,12 @@ class TrickplayPreviewManager(object):
         with self._property_lock:
             if self._latest_current_request(state, request, abort) is None:
                 return False
-            self._clear_preview_properties(state)
+            self._publish_preview_status(
+                state["playback_token"],
+                state["revision"],
+                "temporarily-failed",
+                "frame",
+            )
             # A newer target can share this sampled frame while the failed
             # request is in flight. Only the failed request itself is owned
             # here; leave a newer pending version for the worker to retry.
@@ -1636,21 +1824,21 @@ class TrickplayPreviewManager(object):
 
     def _clear_preview_properties(self, state=None):
         with self._property_lock:
-            # Clear the final target consistency field first so a stale image
-            # is hidden.
-            window(PREVIEW_TARGET, clear=True)
-            for key in (
-                PREVIEW_TOKEN,
-                PREVIEW_PATH,
-                PREVIEW_PLAYBACK,
-                PREVIEW_GENERATION,
-                PREVIEW_SAMPLE,
-                PREVIEW_FRAME,
-                PREVIEW_REVISION,
-            ):
-                window(key, clear=True)
-            if state is not None:
-                state["output_slots"].clear()
+            window(PREVIEW_CONTRACT, clear=True)
+
+    def _publish_preview_status(self, playback, revision, status, reason):
+        contract = {
+            "schema": PREVIEW_SCHEMA,
+            "status": str(status),
+            "playback": str(playback),
+            "revision": int(revision),
+            "reason": str(reason),
+        }
+        with self._property_lock:
+            window(
+                PREVIEW_CONTRACT,
+                json.dumps(contract, sort_keys=True, separators=(",", ":")),
+            )
 
     def _clear_chapter_properties(self):
         with self._property_lock:
@@ -1681,7 +1869,14 @@ class TrickplayPreviewManager(object):
         # playback may publish immediately after this lock is released, but an
         # old lifecycle can never clear the replacement's properties.
         with self._property_lock:
-            if window(PREVIEW_PLAYBACK) == state["playback_token"]:
+            try:
+                preview = json.loads(window(PREVIEW_CONTRACT) or "")
+            except (TypeError, ValueError):
+                preview = None
+            if (
+                isinstance(preview, dict)
+                and preview.get("playback") == state["playback_token"]
+            ):
                 self._clear_preview_properties(state)
             if window(CHAPTER_PLAYBACK) == state["playback_token"]:
                 self._clear_chapter_properties()
@@ -1690,6 +1885,7 @@ class TrickplayPreviewManager(object):
     def _close_state(state):
         state["request_slot"].close()
         state["prefetch_slot"].close()
+        state["work_queue"].close()
         for worker in state["workers"]:
             if worker.is_alive():
                 worker.join(8.0)

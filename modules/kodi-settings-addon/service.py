@@ -466,6 +466,7 @@ class SeekService(object):
             preview_path,
             snapshot.get("generation"),
             snapshot.get("target_seconds"),
+            self.publisher.last_preview_status,
         )
         self.publisher.publish_view(self.view.snapshot())
         self.presenter.update(snapshot)

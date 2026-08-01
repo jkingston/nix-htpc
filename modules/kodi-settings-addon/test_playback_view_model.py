@@ -490,7 +490,7 @@ class PlaybackViewModelTest(unittest.TestCase):
         self.assertEqual(resuming["preview_path"], "")
         self.assertIsNone(view.preview_started_at)
 
-    def test_preview_lifecycle_uses_exact_grace_and_timeout_boundaries(self):
+    def test_preview_lifecycle_waits_for_explicit_producer_status(self):
         view = PlaybackViewModel()
         initial = view.update(
             controller(target=110, generation=4),
@@ -513,18 +513,20 @@ class PlaybackViewModelTest(unittest.TestCase):
         )
         self.assertEqual(at_loading["preview_status"], "loading")
 
-        before_unavailable = view.update(
+        still_loading = view.update(
             controller(target=110, generation=4),
             player(),
             1.999,
         )
-        self.assertEqual(before_unavailable["preview_status"], "loading")
-        at_unavailable = view.update(
+        self.assertEqual(still_loading["preview_status"], "loading")
+        no_false_timeout = view.update(
             controller(target=110, generation=4),
             player(),
             2.000,
         )
-        self.assertEqual(at_unavailable["preview_status"], "unavailable")
+        self.assertEqual(no_false_timeout["preview_status"], "loading")
+        self.assertFalse(view.offer_preview("", 4, 110, "unavailable"))
+        self.assertEqual(view.snapshot()["preview_status"], "unavailable")
 
     def test_empty_and_stale_preview_offers_do_not_restart_lifecycle(self):
         view = PlaybackViewModel()
@@ -556,18 +558,19 @@ class PlaybackViewModelTest(unittest.TestCase):
             player(),
             2.000,
         )
-        self.assertEqual(unavailable["preview_status"], "unavailable")
+        self.assertEqual(unavailable["preview_status"], "loading")
         self.assertEqual(unavailable["preview_path"], "")
 
     def test_exact_preview_can_recover_after_becoming_unavailable(self):
         view = PlaybackViewModel()
         view.update(controller(target=110, generation=4), player(), 0.0)
-        unavailable = view.update(
+        view.update(
             controller(target=110, generation=4),
             player(),
             2.000,
         )
-        self.assertEqual(unavailable["preview_status"], "unavailable")
+        self.assertFalse(view.offer_preview("", 4, 110, "unavailable"))
+        self.assertEqual(view.snapshot()["preview_status"], "unavailable")
 
         self.assertTrue(view.offer_preview("/tmp/110.jpg", 4, 110))
         recovered = view.snapshot()
@@ -724,12 +727,13 @@ class PlaybackViewModelTest(unittest.TestCase):
             9.0,
         )
         self.assertEqual(before_start["preview_status"], "loading")
-        unavailable = view.update(
+        view.update(
             controller(target=110, generation=4),
             player(),
             12.0,
         )
-        self.assertEqual(unavailable["preview_status"], "unavailable")
+        self.assertFalse(view.offer_preview("", 4, 110, "unavailable"))
+        self.assertEqual(view.snapshot()["preview_status"], "unavailable")
         back_inside_loading_window = view.update(
             controller(target=110, generation=4),
             player(),

@@ -22,6 +22,7 @@ kodiPackages.jellyfin.overrideAttrs (old: {
 
   postPatch = (old.postPatch or "") + ''
     cp ${./trickplay.py} jellyfin_kodi/trickplay.py
+    cp ${./trickplay_cache.py} jellyfin_kodi/trickplay_cache.py
 
     substituteInPlace release.yaml \
       --replace-fail "version: '2.0.0'" "version: '2.0.6'"
@@ -30,6 +31,7 @@ kodiPackages.jellyfin.overrideAttrs (old: {
     test "$(grep -c 'TrickplayPreviewManager' jellyfin_kodi/player.py)" -eq 2
     test "$(grep -c 'trickplay_preview.stop()' jellyfin_kodi/player.py)" -eq 3
     test -f jellyfin_kodi/trickplay.py
+    test -f jellyfin_kodi/trickplay_cache.py
   '';
 
   doCheck = true;
@@ -49,5 +51,6 @@ kodiPackages.jellyfin.overrideAttrs (old: {
       '<import addon="script.module.pil" version="5.1.0"' \
       "$out/share/kodi/addons/$namespace/addon.xml")" -eq 1
     test -f "$out/share/kodi/addons/$namespace/jellyfin_kodi/trickplay.py"
+    test -f "$out/share/kodi/addons/$namespace/jellyfin_kodi/trickplay_cache.py"
   '';
 })

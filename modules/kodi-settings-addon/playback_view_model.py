@@ -23,7 +23,6 @@ SETTLE_MAX_SECONDS = 4.0
 PLAYING_SAMPLE_BACKWARD_TOLERANCE = 0.25
 PLAYING_SAMPLE_MAX_ADVANCE = 5.0
 PREVIEW_LOADING_DELAY_SECONDS = 0.180
-PREVIEW_UNAVAILABLE_DELAY_SECONDS = 2.000
 
 
 def finite_number(value, default=None):
@@ -132,10 +131,8 @@ class PlaybackViewModel(object):
         ):
             return
         elapsed = max(0.0, now - self.preview_started_at)
-        if elapsed >= PREVIEW_UNAVAILABLE_DELAY_SECONDS:
-            self.preview_status = "unavailable"
-        elif elapsed >= PREVIEW_LOADING_DELAY_SECONDS:
-            if self.preview_status != "unavailable":
+        if elapsed >= PREVIEW_LOADING_DELAY_SECONDS:
+            if self.preview_status not in ("ready", "unavailable"):
                 self.preview_status = "loading"
         elif self.preview_status not in ("loading", "unavailable"):
             self.preview_status = "none"
@@ -452,11 +449,29 @@ class PlaybackViewModel(object):
         self.settle_started = now
         self.settle_samples = 0
 
-    def offer_preview(self, path, generation, target_seconds):
+    def offer_preview(
+        self,
+        path,
+        generation,
+        target_seconds,
+        producer_status="none",
+    ):
         """Accept only an exact preview for the currently latched target."""
         if not self.active or not self.target_valid:
             return False
         if not path:
+            if producer_status == "unavailable":
+                self.preview_path = ""
+                self.preview_status = "unavailable"
+                return False
+            if producer_status in (
+                "initialising",
+                "warming",
+                "temporarily-failed",
+            ):
+                if self.preview_started_at is not None:
+                    self._advance_preview(self.clock())
+                return False
             if (
                 self.phase == "settling"
                 and self.preview_status == "ready"

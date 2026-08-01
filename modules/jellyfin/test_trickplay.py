@@ -11,8 +11,14 @@ import unittest
 
 
 def load_module():
+    path = pathlib.Path(
+        os.environ.get(
+            "TRICKPLAY_MODULE",
+            pathlib.Path(__file__).with_name("trickplay.py"),
+        )
+    )
     package = types.ModuleType("jellyfin_kodi")
-    package.__path__ = []
+    package.__path__ = [str(path.parent)]
     helper = types.ModuleType("jellyfin_kodi.helper")
     helper.LazyLogger = lambda _name: types.SimpleNamespace(
         debug=lambda *_args: None,
@@ -33,12 +39,6 @@ def load_module():
     sys.modules["xbmc"] = xbmc
     sys.modules["requests"] = requests
 
-    path = pathlib.Path(
-        os.environ.get(
-            "TRICKPLAY_MODULE",
-            pathlib.Path(__file__).with_name("trickplay.py"),
-        )
-    )
     spec = importlib.util.spec_from_file_location("jellyfin_kodi.trickplay", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -219,10 +219,9 @@ class TrickplayTest(unittest.TestCase):
                 threading.Event(),
             )
         )
-        self.assertEqual(
-            json.loads(store.values[trickplay.PREVIEW_TOKEN]),
-            expected["token"],
-        )
+        contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
+        self.assertEqual(contract["target_seconds"], expected["token"]["target_seconds"])
+        self.assertEqual(contract["status"], "ready")
 
     def process_terminal_failure_while_clear_is_blocked(
         self,
@@ -282,21 +281,11 @@ class TrickplayTest(unittest.TestCase):
 
     @staticmethod
     def seed_preview_contract(store, request, path="/replacement-preview.jpg"):
-        token = request["token"]
-        values = {
-            trickplay.PREVIEW_PATH: path,
-            trickplay.PREVIEW_TARGET: request["target_text"],
-            trickplay.PREVIEW_TOKEN: json.dumps(
-                token,
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
-            trickplay.PREVIEW_PLAYBACK: token["playback"],
-            trickplay.PREVIEW_GENERATION: token["seek_generation"],
-            trickplay.PREVIEW_SAMPLE: str(token["sample_seconds"]),
-            trickplay.PREVIEW_FRAME: str(token["frame_index"]),
-            trickplay.PREVIEW_REVISION: str(token["revision"]),
-        }
+        contract = dict(request["token"])
+        contract.update({"status": "ready", "path": path})
+        values = {trickplay.PREVIEW_CONTRACT: json.dumps(
+            contract, sort_keys=True, separators=(",", ":")
+        )}
         store.values.update(values)
         return values
 
@@ -307,12 +296,15 @@ class TrickplayTest(unittest.TestCase):
         return path
 
     def activate_request(self, store, request):
-        store.values.update(
+        store.values[trickplay.SEEK_REQUEST] = json.dumps(
             {
-                trickplay.SEEK_ACTIVE: "true",
-                trickplay.SEEK_GENERATION: request["token"]["seek_generation"],
-                trickplay.SEEK_TARGET: request["target_text"],
-            }
+                "schema": 1,
+                "active": True,
+                "generation": int(request["token"]["seek_generation"]),
+                "target_seconds": int(round(request["target_seconds"])),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
         )
 
     def test_time_and_tile_helpers(self):
@@ -327,6 +319,94 @@ class TrickplayTest(unittest.TestCase):
             trickplay.tile_for_time(99999, INFO),
             (139, 1, (2880, 720, 3200, 960)),
         )
+
+    def test_warm_sprite_decodes_once_and_extracts_every_frame(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as root:
+            sprite = Image.new("RGB", (20, 20))
+            colors = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0))
+            for index, color in enumerate(colors):
+                left = (index % 2) * 10
+                top = (index // 2) * 10
+                tile = Image.new("RGB", (10, 10), color)
+                sprite.paste(tile, (left, top))
+                tile.close()
+            encoded = io.BytesIO()
+            sprite.save(encoded, "JPEG", quality=95)
+            sprite.close()
+
+            info = dict(
+                INFO,
+                ThumbnailCount=4,
+                TileWidth=2,
+                TileHeight=2,
+                Width=10,
+                Height=10,
+            )
+            frame_root = os.path.join(root, "frames")
+            state = {
+                "info": info,
+                "revision": 2,
+                "frame_root": frame_root,
+                "frame_cache": trickplay.PlaybackFrameCache(
+                    frame_root,
+                    byte_limit=1024 * 1024,
+                ),
+                "sprite_cache": trickplay.ByteLruCache(1024 * 1024),
+                "warmed_sprites": set(),
+            }
+            calls = []
+            manager = trickplay.TrickplayPreviewManager(None)
+            manager._load_sprite_data = lambda *_args, **_kwargs: (
+                calls.append(0) or encoded.getvalue()
+            )
+
+            self.assertTrue(manager._warm_sprite(state, 0, threading.Event()))
+            self.assertEqual(calls, [0])
+            self.assertEqual(len(state["frame_cache"]), 4)
+            paths = [state["frame_cache"].get(frame) for frame in range(4)]
+            self.assertTrue(all(path and os.path.isfile(path) for path in paths))
+            self.assertEqual(len(set(paths)), 4)
+            self.assertFalse(manager._warm_sprite(state, 0, threading.Event()))
+            self.assertEqual(calls, [0])
+
+    def test_whole_title_sprite_order_expands_from_current_position(self):
+        info = dict(INFO, ThumbnailCount=550)
+        self.assertEqual(
+            trickplay.sprite_order(info, current_frame=250),
+            [2, 3, 1, 4, 0, 5],
+        )
+
+    def test_playback_frame_cache_is_byte_bounded_and_preserves_pins(self):
+        with tempfile.TemporaryDirectory() as root:
+            cache = trickplay.PlaybackFrameCache(root, byte_limit=8)
+            paths = []
+            for index, content in enumerate((b"aaaa", b"bbbb", b"cccc")):
+                path = self.write_file(
+                    os.path.join(root, "frame-%d.jpg" % index),
+                    content,
+                )
+                paths.append(path)
+            cache.pin([0])
+            self.assertTrue(cache.put(0, paths[0]))
+            self.assertTrue(cache.put(1, paths[1]))
+            self.assertTrue(cache.put(2, paths[2]))
+            self.assertEqual(cache.byte_size, 8)
+            self.assertEqual(cache.get(0), paths[0])
+            self.assertIsNone(cache.get(1))
+            self.assertEqual(cache.get(2), paths[2])
+
+    def test_work_queue_prefers_latest_request_and_promotes_its_sprite(self):
+        queue = trickplay.PlaybackWorkQueue([0, 1, 2])
+        abort = threading.Event()
+        first = {"frame": 100}
+        latest = {"frame": 200}
+        queue.submit_request(first, 1)
+        queue.submit_request(latest, 2)
+        self.assertEqual(queue.take(abort), ("request", latest))
+        self.assertEqual(queue.take(abort), ("warm", 2))
+        self.assertEqual(queue.remaining, 2)
 
     def test_real_pillow_sprite_crop_publishes_valid_consumer_contract(self):
         from PIL import Image
@@ -376,13 +456,8 @@ class TrickplayTest(unittest.TestCase):
                     "prefetch_session": object(),
                 }
             )
-            store = PropertyStore(
-                {
-                    trickplay.SEEK_ACTIVE: "true",
-                    trickplay.SEEK_GENERATION: "7",
-                    trickplay.SEEK_TARGET: "1",
-                }
-            )
+            store = PropertyStore()
+            self.activate_request(store, request)
             messages = []
             trickplay.window = store.window
             trickplay.LOG = types.SimpleNamespace(
@@ -404,7 +479,9 @@ class TrickplayTest(unittest.TestCase):
                 )
             )
 
-            published = store.values[trickplay.PREVIEW_PATH]
+            published = json.loads(
+                store.values[trickplay.PREVIEW_CONTRACT]
+            )["path"]
             with Image.open(published) as cropped:
                 self.assertEqual(cropped.size, (10, 10))
                 red, _green, blue = cropped.getpixel((5, 5))
@@ -930,34 +1007,10 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(results, [True])
             self.assertEqual(calls, [(first["frame"], True)])
             self.assertEqual(state["request_slot"].pending_count, 0)
-            self.assertEqual(
-                json.loads(store.values[trickplay.PREVIEW_TOKEN]),
-                latest["token"],
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_TARGET],
-                latest["target_text"],
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_PLAYBACK],
-                latest["token"]["playback"],
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_GENERATION],
-                latest["token"]["seek_generation"],
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_SAMPLE],
-                str(latest["token"]["sample_seconds"]),
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_FRAME],
-                str(latest["token"]["frame_index"]),
-            )
-            self.assertEqual(
-                store.values[trickplay.PREVIEW_REVISION],
-                str(latest["token"]["revision"]),
-            )
+            contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
+            for key, value in latest["token"].items():
+                self.assertEqual(contract[key], value)
+            self.assertEqual(contract["status"], "ready")
 
     def test_terminal_failure_preserves_newer_same_frame_request(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1202,8 +1255,7 @@ class TrickplayTest(unittest.TestCase):
 
             self.assertEqual(results, [False])
             self.assertEqual(calls, [(first["frame"], True)])
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-            self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
             self.assertIs(
                 state["request_slot"].take(threading.Event()),
                 latest,
@@ -1235,8 +1287,7 @@ class TrickplayTest(unittest.TestCase):
             )
 
             self.assertEqual(results, [False])
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-            self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
     def test_media_or_revision_change_rejects_delayed_completion(self):
         replacements = (
@@ -1262,8 +1313,7 @@ class TrickplayTest(unittest.TestCase):
                 )
 
                 self.assertEqual(results, [False])
-                self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-                self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+                self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
     def test_unobserved_target_change_rejects_stale_completion(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1280,12 +1330,14 @@ class TrickplayTest(unittest.TestCase):
                 state,
                 request,
                 source,
-                lambda: store.values.__setitem__(trickplay.SEEK_TARGET, "62"),
+                lambda: self.activate_request(
+                    store,
+                    self.make_request(target="62"),
+                ),
             )
 
             self.assertEqual(results, [False])
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-            self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
     def test_output_slots_double_buffer_and_pin_active_path(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1357,8 +1409,9 @@ class TrickplayTest(unittest.TestCase):
                 )
             )
             self.assertEqual(chapter_calls, [])
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-            self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+            contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
+            self.assertEqual(contract["status"], "temporarily-failed")
+            self.assertNotIn("path", contract)
 
     def test_stale_resolved_frame_is_rejected_before_publication(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1388,7 +1441,7 @@ class TrickplayTest(unittest.TestCase):
                     threading.Event(),
                 )
             )
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
+            self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
             pending = state["request_slot"].take(threading.Event())
             self.assertIs(pending, new_request)
@@ -1399,9 +1452,10 @@ class TrickplayTest(unittest.TestCase):
                     threading.Event(),
                 )
             )
+            contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
             self.assertEqual(
-                store.values[trickplay.PREVIEW_TARGET],
-                new_request["target_text"],
+                contract["target_seconds"],
+                new_request["token"]["target_seconds"],
             )
 
     def test_transient_exact_failure_retries_without_poisoning_frame(self):
@@ -1431,9 +1485,9 @@ class TrickplayTest(unittest.TestCase):
                 )
             )
             self.assertEqual(calls, [(6, True), (6, True)])
-            self.assertIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertIn(trickplay.PREVIEW_CONTRACT, store.values)
 
-    def test_exhausted_transient_requeues_unchanged_stationary_target(self):
+    def test_exhausted_transient_publishes_temporary_failure(self):
         with tempfile.TemporaryDirectory() as root:
             request = self.make_request()
             source = self.write_file(os.path.join(root, "frame"), b"frame")
@@ -1460,18 +1514,10 @@ class TrickplayTest(unittest.TestCase):
                     threading.Event(),
                 )
             )
-            self.assertEqual(state["request_slot"].pending_count, 1)
-            retry = state["request_slot"].take(threading.Event())
-            self.assertIs(retry, request)
-            self.assertTrue(
-                manager._process_preview_request(
-                    state,
-                    retry,
-                    threading.Event(),
-                )
-            )
-            self.assertEqual(calls, [(6, True), (6, True)])
-            self.assertIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertEqual(state["request_slot"].pending_count, 0)
+            contract = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
+            self.assertEqual(contract["status"], "temporarily-failed")
+            self.assertEqual(calls, [(6, True)])
 
     def test_stationary_retry_never_replaces_newer_target(self):
         slot = trickplay.LatestRequestSlot()
@@ -1555,18 +1601,11 @@ class TrickplayTest(unittest.TestCase):
                     threading.Event(),
                 )
             )
-            token = json.loads(store.values[trickplay.PREVIEW_TOKEN])
-            self.assertEqual(token, request["token"])
-            preview_keys = (
-                trickplay.PREVIEW_PATH,
-                trickplay.PREVIEW_PLAYBACK,
-                trickplay.PREVIEW_GENERATION,
-                trickplay.PREVIEW_SAMPLE,
-                trickplay.PREVIEW_FRAME,
-                trickplay.PREVIEW_REVISION,
-                trickplay.PREVIEW_TOKEN,
-                trickplay.PREVIEW_TARGET,
-            )
+            token = json.loads(store.values[trickplay.PREVIEW_CONTRACT])
+            for key, value in request["token"].items():
+                self.assertEqual(token[key], value)
+            self.assertEqual(token["status"], "ready")
+            preview_keys = (trickplay.PREVIEW_CONTRACT,)
             published = tuple(
                 key
                 for key, value, clear in store.events
@@ -1575,11 +1614,7 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(published, preview_keys)
             self.assertEqual(
                 set(store.values),
-                {
-                    trickplay.SEEK_ACTIVE,
-                    trickplay.SEEK_GENERATION,
-                    trickplay.SEEK_TARGET,
-                }
+                {trickplay.SEEK_REQUEST}
                 | set(preview_keys),
             )
 
@@ -1593,22 +1628,6 @@ class TrickplayTest(unittest.TestCase):
             state = self.make_process_state(root, request)
             manager = trickplay.TrickplayPreviewManager(None)
             manager._resolve_frame_path = lambda *_args, **_kwargs: source
-            staged = threading.Event()
-            real_slots = state["output_slots"]
-
-            class SignallingSlots(object):
-                def stage(self, source_path):
-                    path = real_slots.stage(source_path)
-                    staged.set()
-                    return path
-
-                def activate(self, path):
-                    real_slots.activate(path)
-
-                def clear(self):
-                    real_slots.clear()
-
-            state["output_slots"] = SignallingSlots()
             abort = threading.Event()
             results = []
             with manager._property_lock:
@@ -1622,12 +1641,10 @@ class TrickplayTest(unittest.TestCase):
                     )
                 )
                 publisher.start()
-                self.assertTrue(staged.wait(1))
                 abort.set()
             publisher.join(1)
             self.assertEqual(results, [False])
-            self.assertNotIn(trickplay.PREVIEW_PATH, store.values)
-            self.assertNotIn(trickplay.PREVIEW_TOKEN, store.values)
+            self.assertNotIn(trickplay.PREVIEW_CONTRACT, store.values)
 
     def test_only_one_directional_neighbor_is_queued(self):
         slot = trickplay.LatestRequestSlot()

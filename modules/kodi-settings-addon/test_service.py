@@ -122,14 +122,8 @@ from media_contract import (
     CURRENT_SEEK_PROPERTY_KEYS,
     CURRENT_SEEK_VIEW_PROPERTY_KEYS,
     CURRENT_VIEW_SLOT_FIELDS,
-    PREVIEW_FRAME,
-    PREVIEW_GENERATION,
-    PREVIEW_PATH,
-    PREVIEW_PLAYBACK,
-    PREVIEW_REVISION,
-    PREVIEW_SAMPLE,
-    PREVIEW_TARGET,
-    PREVIEW_TOKEN,
+    PREVIEW_CONTRACT,
+    SEEK_REQUEST,
     SERVICE_PROTOCOL,
     SERVICE_PROTOCOL_VERSION,
     SERVICE_READY,
@@ -1638,9 +1632,11 @@ class MediaContractTest(unittest.TestCase):
         chapters = parse_chapter_payload(json.dumps(payload), "playback-one")
         self.assertEqual([item["start_seconds"] for item in chapters], [0, 600])
 
-    def test_preview_requires_atomic_token_and_all_matching_components(self):
+    def test_preview_requires_one_complete_atomic_contract(self):
         token = {
-            "schema": 1,
+            "schema": 2,
+            "status": "ready",
+            "path": "/tmp/frame-10.jpg",
             "playback": "playback-one",
             "seek_generation": "7",
             "target_seconds": 110,
@@ -1648,16 +1644,7 @@ class MediaContractTest(unittest.TestCase):
             "frame_index": 10,
             "revision": 4,
         }
-        properties = {
-            PREVIEW_PATH: "/tmp/frame-10.jpg",
-            PREVIEW_TOKEN: json.dumps(token),
-            PREVIEW_PLAYBACK: "playback-one",
-            PREVIEW_GENERATION: "7",
-            PREVIEW_TARGET: "110.0",
-            PREVIEW_SAMPLE: "100.0",
-            PREVIEW_FRAME: "10",
-            PREVIEW_REVISION: "4",
-        }
+        properties = {PREVIEW_CONTRACT: json.dumps(token)}
         snapshot = {
             "active": True,
             "generation": 7,
@@ -1672,17 +1659,10 @@ class MediaContractTest(unittest.TestCase):
             ("/tmp/frame-10.jpg", "ready"),
         )
 
-        for key in (
-            PREVIEW_TOKEN,
-            PREVIEW_PLAYBACK,
-            PREVIEW_GENERATION,
-            PREVIEW_TARGET,
-            PREVIEW_SAMPLE,
-            PREVIEW_FRAME,
-            PREVIEW_REVISION,
-        ):
-            incomplete = dict(properties)
-            incomplete.pop(key)
+        for key in ("path", "playback", "frame_index", "revision"):
+            incomplete_token = dict(token)
+            incomplete_token.pop(key)
+            incomplete = {PREVIEW_CONTRACT: json.dumps(incomplete_token)}
             self.assertEqual(validated_preview(incomplete, snapshot), "")
 
         self.assertEqual(
@@ -1692,10 +1672,11 @@ class MediaContractTest(unittest.TestCase):
 
     def test_preview_rejects_old_media_generation_and_target(self):
         properties = {
-            PREVIEW_PATH: "/tmp/frame.jpg",
-            PREVIEW_TOKEN: json.dumps(
+            PREVIEW_CONTRACT: json.dumps(
                 {
-                    "schema": 1,
+                    "schema": 2,
+                    "status": "ready",
+                    "path": "/tmp/frame.jpg",
                     "playback": "old-playback",
                     "seek_generation": "6",
                     "target_seconds": 110,
@@ -1704,12 +1685,6 @@ class MediaContractTest(unittest.TestCase):
                     "revision": 3,
                 }
             ),
-            PREVIEW_PLAYBACK: "old-playback",
-            PREVIEW_GENERATION: "6",
-            PREVIEW_TARGET: "110",
-            PREVIEW_SAMPLE: "100",
-            PREVIEW_FRAME: "10",
-            PREVIEW_REVISION: "3",
         }
         self.assertEqual(
             validated_preview(
@@ -1759,7 +1734,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
             + CURRENT_SEEK_VIEW_PROPERTY_KEYS,
         )
 
-    def test_publisher_writes_only_four_current_controller_fields(self):
+    def test_publisher_writes_controller_fields_and_atomic_request(self):
         window = FakeWindow()
         publisher = KodiPropertyPublisher(window)
         snapshot = {
@@ -1788,6 +1763,12 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 ("set", "htpc.seek.generation", "1"),
                 ("set", "htpc.seek.targetseconds", "110"),
                 ("set", "htpc.seek.modal", "true"),
+                (
+                    "set",
+                    SEEK_REQUEST,
+                    '{"active":true,"generation":1,"schema":1,'
+                    '"target_seconds":110}',
+                ),
             ],
         )
         self.assertEqual(window.getProperty("htpc.seek.modal"), "true")
@@ -1809,13 +1790,23 @@ class PresenterAndLeaseTest(unittest.TestCase):
         publisher.publish(snapshot)
         self.assertEqual(
             window.operations,
-            [("set", "htpc.seek.targetseconds", "125")],
+            [
+                ("set", "htpc.seek.targetseconds", "125"),
+                (
+                    "set",
+                    SEEK_REQUEST,
+                    '{"active":true,"generation":1,"schema":1,'
+                    '"target_seconds":125}',
+                ),
+            ],
         )
 
     def test_preview_validation_does_not_republish_controller_properties(self):
         window = FakeWindow()
         token = {
-            "schema": 1,
+            "schema": 2,
+            "status": "ready",
+            "path": "/tmp/frame-10.jpg",
             "playback": "playback-one",
             "seek_generation": 7,
             "target_seconds": 110,
@@ -1823,18 +1814,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "frame_index": 10,
             "revision": 4,
         }
-        window.properties.update(
-            {
-                PREVIEW_PATH: "/tmp/frame-10.jpg",
-                PREVIEW_TOKEN: json.dumps(token),
-                PREVIEW_PLAYBACK: "playback-one",
-                PREVIEW_GENERATION: "7",
-                PREVIEW_TARGET: "110",
-                PREVIEW_SAMPLE: "100",
-                PREVIEW_FRAME: "10",
-                PREVIEW_REVISION: "4",
-            }
-        )
+        window.properties[PREVIEW_CONTRACT] = json.dumps(token)
         publisher = KodiPropertyPublisher(window)
         path = publisher.refresh_preview(
             {"active": True, "generation": 7, "target_seconds": 110}
@@ -1860,12 +1840,11 @@ class PresenterAndLeaseTest(unittest.TestCase):
             ],
         )
 
-        window.properties.update(
-            {
-                PREVIEW_PATH: "/private/generated/frame.jpg",
-                PREVIEW_TOKEN: json.dumps(
+        window.properties[PREVIEW_CONTRACT] = json.dumps(
                     {
-                        "schema": 1,
+                        "schema": 2,
+                        "status": "ready",
+                        "path": "/private/generated/frame.jpg",
                         "playback": "private-playback-token",
                         "seek_generation": 7,
                         "target_seconds": 110,
@@ -1873,14 +1852,6 @@ class PresenterAndLeaseTest(unittest.TestCase):
                         "frame_index": 10,
                         "revision": 4,
                     }
-                ),
-                PREVIEW_PLAYBACK: "private-playback-token",
-                PREVIEW_GENERATION: "7",
-                PREVIEW_TARGET: "110",
-                PREVIEW_SAMPLE: "100",
-                PREVIEW_FRAME: "10",
-                PREVIEW_REVISION: "4",
-            }
         )
         self.assertEqual(
             publisher.refresh_preview(snapshot),
