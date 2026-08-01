@@ -269,7 +269,7 @@ class ReviewRuntimeTest(unittest.TestCase):
         self.assertFalse(harness.runtime.run(["state=timeline-idle"]))
         self.assertEqual(harness.builtins, [])
         self.assertEqual(harness.window.events, [])
-        self.assertIn("idle BINGIE Home", harness.logs[-1][0])
+        self.assertIn("idle HTPC Home", harness.logs[-1][0])
 
     def test_other_skin_refuses_before_accessing_window(self):
         harness = RuntimeHarness(skin="Estuary")
@@ -279,7 +279,16 @@ class ReviewRuntimeTest(unittest.TestCase):
         self.assertFalse(harness.runtime.run(["state=timeline-idle"]))
         self.assertEqual(harness.builtins, [])
         self.assertEqual(harness.window.events, [])
-        self.assertIn("not BINGIE", harness.logs[-1][0])
+        self.assertIn("HTPC UI contract", harness.logs[-1][0])
+
+    def test_purpose_built_htpc_skin_is_supported(self):
+        harness = RuntimeHarness(skin="skin.htpc")
+
+        self.assertTrue(harness.runtime.run(["state=timeline-idle"]))
+        self.assertEqual(
+            harness.builtins,
+            ["ActivateWindow(1192)", "Dialog.Close(1192,true)"],
+        )
 
     def test_non_home_window_refuses_without_mutation(self):
         harness = RuntimeHarness(current_window=12005)

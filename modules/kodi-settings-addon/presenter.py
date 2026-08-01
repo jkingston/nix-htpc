@@ -311,7 +311,7 @@ class ServiceLease(object):
         self.next_refresh = 0.0
 
 
-class BingiePresenter(object):
+class HtpcPresenter(object):
     PENDING_FOCUS_TARGETS = frozenset(("timeline", "transport"))
     TOP_BAR_CONTROL_ID = 9102
     TIMELINE_CONTROL_ID = 9300
@@ -366,19 +366,19 @@ class BingiePresenter(object):
     @staticmethod
     def focus_top_bar():
         xbmc.executebuiltin(
-            "SetFocus(%d)" % BingiePresenter.TOP_BAR_CONTROL_ID
+            "SetFocus(%d)" % HtpcPresenter.TOP_BAR_CONTROL_ID
         )
 
     @staticmethod
     def focus_timeline():
         xbmc.executebuiltin(
-            "SetFocus(%d)" % BingiePresenter.TIMELINE_CONTROL_ID
+            "SetFocus(%d)" % HtpcPresenter.TIMELINE_CONTROL_ID
         )
 
     @staticmethod
     def focus_transport():
         xbmc.executebuiltin(
-            "SetFocus(%d)" % BingiePresenter.TRANSPORT_CONTROL_ID
+            "SetFocus(%d)" % HtpcPresenter.TRANSPORT_CONTROL_ID
         )
 
     @staticmethod

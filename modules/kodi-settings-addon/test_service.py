@@ -133,7 +133,7 @@ from media_contract import (
     validated_preview,
 )
 from presenter import (
-    BingiePresenter,
+    HtpcPresenter,
     KodiPropertyPublisher,
     ServiceLease,
 )
@@ -581,6 +581,24 @@ class ManagedCoreSettingsTest(unittest.TestCase):
         apply_core.assert_called_once_with()
         get_screenshot.assert_called_once_with("debug.screenshotpath")
         apply_skin.assert_called_once_with()
+
+    def test_purpose_built_skin_needs_no_bingie_setting_mutation(self):
+        settings = ManagedSettings(clock=lambda: 0.0)
+        settings.core_applied = True
+        settings.screenshot_ready = True
+        original_get_skin_dir = fake_xbmc.getSkinDir
+        fake_xbmc.getSkinDir = lambda: "skin.htpc"
+        try:
+            with mock.patch.object(
+                ManagedSettings,
+                "_apply_bingie",
+            ) as apply_bingie:
+                settings.tick()
+        finally:
+            fake_xbmc.getSkinDir = original_get_skin_dir
+
+        self.assertTrue(settings.skin_applied)
+        apply_bingie.assert_not_called()
 
 
 class ManagedScreenshotSettingsTest(unittest.TestCase):
@@ -2373,12 +2391,12 @@ class PresenterAndLeaseTest(unittest.TestCase):
 
     def test_presenter_never_mutates_window_controls(self):
         CONDITIONS["Window.IsActive(videoosd)"] = True
-        presenter = BingiePresenter()
+        presenter = HtpcPresenter()
         presenter.update({"active": True, "generation": 1, "percent": 25.0})
         self.assertNotIn(12901, WINDOWS)
 
     def test_presenter_reset_discards_deferred_focus_and_generation_state(self):
-        presenter = BingiePresenter()
+        presenter = HtpcPresenter()
         presenter.last_generation = 7
         presenter.last_active = True
         presenter.pending_focus_target = "timeline"
@@ -2390,7 +2408,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertIsNone(presenter.pending_focus_target)
 
     def test_presenter_delivers_latest_focus_after_async_osd_activation(self):
-        presenter = BingiePresenter()
+        presenter = HtpcPresenter()
 
         presenter.emphasize_timeline()
         presenter.show_transport()
@@ -2408,7 +2426,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
 
     def test_presenter_delivers_focus_immediately_when_osd_is_active(self):
         CONDITIONS["Window.IsActive(videoosd)"] = True
-        presenter = BingiePresenter()
+        presenter = HtpcPresenter()
 
         presenter.emphasize_timeline()
 
@@ -2416,9 +2434,9 @@ class PresenterAndLeaseTest(unittest.TestCase):
         self.assertEqual(BUILTINS, ["SetFocus(9300)"])
 
     def test_presenter_focus_methods_target_owned_osd_controls(self):
-        BingiePresenter.focus_top_bar()
-        BingiePresenter.focus_timeline()
-        BingiePresenter.focus_transport()
+        HtpcPresenter.focus_top_bar()
+        HtpcPresenter.focus_timeline()
+        HtpcPresenter.focus_transport()
 
         self.assertEqual(
             BUILTINS,
@@ -2430,7 +2448,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
         )
 
     def test_presenter_rejects_unknown_pending_focus_target(self):
-        presenter = BingiePresenter()
+        presenter = HtpcPresenter()
 
         with self.assertRaises(ValueError):
             presenter._request_focus("unknown")

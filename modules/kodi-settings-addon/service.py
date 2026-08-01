@@ -17,7 +17,7 @@ from input_quarantine import (
 from input_router import InputRouter, KodiCommands
 from playback_view_model import PlaybackViewModel
 from player_adapter import KodiPlayerAdapter
-from presenter import BingiePresenter, KodiPropertyPublisher, ServiceLease
+from presenter import HtpcPresenter, KodiPropertyPublisher, ServiceLease
 from seek_controller import SeekController
 
 
@@ -51,6 +51,7 @@ CORE_RETRY_INITIAL = 1.0
 CORE_RETRY_MAX = 30.0
 SCREENSHOT_RETRY_INITIAL = 1.0
 SCREENSHOT_RETRY_MAX = 30.0
+SUPPORTED_HTPC_SKINS = frozenset(("skin.bingie", "skin.htpc"))
 PLAYER_BOUNDARY_EVENTS = frozenset(("started", "stopped", "ended"))
 
 
@@ -135,7 +136,7 @@ def set_skin_setting(setting, enabled):
 
 
 class ManagedSettings(object):
-    """Converge core, screenshot, and BINGIE settings independently."""
+    """Converge core, screenshot, and active-skin settings independently."""
 
     def __init__(self, clock=None, screenshot_path=None):
         self.clock = time.monotonic if clock is None else clock
@@ -235,9 +236,11 @@ class ManagedSettings(object):
         if self.skin_applied or now < self.next_skin_check:
             return
         self.next_skin_check = now + 1.0
-        if xbmc.getSkinDir() != "skin.bingie":
+        active_skin = xbmc.getSkinDir()
+        if active_skin not in SUPPORTED_HTPC_SKINS:
             return
-        self._apply_bingie()
+        if active_skin == "skin.bingie":
+            self._apply_bingie()
         self.skin_applied = True
 
     @staticmethod
@@ -395,7 +398,7 @@ class SeekService(object):
     def __init__(self, monitor, addon_path=None):
         self.monitor = monitor
         self.publisher = KodiPropertyPublisher(logger=log)
-        self.presenter = BingiePresenter(logger=log)
+        self.presenter = HtpcPresenter(logger=log)
         self.lease = ServiceLease()
         self.player = KodiPlayerAdapter(event_sink=monitor.post_player, logger=log)
         self.controller = SeekController(self.player, self.publisher)

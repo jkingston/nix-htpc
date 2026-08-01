@@ -1,4 +1,4 @@
-"""Strict runtime adapter for the inert BINGIE OSD review window."""
+"""Strict runtime adapter for the inert HTPC OSD review window."""
 
 from __future__ import annotations
 
@@ -26,10 +26,11 @@ REVIEW_TTL_TICKS = 160
 TICK_SECONDS = 0.05
 NO_DIALOG_IDS = frozenset((0, 9999))
 REVIEW_DIALOG_IDS = frozenset((1192, 11192))
+SUPPORTED_SKINS = frozenset(("skin.bingie", "skin.htpc"))
 
 
-def _is_bingie():
-    return xbmc.getSkinDir() == "skin.bingie"
+def _is_htpc_skin():
+    return xbmc.getSkinDir() in SUPPORTED_SKINS
 
 
 def _clear(window):
@@ -91,7 +92,7 @@ def _stage(window, scenario):
 
 def _safe_to_open():
     return (
-        _is_bingie()
+        _is_htpc_skin()
         and xbmcgui.getCurrentWindowId() == HOME_WINDOW_ID
         and xbmcgui.getCurrentWindowDialogId() in NO_DIALOG_IDS
         and not xbmc.getCondVisibility("Player.HasMedia")
@@ -104,7 +105,7 @@ def _safe_to_open():
 
 def _review_is_stable(expected_focus):
     return (
-        _is_bingie()
+        _is_htpc_skin()
         and xbmcgui.getCurrentWindowId() == HOME_WINDOW_ID
         and xbmcgui.getCurrentWindowDialogId() in REVIEW_DIALOG_IDS
         and xbmc.getCondVisibility(ACTIVE_REVIEW)
@@ -161,8 +162,8 @@ def _cleanup(window):
 
 def _execute(arguments):
     request, value = parse_request(arguments)
-    if not _is_bingie():
-        raise RequestError("active skin is not BINGIE")
+    if not _is_htpc_skin():
+        raise RequestError("active skin does not implement the HTPC UI contract")
 
     window = xbmcgui.Window(HOME_WINDOW_ID)
     if request == "command":
@@ -175,7 +176,7 @@ def _execute(arguments):
         return True
 
     if not _safe_to_open():
-        raise RequestError("review requires an idle BINGIE Home window")
+        raise RequestError("review requires an idle HTPC Home window")
     if xbmc.getCondVisibility(ACTIVE_REVIEW):
         raise RequestError("review window is already active")
     if not _properties_are_empty(window):
