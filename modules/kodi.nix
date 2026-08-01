@@ -4,13 +4,16 @@ let
   kodiBase = rpiPackages.kodi-gbm;
   kodiTcpServerRaceBackport =
     ./kodi/patches/7c574313-tcpserver-lock-connections.patch;
+  kodiPythonActionHoldTimePatch =
+    ./kodi/patches/xbmcgui-action-hold-time.patch;
   kodiCore = kodiBase.overrideAttrs (oldAttrs: {
     patches = (oldAttrs.patches or [ ]) ++ [
       kodiTcpServerRaceBackport
+      kodiPythonActionHoldTimePatch
     ];
   });
   kodiPackages = kodiCore.packages;
-  kodiSettingsAddonVersion = "2.1.16";
+  kodiSettingsAddonVersion = "2.1.17";
   kodiOsdReviewAddonVersion = "0.1.2";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   simplejsonIdentity = {
@@ -190,6 +193,7 @@ let
       passthru = (oldAttrs.passthru or { }) // {
         inherit
           kodiCore
+          kodiPythonActionHoldTimePatch
           kodiTcpServerRaceBackport
           kodiAddonRoots
           kodiRuntimeAddons
@@ -201,6 +205,7 @@ let
     assert kodiCore == kodiCore.passthru.kodi;
     assert kodiCore.packages.kodi == kodiCore;
     assert builtins.elem kodiTcpServerRaceBackport kodiCore.patches;
+    assert builtins.elem kodiPythonActionHoldTimePatch kodiCore.patches;
     assert simplejson.version == simplejsonIdentity.version;
     assert bingieHelper.manifestIdentity == bingieHelperIdentity;
     assert bingieHelper.requiredKodiAddons == [ simplejson ];
@@ -274,6 +279,15 @@ let
       test "$(
         sha256sum ${kodiTcpServerRaceBackport} | cut -d ' ' -f 1
       )" = a9abbd265e7b4c024e4caa75b104c6d1cb08a94ad9843f1a086ee42205d5356b
+      test "$(
+        sha256sum ${kodiPythonActionHoldTimePatch} | cut -d ' ' -f 1
+      )" = 49189d3f04b757dd80275b3e54d2faffb7e08460f45ce468f5d5e13ba2198cea
+      grep -Fq \
+        'holdTime = action.GetHoldTime();' \
+        ${kodiPythonActionHoldTimePatch}
+      grep -Fq \
+        'unsigned long getHoldTime()' \
+        ${kodiPythonActionHoldTimePatch}
 
       touch "$out"
     '';

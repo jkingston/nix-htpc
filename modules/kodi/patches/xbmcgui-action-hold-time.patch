@@ -1,0 +1,73 @@
+From 2c83e9caefaa4ec6bc84ffecab23d0b30cced9f4 Mon Sep 17 00:00:00 2001
+From: NixOS HTPC <noreply@nixos-htpc.invalid>
+Date: Sat, 1 Aug 2026 12:00:00 +0100
+Subject: [PATCH] Python: expose action hold time to WindowXML callbacks
+
+Kodi's native containers consume directional input before a WindowXML Python
+callback runs. Add-ons that need to repair native held-button acceleration
+therefore need the original CAction hold time to distinguish a new press from
+repeat callbacks. The legacy Action wrapper already copies repeat metadata;
+copy and expose the existing CAction hold time alongside it.
+---
+ xbmc/interfaces/legacy/Window.cpp |  1 +
+ xbmc/interfaces/legacy/Window.h   | 26 ++++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/xbmc/interfaces/legacy/Window.cpp b/xbmc/interfaces/legacy/Window.cpp
+index d68ce550d5..3046630db9 100644
+--- a/xbmc/interfaces/legacy/Window.cpp
++++ b/xbmc/interfaces/legacy/Window.cpp
+@@ -768,6 +768,7 @@ namespace XBMCAddon
+       fAmount1 = action.GetAmount(0);
+       fAmount2 = action.GetAmount(1);
+       fRepeat = action.GetRepeat();
++      holdTime = action.GetHoldTime();
+       strAction = action.GetName();
+     }
+ 
+diff --git a/xbmc/interfaces/legacy/Window.h b/xbmc/interfaces/legacy/Window.h
+index a0b6e22b8d..e10a44c559 100644
+--- a/xbmc/interfaces/legacy/Window.h
++++ b/xbmc/interfaces/legacy/Window.h
+@@ -54,6 +54,7 @@ namespace XBMCAddon
+       float fAmount1 = 0.0f;
+       float fAmount2 = 0.0f;
+       float fRepeat = 0.0f;
++      unsigned long holdTime = 0;
+       unsigned long buttonCode = 0;
+       std::string strAction;
+ 
+@@ -91,6 +92,31 @@ namespace XBMCAddon
+       long getId() { XBMC_TRACE; return id; }
+ #endif
+ 
++#ifdef DOXYGEN_SHOULD_USE_THIS
++      ///
++      /// \ingroup python_xbmcgui_action
++      /// @brief \python_func{ getHoldTime() }
++      /// Returns how long the originating key has been held in milliseconds.
++      ///
++      /// @return                        [integer] held duration in milliseconds
++      ///
++      ///
++      ///-----------------------------------------------------------------------
++      ///
++      /// **Example:**
++      /// ~~~~~~~~~~~~~{.py}
++      /// ..
++      /// def onAction(self, action):
++      ///   if action.getHoldTime() == 0:
++      ///     print('new physical press')
++      /// ..
++      /// ~~~~~~~~~~~~~
++      ///
++      getHoldTime();
++#else
++      unsigned long getHoldTime() { XBMC_TRACE; return holdTime; }
++#endif
++
+ #ifdef DOXYGEN_SHOULD_USE_THIS
+       ///
+       /// \ingroup python_xbmcgui_action
+-- 
+2.54.0

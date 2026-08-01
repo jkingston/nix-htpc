@@ -100,8 +100,12 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
     def onClick(self, control_id):
         if control_id != CHAPTER_LIST_ID or self._closing:
             return
-        control = self.getControl(CHAPTER_LIST_ID)
-        position = control.getSelectedPosition()
+        # Native panel movement happens before this Python callback. Commit
+        # the position accepted by our input contract, not a held-button
+        # overrun that may still be waiting for its correction callback.
+        position = self._selected_position
+        if position is None:
+            return
         if not 0 <= position < len(self.chapters):
             return
         chapter = dict(self.chapters[position])
@@ -119,15 +123,27 @@ class ChapterRail(xbmcgui.WindowXMLDialog):
             if previous_position is None:
                 self._selected_position = native_position
                 return
-            # WindowXML callbacks can queue behind several native panel moves.
-            # An earlier callback may already have corrected the live control,
-            # so each callback advances from our accepted position and the
-            # native position is used only to repair the panel when necessary.
-            delta = -1 if action_id == ACTION_MOVE_LEFT else 1
-            selected = max(
-                0,
-                min(len(self.chapters) - 1, previous_position + delta),
-            )
+            try:
+                hold_time = int(action.getHoldTime())
+            except (AttributeError, TypeError, ValueError):
+                # The managed Kodi core provides getHoldTime(). If an
+                # incompatible core reaches this add-on, fail closed instead
+                # of accepting every repeat callback as a new chapter press.
+                hold_time = 1
+
+            selected = previous_position
+            if hold_time == 0:
+                # Kodi has already applied native panel movement. Advance from
+                # the last accepted position exactly once for this new
+                # physical press, then repair any native overrun or wrap.
+                delta = -1 if action_id == ACTION_MOVE_LEFT else 1
+                selected = max(
+                    0,
+                    min(
+                        len(self.chapters) - 1,
+                        previous_position + delta,
+                    ),
+                )
             if selected == previous_position:
                 if native_position != selected:
                     try:

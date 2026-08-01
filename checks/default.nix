@@ -48,6 +48,8 @@ let
   kodiCore = kodiWithAddons.kodiCore;
   kodiTcpServerRaceBackport =
     kodiWithAddons.kodiTcpServerRaceBackport;
+  kodiPythonActionHoldTimePatch =
+    kodiWithAddons.kodiPythonActionHoldTimePatch;
   expectedSimplejsonIdentity = {
     manifest_sha256 =
       "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
@@ -344,6 +346,7 @@ in
     assert kodiCore == kodiCore.passthru.kodi;
     assert kodiCore.packages.kodi == kodiCore;
     assert builtins.elem kodiTcpServerRaceBackport kodiCore.patches;
+    assert builtins.elem kodiPythonActionHoldTimePatch kodiCore.patches;
     assert kodiSimplejson.version == "3.19.1+matrix.1";
     assert kodiSimplejson.namespace == "script.module.simplejson";
     assert kodiSimplejson.pythonPath == "lib";
@@ -378,7 +381,7 @@ in
       "service.libreelec.settings"
       (map (addon: addon.namespace) kodiWithAddons.kodiRuntimeAddons));
     assert kodiSettingsAddon.namespace == "service.htpc.settings";
-    assert kodiSettingsAddon.version == "2.1.16";
+    assert kodiSettingsAddon.version == "2.1.17";
     assert kodiOsdReviewAddon.namespace == "script.htpc.osd-review";
     assert kodiOsdReviewAddon.version == "0.1.2";
     assert builtins.elem kodiSettingsAddon greetdRestartTriggers;
@@ -394,7 +397,7 @@ in
       }
       {
         addonId = "service.htpc.settings";
-        version = "2.1.16";
+        version = "2.1.17";
       }
       {
         addonId = "script.htpc.osd-review";
@@ -404,7 +407,7 @@ in
     assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
       enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
       enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
-      enable_managed_addon service.htpc.settings 2.1.16 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
+      enable_managed_addon service.htpc.settings 2.1.17 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
       enable_managed_addon script.htpc.osd-review 0.1.2 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
     '') kodiSettingsServiceScriptText;
     assert lib.hasInfix

@@ -2308,11 +2308,15 @@ class FakeChapterControl(object):
 
 
 class FakeAction(object):
-    def __init__(self, action_id):
+    def __init__(self, action_id, hold_time=0):
         self.action_id = action_id
+        self.hold_time = hold_time
 
     def getId(self):
         return self.action_id
+
+    def getHoldTime(self):
+        return self.hold_time
 
 
 class ChapterRailTest(unittest.TestCase):
@@ -2423,19 +2427,40 @@ class ChapterRailTest(unittest.TestCase):
             ],
         )
 
-    def test_repeated_right_actions_follow_each_native_position_once(self):
+    def test_right_hold_repeat_train_is_one_accepted_step(self):
+        rail, control, events, _exit_events = self._rail(0)
+
+        control.simulate_native_navigation(1)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        for hold_time, native_position in (
+            (120, 2),
+            (240, 2),
+            (400, 0),
+        ):
+            control.simulate_native_navigation(native_position)
+            rail.onAction(
+                FakeAction(ACTION_MOVE_RIGHT, hold_time=hold_time)
+            )
+
+        self.assertEqual(control.selections, [1, 1, 1])
+        self.assertEqual(control.selected, 1)
+        self.assertEqual(rail._selected_position, 1)
+        self.assertEqual([event["index"] for event in events], [1])
+
+    def test_new_zero_hold_same_direction_is_a_second_press(self):
         rail, control, events, _exit_events = self._rail(0)
 
         control.simulate_native_navigation(1)
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
         control.simulate_native_navigation(2)
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT, hold_time=160))
+        control.simulate_native_navigation(2)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT, hold_time=0))
 
-        self.assertEqual(control.selections, [])
-        self.assertEqual(
-            [event["index"] for event in events],
-            [1, 2],
-        )
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selected, 2)
+        self.assertEqual(rail._selected_position, 2)
+        self.assertEqual([event["index"] for event in events], [1, 2])
 
     def test_native_overrun_is_corrected_to_one_chapter(self):
         rail, control, events, _exit_events = self._rail(0)
@@ -2448,26 +2473,32 @@ class ChapterRailTest(unittest.TestCase):
         self.assertEqual(rail._selected_position, 1)
         self.assertEqual([event["index"] for event in events], [1])
 
-    def test_queued_direction_callback_advances_from_cached_position(self):
+    def test_held_callback_repairs_native_move_without_advancing(self):
         rail, control, events, _exit_events = self._rail(1)
-
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
-
-        self.assertEqual(control.selections, [2])
-        self.assertEqual(rail._selected_position, 2)
-        self.assertEqual([event["index"] for event in events], [2])
-
-    def test_queued_same_direction_callback_survives_overrun_correction(self):
-        rail, control, events, _exit_events = self._rail(0)
         control.simulate_native_navigation(2)
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
 
-        rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT, hold_time=120))
 
-        self.assertEqual(control.selections, [1, 2])
-        self.assertEqual(control.selected, 2)
-        self.assertEqual(rail._selected_position, 2)
-        self.assertEqual([event["index"] for event in events], [1, 2])
+        self.assertEqual(control.selections, [1])
+        self.assertEqual(control.selected, 1)
+        self.assertEqual(rail._selected_position, 1)
+        self.assertEqual(events, [])
+
+    def test_compressed_held_callbacks_do_not_become_discrete_steps(self):
+        rail, control, events, _exit_events = self._rail(0)
+
+        control.simulate_native_navigation(1)
+        rail.onAction(FakeAction(ACTION_MOVE_RIGHT, hold_time=0))
+        for hold_time in (120, 121, 122):
+            control.simulate_native_navigation(2)
+            rail.onAction(
+                FakeAction(ACTION_MOVE_RIGHT, hold_time=hold_time)
+            )
+
+        self.assertEqual(control.selections, [1, 1, 1])
+        self.assertEqual(control.selected, 1)
+        self.assertEqual(rail._selected_position, 1)
+        self.assertEqual([event["index"] for event in events], [1])
 
     def test_end_stops_correct_native_wrap_without_focus_event(self):
         cases = (
@@ -2499,12 +2530,15 @@ class ChapterRailTest(unittest.TestCase):
         self.assertEqual(rail._selected_position, 0)
         self.assertEqual([event["index"] for event in events], [1, 0])
 
-    def test_click_uses_position_corrected_after_native_overrun(self):
+    def test_click_uses_cached_position_before_repeat_correction_runs(self):
         rail, control, _events, _exit_events = self._rail(0)
         selected_chapters = []
         rail.select_callback = selected_chapters.append
-        control.simulate_native_navigation(2)
+        control.simulate_native_navigation(1)
         rail.onAction(FakeAction(ACTION_MOVE_RIGHT))
+        # Kodi has already moved for a held repeat, but its queued Python
+        # correction has not run before Select is delivered.
+        control.simulate_native_navigation(2)
 
         rail.onClick(CHAPTER_LIST_ID)
 
