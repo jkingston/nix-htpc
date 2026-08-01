@@ -136,9 +136,10 @@ class SeekControllerTest(unittest.TestCase):
         self.assertEqual(format_delta(-10), "\N{MINUS SIGN}0:10")
         self.assertEqual(format_delta(80), "+1:20")
         speeds = [hold_velocity(t, 3600) for t in (0, 1, 2, 4, 10)]
-        self.assertEqual(speeds[0], 10)
+        self.assertEqual(speeds[0], 30)
+        self.assertAlmostEqual(speeds[1], 47.622, places=3)
+        self.assertAlmostEqual(speeds[2], 75.595, places=3)
         self.assertEqual(speeds, sorted(speeds))
-        self.assertLess(speeds[1], 20)
         self.assertLessEqual(speeds[-1], 360)
 
     def test_one_hidden_tap_is_optimistic_then_one_absolute_seek(self):
@@ -718,6 +719,25 @@ class SeekControllerTest(unittest.TestCase):
         h.controller.confirm(0.02)
         h.ack_pause(0.1)
         self.assertEqual([item[0] for item in h.player.seek_requests], [600])
+
+    def test_chapter_commit_plays_even_when_playback_was_already_paused(self):
+        h = ControllerHarness(paused=True)
+        self.assertTrue(h.controller.begin_chapter_browse(0.0))
+        self.assertTrue(h.controller.set_target(600))
+        self.assertTrue(h.controller.confirm(0.02, play_after=True))
+        h.ack_seek(now=0.10)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
+
+    def test_chapter_play_policy_survives_pending_pause_confirmation(self):
+        h = ControllerHarness()
+        self.assertTrue(h.controller.begin_chapter_browse(0.0))
+        self.assertTrue(h.controller.set_target(600))
+        self.assertTrue(h.controller.confirm(0.02, play_after=True))
+        h.ack_pause(now=0.10)
+        h.ack_seek(now=0.20)
+        self.assertEqual(h.controller.state, RESUME_PENDING)
+        self.assertEqual(len(h.player.resume_requests), 1)
 
     def test_delayed_skip_callback_serializes_later_timeline_skip(self):
         h = ControllerHarness()

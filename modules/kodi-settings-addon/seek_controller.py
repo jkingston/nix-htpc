@@ -53,7 +53,7 @@ def format_delta(seconds):
 def hold_velocity(elapsed, duration):
     """Gradual scrub speed, independent of CEC repeat frequency."""
     cap = min(600.0, max(60.0, float(duration) * 0.10))
-    return min(cap, 10.0 * math.pow(2.0, max(0.0, elapsed) / 1.75))
+    return min(cap, 30.0 * math.pow(2.0, max(0.0, elapsed) / 1.50))
 
 
 class RepeatGuard(object):
@@ -145,6 +145,7 @@ class SeekController(object):
         self.pending_operation = None
         self.pending_deadline = None
         self.resume_reason = None
+        self.play_after_commit = False
         self.confirm_when_paused = False
         self.confirm_after_skip = False
         self.last_input = None
@@ -535,7 +536,10 @@ class SeekController(object):
             self._publish()
             return True
         if self.hold_active:
-            if self.state == SCRUB_ACTIVE:
+            if (
+                self.state == SCRUB_ACTIVE
+                and direction == self.gesture_direction
+            ):
                 self._integrate_hold(now)
             if direction != self.gesture_direction:
                 self._apply_steps(direction, 1)
@@ -622,8 +626,10 @@ class SeekController(object):
     def end_optimistic_skip(self, now=None):
         return self.flush_skip(now)
 
-    def confirm(self, now=None):
+    def confirm(self, now=None, play_after=None):
         now = self.clock() if now is None else float(now)
+        if play_after is not None:
+            self.play_after_commit = bool(play_after)
         if self.state == PAUSE_PENDING:
             self.confirm_when_paused = True
             self._publish()
@@ -887,7 +893,9 @@ class SeekController(object):
                 self.reset()
 
     def _finish_commit(self, now):
-        if self.controller_paused and self.was_playing:
+        if self.play_after_commit or (
+            self.controller_paused and self.was_playing
+        ):
             self._request_resume("commit", now)
         else:
             self.reset()

@@ -438,7 +438,7 @@ class InputRouter(object):
         if valid:
             if (
                 self.controller.set_target(requested_start)
-                and self.controller.confirm()
+                and self.controller.confirm(play_after=True)
             ):
                 self._defer_transition(
                     "transport",

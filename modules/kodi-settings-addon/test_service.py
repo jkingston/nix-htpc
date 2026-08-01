@@ -208,8 +208,8 @@ class FakeController(object):
         self.source = "timeline"
         return True
 
-    def confirm(self, timestamp=None):
-        self.confirms.append(timestamp)
+    def confirm(self, timestamp=None, play_after=False):
+        self.confirms.append((timestamp, bool(play_after)))
         self.state = "committing"
         return True
 
@@ -1033,7 +1033,13 @@ class InputRouterTest(unittest.TestCase):
             self.router.repeat_guard.reset()
         self.assertEqual(
             self.controller.confirms,
-            [1.0, 2.0, 3.0, 4.0, 5.0],
+            [
+                (1.0, False),
+                (2.0, False),
+                (3.0, False),
+                (4.0, False),
+                (5.0, False),
+            ],
         )
         self.assertEqual(self.controller.ends, 0)
         self.assertEqual(self.presenter.calls, [])
@@ -1248,7 +1254,7 @@ class InputRouterTest(unittest.TestCase):
         )
         self.router.handle("chapter-select", 1.1, chapter)
         self.assertEqual(self.controller.targets, [600.0, 600.0])
-        self.assertEqual(self.controller.confirms, [None])
+        self.assertEqual(self.controller.confirms, [(None, True)])
         self.assertEqual(self.router.pending_transition, "transport")
 
     def test_physical_chapter_navigation_is_quarantined_before_update(self):
@@ -4155,7 +4161,30 @@ class AdapterDouble(KodiPlayerAdapter):
         self.duration = 3600.0
         self.pause_calls = 0
         self.seek_calls = []
-        super(AdapterDouble, self).__init__(event_sink=event_sink)
+        def rpc(serialized):
+            request = json.loads(serialized)
+            if request.get("method") == "Player.PlayPause":
+                play = request.get("params", {}).get("play")
+                if play is True:
+                    CONDITIONS["Player.Paused"] = False
+                    speed = 1
+                elif play is False:
+                    CONDITIONS["Player.Paused"] = True
+                    speed = 0
+                else:
+                    speed = 0
+                return json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "result": {"speed": speed},
+                    }
+                )
+            return json.dumps(
+                {"jsonrpc": "2.0", "id": request.get("id"), "result": True}
+            )
+
+        super(AdapterDouble, self).__init__(event_sink=event_sink, rpc=rpc)
 
     def isPlayingVideo(self):
         return self.playing
@@ -4236,7 +4265,7 @@ class ServiceClosePlaybackSafetyTest(unittest.TestCase):
         service.close()
 
         self.assertEqual(controller.state, RESUME_PENDING)
-        self.assertEqual(adapter.pause_calls, 2)
+        self.assertEqual(adapter.pause_calls, 1)
         self.assertFalse(CONDITIONS["Player.Paused"])
         adapter.onPlayBackPaused()
         self.assertIsNone(events[-1][1]["operation"])
@@ -4253,7 +4282,7 @@ class ServiceClosePlaybackSafetyTest(unittest.TestCase):
         service.close()
 
         self.assertEqual(controller.state, RESUME_PENDING)
-        self.assertEqual(adapter.pause_calls, 2)
+        self.assertEqual(adapter.pause_calls, 1)
         self.assertFalse(CONDITIONS["Player.Paused"])
         service.lease.stop.assert_called_once_with()
 

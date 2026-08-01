@@ -179,7 +179,29 @@ class KodiPlayerAdapter(xbmc.Player):
                 "identity": expected_identity,
                 "epoch": expected_epoch,
             }
-            self.pause()
+            request = {
+                "jsonrpc": "2.0",
+                "method": "Player.PlayPause",
+                "params": {"playerid": 1, "play": True},
+                "id": operation,
+            }
+            try:
+                response = json.loads(self.rpc(json.dumps(request)))
+            except Exception as error:
+                self.pending_resume = None
+                self._log_error("resume request failed: %s" % error)
+                return False
+            if (
+                not isinstance(response, dict)
+                or response.get("jsonrpc") != "2.0"
+                or response.get("id") != operation
+                or "error" in response
+                or not isinstance(response.get("result"), dict)
+                or response["result"].get("speed") != 1
+            ):
+                self.pending_resume = None
+                self._log_error("resume request returned an invalid response")
+                return False
             return True
 
     def request_seek(
