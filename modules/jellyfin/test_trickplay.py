@@ -123,7 +123,7 @@ class TrickplayTest(unittest.TestCase):
         playback="playback-1",
         revision=3,
     ):
-        return trickplay.make_preview_request(
+        request = trickplay.make_preview_request(
             playback,
             revision,
             generation,
@@ -131,6 +131,13 @@ class TrickplayTest(unittest.TestCase):
             INFO,
             direction,
         )
+        request["token"].update(
+            {
+                "consumer_nonce": "consumer-1",
+                "playback_epoch": 2,
+            }
+        )
+        return request
 
     def make_process_state(self, root, request, chapters=None):
         output_root = os.path.join(root, "output")
@@ -147,6 +154,11 @@ class TrickplayTest(unittest.TestCase):
             "output_slots": trickplay.OutputSlots(output_root, 3),
             "publish_lock": threading.RLock(),
             "preview_failure_diagnostics": {},
+            "frame_cache": trickplay.PlaybackFrameCache(
+                os.path.join(root, "frames"),
+                byte_limit=1024 * 1024,
+            ),
+            "chapter_frames": set(),
         }
         state["request_slot"].submit(request)
         return state
@@ -296,12 +308,16 @@ class TrickplayTest(unittest.TestCase):
         return path
 
     def activate_request(self, store, request):
+        request["token"].setdefault("playback_epoch", 2)
+        request["token"].setdefault("consumer_nonce", "consumer-1")
         store.values[trickplay.SEEK_REQUEST] = json.dumps(
             {
                 "schema": 1,
                 "active": True,
                 "generation": int(request["token"]["seek_generation"]),
                 "target_seconds": int(round(request["target_seconds"])),
+                "playback_epoch": request["token"]["playback_epoch"],
+                "consumer_nonce": request["token"]["consumer_nonce"],
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -371,6 +387,32 @@ class TrickplayTest(unittest.TestCase):
             self.assertFalse(manager._warm_sprite(state, 0, threading.Event()))
             self.assertEqual(calls, [0])
 
+            os.unlink(paths[2])
+            self.assertTrue(
+                manager._warm_sprite(
+                    state,
+                    0,
+                    threading.Event(),
+                    priority_frame=2,
+                )
+            )
+            self.assertEqual(calls, [0, 0])
+            self.assertTrue(os.path.isfile(state["frame_cache"].get(2)))
+
+    def test_frame_cache_keeps_active_pin_under_pressure(self):
+        with tempfile.TemporaryDirectory() as root:
+            cache = trickplay.PlaybackFrameCache(root, byte_limit=8)
+            active = self.write_file(os.path.join(root, "active"), b"1234")
+            other = self.write_file(os.path.join(root, "other"), b"5678")
+            newest = self.write_file(os.path.join(root, "newest"), b"abcd")
+            self.assertTrue(cache.put(1, active))
+            self.assertTrue(cache.put(2, other))
+            cache.set_pins({1})
+            self.assertTrue(cache.put(3, newest))
+            self.assertEqual(cache.get(1), active)
+            self.assertTrue(os.path.isfile(active))
+            self.assertIsNone(cache.get(2))
+
     def test_whole_title_sprite_order_expands_from_current_position(self):
         info = dict(INFO, ThumbnailCount=550)
         self.assertEqual(
@@ -436,7 +478,7 @@ class TrickplayTest(unittest.TestCase):
             )
             state = self.make_process_state(root, request)
             frame_root = os.path.join(root, "frames")
-            os.makedirs(frame_root)
+            os.makedirs(frame_root, exist_ok=True)
             state.update(
                 {
                     "info": info,
@@ -446,7 +488,11 @@ class TrickplayTest(unittest.TestCase):
                     "client": object(),
                     "frame_root": frame_root,
                     "sprite_cache": trickplay.ByteLruCache(1024 * 1024),
-                    "frame_cache": trickplay.FileLruCache(4),
+                    "frame_cache": trickplay.PlaybackFrameCache(
+                        frame_root,
+                        byte_limit=1024 * 1024,
+                    ),
+                    "chapter_frames": set(),
                     "sprite_condition": threading.Condition(threading.RLock()),
                     "inflight_sprites": set(),
                     "background_network_lock": threading.Lock(),
@@ -490,7 +536,13 @@ class TrickplayTest(unittest.TestCase):
             self.assertEqual(
                 media_contract.validated_preview(
                     store.values,
-                    {"active": True, "generation": 7, "target_seconds": 1},
+                    {
+                        "active": True,
+                        "generation": 7,
+                        "target_seconds": 1,
+                        "consumer_nonce": "consumer-1",
+                        "playback_epoch": 2,
+                    },
                 ),
                 published,
             )
@@ -929,6 +981,8 @@ class TrickplayTest(unittest.TestCase):
                 "sample_seconds",
                 "frame_index",
                 "revision",
+                "consumer_nonce",
+                "playback_epoch",
             },
         )
         self.assertEqual(token["target_seconds"], 63.5)

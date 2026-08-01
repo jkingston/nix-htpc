@@ -225,10 +225,18 @@ def preview_validation(properties, seek_snapshot):
         return "", "target"
     if frame < 0 or revision < 0 or not _text(token.get("playback")):
         return "", "token-fields"
+    expected_consumer = _text(seek_snapshot.get("consumer_nonce"))
+    if not expected_consumer or _text(
+        token.get("consumer_nonce")
+    ) != expected_consumer:
+        return "", "consumer"
+    expected_epoch = _text(seek_snapshot.get("playback_epoch"))
+    if not expected_epoch or _text(token.get("playback_epoch")) != expected_epoch:
+        return "", "playback-epoch"
     return path, "ready"
 
 
-def preview_status(properties):
+def preview_status(properties, seek_snapshot):
     try:
         contract = json.loads(properties.get(PREVIEW_CONTRACT) or "")
     except (TypeError, ValueError):
@@ -239,13 +247,25 @@ def preview_status(properties):
     ):
         return "none"
     status = _text(contract.get("status"))
-    return status if status in (
+    if status not in (
         "initialising",
         "warming",
         "ready",
         "temporarily-failed",
         "unavailable",
-    ) else "none"
+    ):
+        return "none"
+    expected_consumer = _text(seek_snapshot.get("consumer_nonce"))
+    if not expected_consumer or _text(
+        contract.get("consumer_nonce")
+    ) != expected_consumer:
+        return "none"
+    expected_epoch = _text(seek_snapshot.get("playback_epoch"))
+    if not expected_epoch or _text(
+        contract.get("playback_epoch")
+    ) != expected_epoch:
+        return "none"
+    return status
 
 
 def validated_preview(properties, seek_snapshot):

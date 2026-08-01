@@ -433,8 +433,18 @@ in
     assert lib.hasInfix
       "and (.result.addon.path == $expected_path)"
       kodiSettingsServiceScriptText;
-    assert htpcConfiguration.services.greetd.settings.default_session.command
-      == "${kodiWithAddons}/bin/kodi-standalone";
+    assert lib.hasInfix
+      "/bin/env HTPC_TRICKPLAY_CACHE_ROOT=/run/htpc-trickplay "
+      htpcConfiguration.services.greetd.settings.default_session.command;
+    assert lib.hasSuffix
+      "${kodiWithAddons}/bin/kodi-standalone"
+      htpcConfiguration.services.greetd.settings.default_session.command;
+    assert builtins.elem
+      "d /run/htpc-trickplay 0700 htpc users - -"
+      htpcConfiguration.systemd.tmpfiles.rules;
+    assert lib.hasInfix
+      "find /run/htpc-trickplay -mindepth 1 -delete"
+      htpcConfiguration.systemd.services.greetd.preStart;
     if pkgs.stdenv.hostPlatform.isLinux then
       kodiBingieDependenciesCheck
     else

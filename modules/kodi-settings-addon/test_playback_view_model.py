@@ -707,7 +707,7 @@ class PlaybackViewModelTest(unittest.TestCase):
         self.assertTrue(handoff["active"])
         self.assertEqual(handoff["phase"], "settling")
         self.assertEqual(handoff["target_seconds"], 120)
-        self.assertEqual(handoff["preview_status"], "none")
+        self.assertEqual(handoff["preview_status"], "loading")
         self.assertEqual(handoff["preview_path"], "")
         self.assertEqual(view.preview_started_at, 0.1)
 

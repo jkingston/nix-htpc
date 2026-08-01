@@ -1643,12 +1643,16 @@ class MediaContractTest(unittest.TestCase):
             "sample_seconds": 100,
             "frame_index": 10,
             "revision": 4,
+            "consumer_nonce": "consumer-1",
+            "playback_epoch": 2,
         }
         properties = {PREVIEW_CONTRACT: json.dumps(token)}
         snapshot = {
             "active": True,
             "generation": 7,
             "target_seconds": 110,
+            "consumer_nonce": "consumer-1",
+            "playback_epoch": 2,
         }
         self.assertEqual(
             validated_preview(properties, snapshot),
@@ -1657,6 +1661,16 @@ class MediaContractTest(unittest.TestCase):
         self.assertEqual(
             preview_validation(properties, snapshot),
             ("/tmp/frame-10.jpg", "ready"),
+        )
+
+        stale = dict(snapshot)
+        stale["consumer_nonce"] = "consumer-2"
+        self.assertEqual(preview_validation(properties, stale), ("", "consumer"))
+        stale = dict(snapshot)
+        stale["playback_epoch"] = 3
+        self.assertEqual(
+            preview_validation(properties, stale),
+            ("", "playback-epoch"),
         )
 
         for key in ("path", "playback", "frame_index", "revision"):
@@ -1736,7 +1750,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
 
     def test_publisher_writes_controller_fields_and_atomic_request(self):
         window = FakeWindow()
-        publisher = KodiPropertyPublisher(window)
+        publisher = KodiPropertyPublisher(window, consumer_nonce="consumer-1")
         snapshot = {
             "active": True,
             "generation": 1,
@@ -1766,7 +1780,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 (
                     "set",
                     SEEK_REQUEST,
-                    '{"active":true,"generation":1,"schema":1,'
+                    '{"active":true,"consumer_nonce":"consumer-1",'
+                    '"generation":1,"playback_epoch":2,"schema":1,'
                     '"target_seconds":110}',
                 ),
             ],
@@ -1795,7 +1810,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
                 (
                     "set",
                     SEEK_REQUEST,
-                    '{"active":true,"generation":1,"schema":1,'
+                    '{"active":true,"consumer_nonce":"consumer-1",'
+                    '"generation":1,"playback_epoch":2,"schema":1,'
                     '"target_seconds":125}',
                 ),
             ],
@@ -1813,11 +1829,18 @@ class PresenterAndLeaseTest(unittest.TestCase):
             "sample_seconds": 100,
             "frame_index": 10,
             "revision": 4,
+            "consumer_nonce": "consumer-1",
+            "playback_epoch": 2,
         }
         window.properties[PREVIEW_CONTRACT] = json.dumps(token)
-        publisher = KodiPropertyPublisher(window)
+        publisher = KodiPropertyPublisher(window, consumer_nonce="consumer-1")
         path = publisher.refresh_preview(
-            {"active": True, "generation": 7, "target_seconds": 110}
+            {
+                "active": True,
+                "generation": 7,
+                "target_seconds": 110,
+                "playback_epoch": 2,
+            }
         )
         self.assertEqual(path, "/tmp/frame-10.jpg")
         self.assertEqual(window.operations, [])
@@ -1827,8 +1850,17 @@ class PresenterAndLeaseTest(unittest.TestCase):
     def test_preview_diagnostics_are_private_and_once_per_generation(self):
         window = FakeWindow()
         messages = []
-        publisher = KodiPropertyPublisher(window, logger=messages.append)
-        snapshot = {"active": True, "generation": 7, "target_seconds": 110}
+        publisher = KodiPropertyPublisher(
+            window,
+            logger=messages.append,
+            consumer_nonce="consumer-1",
+        )
+        snapshot = {
+            "active": True,
+            "generation": 7,
+            "target_seconds": 110,
+            "playback_epoch": 2,
+        }
 
         self.assertEqual(publisher.refresh_preview(snapshot), "")
         self.assertEqual(publisher.refresh_preview(snapshot), "")
@@ -1851,6 +1883,8 @@ class PresenterAndLeaseTest(unittest.TestCase):
                         "sample_seconds": 100,
                         "frame_index": 10,
                         "revision": 4,
+                        "consumer_nonce": "consumer-1",
+                        "playback_epoch": 2,
                     }
         )
         self.assertEqual(
@@ -2269,7 +2303,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
             [
                 ("clear", "htpc.seek." + key, "")
                 for key in all_keys
-            ],
+            ] + [("clear", SEEK_REQUEST, "")],
         )
         self.assertTrue(
             all(
@@ -2303,7 +2337,7 @@ class PresenterAndLeaseTest(unittest.TestCase):
             [
                 ("clear", "htpc.seek." + key, "")
                 for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS
-            ],
+            ] + [("clear", SEEK_REQUEST, "")],
         )
         self.assertEqual(window.getProperty("htpc.seek.viewactive"), "true")
         self.assertEqual(window.getProperty("htpc.seek.viewslot"), "a")

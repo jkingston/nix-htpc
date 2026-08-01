@@ -34,6 +34,10 @@ class PlaybackFrameCache(object):
         with self._lock:
             self._pinned.update(int(key) for key in keys)
 
+    def set_pins(self, keys):
+        with self._lock:
+            self._pinned = set(int(key) for key in keys)
+
     def get(self, key):
         key = int(key)
         with self._lock:
@@ -183,6 +187,16 @@ class PlaybackWorkQueue(object):
             self._sprites = []
             self._remaining.clear()
             self._condition.notify_all()
+
+    def requeue_sprite(self, sprite):
+        sprite = int(sprite)
+        with self._condition:
+            if self._closed or sprite in self._remaining:
+                return False
+            self._sprites.append(sprite)
+            self._remaining.add(sprite)
+            self._condition.notify_all()
+            return True
 
     @property
     def remaining(self):

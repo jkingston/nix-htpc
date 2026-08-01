@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import json
 import math
 import time
+import uuid
 
 import xbmc
 import xbmcgui
@@ -32,7 +33,7 @@ TIMELINE_MARKER_CONTROL_WIDTH = (
 
 
 class KodiPropertyPublisher(object):
-    def __init__(self, window=None, logger=None):
+    def __init__(self, window=None, logger=None, consumer_nonce=None):
         self.window = window or xbmcgui.Window(HOME_WINDOW_ID)
         self.logger = logger
         self.last = {}
@@ -42,6 +43,7 @@ class KodiPropertyPublisher(object):
         self.preview_diagnostics_seen = set()
         self.texture_handoff_generation = None
         self.last_preview_status = "none"
+        self.consumer_nonce = consumer_nonce or uuid.uuid4().hex
 
     def _diagnose(self, message):
         """Emit best-effort diagnostics without changing playback behavior."""
@@ -75,6 +77,8 @@ class KodiPropertyPublisher(object):
                     "active": True,
                     "generation": int(snapshot["generation"]),
                     "target_seconds": int(snapshot["target_seconds"]),
+                    "playback_epoch": snapshot.get("playback_epoch"),
+                    "consumer_nonce": self.consumer_nonce,
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -92,8 +96,13 @@ class KodiPropertyPublisher(object):
             (key, self.window.getProperty(key))
             for key in keys
         )
-        path, reason = preview_validation(properties, snapshot)
-        self.last_preview_status = preview_status(properties)
+        validation_snapshot = dict(snapshot)
+        validation_snapshot["consumer_nonce"] = self.consumer_nonce
+        path, reason = preview_validation(properties, validation_snapshot)
+        self.last_preview_status = preview_status(
+            properties,
+            validation_snapshot,
+        )
         generation = snapshot.get("generation") if snapshot.get("active") else None
         if generation != self.preview_diagnostic_generation:
             self.preview_diagnostic_generation = generation
@@ -197,7 +206,7 @@ class KodiPropertyPublisher(object):
             (
                 "previewpath",
                 str(view.get("preview_path", ""))
-                if view.get("preview_status") == "ready"
+                if view.get("preview_status") in ("ready", "loading")
                 else "",
             ),
             (
@@ -261,12 +270,16 @@ class KodiPropertyPublisher(object):
         self.preview_diagnostic_generation = None
         self.preview_diagnostics_seen = set()
         self.texture_handoff_generation = None
+        self.last_preview_status = "none"
+        self.window.clearProperty(SEEK_REQUEST)
 
     def clear_controller(self):
         """Clear the transaction contract without tearing the latched view."""
         for key in CURRENT_SEEK_CONTROLLER_PROPERTY_KEYS:
             self.window.clearProperty(SEEK_PREFIX + key)
             self.last.pop(key, None)
+        self.window.clearProperty(SEEK_REQUEST)
+        self.last.pop("seekrequest", None)
 
 
 class ServiceLease(object):

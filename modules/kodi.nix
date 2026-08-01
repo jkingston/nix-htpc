@@ -330,6 +330,7 @@ in
 
     path = [
       pkgs.coreutils
+      pkgs.findutils
       pkgs.gnugrep
       pkgs.libxml2
       pkgs.rsync
@@ -337,6 +338,8 @@ in
 
     preStart = ''
       set -eu
+
+      find /run/htpc-trickplay -mindepth 1 -delete
 
       ${kodiAddonReconciler}/bin/kodi-addon-reconciler
 

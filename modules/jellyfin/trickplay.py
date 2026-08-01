@@ -789,6 +789,12 @@ class TrickplayPreviewManager(object):
             client = item["Server"]
             metadata = self._load_metadata(item, abort)
             if metadata is None:
+                self._serve_unavailable(
+                    playback_token,
+                    revision,
+                    abort,
+                    "metadata",
+                )
                 return
             media_source_id, width, info = select_trickplay(
                 metadata.get("Trickplay"),
@@ -882,7 +888,15 @@ class TrickplayPreviewManager(object):
                         else 0
                     )
                     if info is None:
-                        raise ValueError("no exact trickplay metadata")
+                        self._publish_preview_status(
+                            playback_token,
+                            revision,
+                            "unavailable",
+                            reason,
+                            seek_request,
+                        )
+                        last_observed = observed
+                        continue
                     request = make_preview_request(
                         playback_token,
                         revision,
@@ -890,6 +904,12 @@ class TrickplayPreviewManager(object):
                         target_text,
                         info,
                         direction,
+                    )
+                    request["token"].update(
+                        {
+                            "consumer_nonce": seek_request["consumer_nonce"],
+                            "playback_epoch": seek_request["playback_epoch"],
+                        }
                     )
                 except (TypeError, ValueError):
                     state["request_slot"].clear()
@@ -1036,6 +1056,7 @@ class TrickplayPreviewManager(object):
             "chapter_root": chapter_root,
             "sprite_cache": ByteLruCache(SPRITE_CACHE_BYTES),
             "frame_cache": frame_cache,
+            "chapter_frames": chapter_frames,
             "chapter_cache": FileLruCache(CHAPTER_CACHE_LIMIT),
             "sprite_condition": threading.Condition(threading.RLock()),
             "inflight_sprites": set(),
@@ -1070,21 +1091,77 @@ class TrickplayPreviewManager(object):
             try:
                 if kind == "request":
                     sprite = sprite_for_frame(payload["frame"], state["info"])
-                    self._warm_sprite(
+                    completed = self._warm_sprite(
                         state,
                         sprite,
                         abort,
                         priority_frame=payload["frame"],
                     )
+                    if (
+                        not completed
+                        and sprite not in state["warmed_sprites"]
+                    ):
+                        state["work_queue"].requeue_sprite(sprite)
                     if self._latest_current_request(state, payload, abort):
                         self._process_preview_request(state, payload, abort)
                 else:
-                    self._warm_sprite(state, payload, abort)
+                    completed = self._warm_sprite(state, payload, abort)
+                    if (
+                        not completed
+                        and payload not in state["warmed_sprites"]
+                    ):
+                        state["work_queue"].requeue_sprite(payload)
                 self._refresh_chapter_frames(state)
             except PreviewFailure as error:
                 if kind == "request" and not abort.is_set():
-                    self._clear_preview_if_current(state, payload, abort)
+                    attempt = int(payload.get("coordinator_attempt", 0))
+                    if (
+                        error.transient
+                        and attempt < len(PREVIEW_RETRY_BACKOFFS)
+                        and self._latest_current_request(
+                            state,
+                            payload,
+                            abort,
+                        )
+                        is not None
+                    ):
+                        self._publish_preview_status(
+                            state["playback_token"],
+                            state["revision"],
+                            "temporarily-failed",
+                            error.reason,
+                            {
+                                "consumer_nonce": payload["token"][
+                                    "consumer_nonce"
+                                ],
+                                "playback_epoch": payload["token"][
+                                    "playback_epoch"
+                                ],
+                            },
+                        )
+                        retry = dict(payload)
+                        retry["coordinator_attempt"] = attempt + 1
+                        retry["coordinator_origin"] = payload.get(
+                            "coordinator_origin",
+                            payload,
+                        )
+                        if not abort.wait(PREVIEW_RETRY_BACKOFFS[attempt]):
+                            state["work_queue"].submit_request(
+                                retry,
+                                sprite_for_frame(
+                                    retry["frame"],
+                                    state["info"],
+                                ),
+                            )
+                    else:
+                        self._clear_preview_if_current(
+                            state,
+                            payload,
+                            abort,
+                        )
                     self._log_preview_failure(state, payload, error)
+                elif kind == "warm" and error.transient:
+                    state["work_queue"].requeue_sprite(payload)
             except Exception:
                 if not abort.is_set():
                     LOG.warning(
@@ -1101,7 +1178,12 @@ class TrickplayPreviewManager(object):
     ):
         sprite = int(sprite)
         if sprite in state["warmed_sprites"]:
-            return False
+            if (
+                priority_frame is None
+                or state["frame_cache"].get(priority_frame) is not None
+            ):
+                return False
+            state["warmed_sprites"].discard(sprite)
         started = time.monotonic()
         sprite_data = self._load_sprite_data(
             state,
@@ -1169,12 +1251,15 @@ class TrickplayPreviewManager(object):
                 )
                 cropped = image.crop(box).convert("RGB")
                 try:
-                    cropped.save(temporary, "JPEG", quality=92)
+                    save_options = {"quality": 92}
+                    if image.info.get("icc_profile"):
+                        save_options["icc_profile"] = image.info["icc_profile"]
+                    cropped.save(temporary, "JPEG", **save_options)
                 finally:
                     cropped.close()
                 os.replace(temporary, path)
-                state["frame_cache"].put(frame, path)
-                extracted += 1
+                if state["frame_cache"].put(frame, path):
+                    extracted += 1
         finally:
             image.close()
             state["sprite_cache"].remove(sprite)
@@ -1316,6 +1401,10 @@ class TrickplayPreviewManager(object):
             != token["seek_generation"]
             or int(seek_request.get("target_seconds", -1))
             != int(round(latest["target_seconds"]))
+            or seek_request.get("consumer_nonce")
+            != token.get("consumer_nonce")
+            or seek_request.get("playback_epoch")
+            != token.get("playback_epoch")
         ):
             return None
         return latest
@@ -1333,9 +1422,41 @@ class TrickplayPreviewManager(object):
                 "active": bool(request.get("active")),
                 "generation": int(request["generation"]),
                 "target_seconds": int(request["target_seconds"]),
+                "playback_epoch": request["playback_epoch"],
+                "consumer_nonce": str(request["consumer_nonce"]),
             }
         except (KeyError, TypeError, ValueError):
             return None
+
+    def _serve_unavailable(
+        self,
+        playback,
+        revision,
+        abort,
+        reason,
+    ):
+        last_request = None
+        while not abort.wait(SEEK_POLL_SECONDS):
+            request = self._read_seek_request()
+            if request is None or not request.get("active"):
+                last_request = None
+                continue
+            signature = (
+                request["consumer_nonce"],
+                request["playback_epoch"],
+                request["generation"],
+                request["target_seconds"],
+            )
+            if signature == last_request:
+                continue
+            self._publish_preview_status(
+                playback,
+                revision,
+                "unavailable",
+                reason,
+                request,
+            )
+            last_request = signature
 
     def _publish_preview(self, state, request, source_path, abort):
         """Commit this sampled frame for the exact latest matching target."""
@@ -1350,6 +1471,9 @@ class TrickplayPreviewManager(object):
                         "status": "ready",
                         "path": source_path,
                     }
+                )
+                state["frame_cache"].set_pins(
+                    state.get("chapter_frames", set()) | {latest["frame"]}
                 )
                 contract = json.dumps(
                     payload,
@@ -1376,18 +1500,25 @@ class TrickplayPreviewManager(object):
 
     def _clear_preview_if_current(self, state, request, abort):
         with self._property_lock:
-            if self._latest_current_request(state, request, abort) is None:
+            latest = self._latest_current_request(state, request, abort)
+            if latest is None:
                 return False
             self._publish_preview_status(
                 state["playback_token"],
                 state["revision"],
                 "temporarily-failed",
                 "frame",
+                {
+                    "consumer_nonce": request["token"]["consumer_nonce"],
+                    "playback_epoch": request["token"]["playback_epoch"],
+                },
             )
             # A newer target can share this sampled frame while the failed
             # request is in flight. Only the failed request itself is owned
             # here; leave a newer pending version for the worker to retry.
-            state["request_slot"].discard_pending(request)
+            state["request_slot"].discard_pending(
+                request.get("coordinator_origin", request)
+            )
             return True
 
     def _queue_one_neighbor(self, state, request):
@@ -1826,7 +1957,14 @@ class TrickplayPreviewManager(object):
         with self._property_lock:
             window(PREVIEW_CONTRACT, clear=True)
 
-    def _publish_preview_status(self, playback, revision, status, reason):
+    def _publish_preview_status(
+        self,
+        playback,
+        revision,
+        status,
+        reason,
+        seek_request=None,
+    ):
         contract = {
             "schema": PREVIEW_SCHEMA,
             "status": str(status),
@@ -1834,6 +1972,13 @@ class TrickplayPreviewManager(object):
             "revision": int(revision),
             "reason": str(reason),
         }
+        if seek_request is not None:
+            contract.update(
+                {
+                    "consumer_nonce": seek_request["consumer_nonce"],
+                    "playback_epoch": seek_request["playback_epoch"],
+                }
+            )
         with self._property_lock:
             window(
                 PREVIEW_CONTRACT,

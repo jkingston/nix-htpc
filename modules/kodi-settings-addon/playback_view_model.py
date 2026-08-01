@@ -118,8 +118,7 @@ class PlaybackViewModel(object):
         self.preview_started_at = None
 
     def _start_preview(self, now):
-        self.preview_path = ""
-        self.preview_status = "none"
+        self.preview_status = "loading" if self.preview_path else "none"
         self.preview_started_at = now
 
     def _advance_preview(self, now):
