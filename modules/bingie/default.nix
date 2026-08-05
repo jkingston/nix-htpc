@@ -85,6 +85,14 @@ kodiPackages.buildKodiAddon {
       extras/bingiesettings.xml
 
     test ! -e 1080i/script-skinshortcuts-includes.xml
+    test -f shortcuts/htpc.properties.json
+    ! grep -R -E -q \
+      'jellyfintvshows|library://video/jellyfin|[0-9a-f]{32}' \
+      shortcuts/mainmenu.DATA.xml \
+      shortcuts/10000-1.DATA.xml \
+      shortcuts/moviehub.DATA.xml \
+      shortcuts/tvshowhub.DATA.xml \
+      shortcuts/htpc.properties.json
     test "$(xmllint --xpath 'name(/*)' \
       1080i/script-skinshortcuts-bootstrap.xml)" = includes
     test "$(grep -c 'SetProperty(BingiePlaybackStarting' \
@@ -161,6 +169,7 @@ kodiPackages.buildKodiAddon {
       test ! -e "$addon_dir/extras/media/$removed_asset"
     done
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"
+    test -f "$addon_dir/shortcuts/htpc.properties.json"
     for retired_path in \
       1080i/service-LibreELEC-Settings-mainWindow.xml \
       1080i/service-OpenELEC-Settings-mainWindow.xml \

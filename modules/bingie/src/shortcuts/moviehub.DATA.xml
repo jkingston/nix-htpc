@@ -1,26 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BINGIE -->
 <shortcuts>
     <shortcut>
-        <label>$VAR[DefMovieHubName]</label>
+        <label>Continue Watching</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefMovieHubContent]</action>
+        <action>ActivateWindow(Videos,special://skin/extras/widgetplaylists/inprogressmovies.xsp,return)</action>
+        <property name="widgetstyle">landscape</property>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefMovieHub1Name]</label>
+        <label>Recently Added Movies</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefMovieHub1Content]</action>
+        <action>ActivateWindow(Videos,library://video/movies/recentlyaddedmovies.xml,return)</action>
+        <property name="widgetstyle">poster</property>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefMovieHub2Name]</label>
+        <label>Collections</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefMovieHub2Content]</action>
+        <action>ActivateWindow(Videos,library://video/movies/sets.xml,return)</action>
+        <property name="widgetstyle">poster</property>
     </shortcut>
-    
+    <shortcut>
+        <label>All Movies</label>
+        <label2 />
+        <icon />
+        <thumb />
+        <action>ActivateWindow(Videos,library://video/movies/titles.xml,return)</action>
+        <property name="widgetstyle">poster</property>
+    </shortcut>
 </shortcuts>

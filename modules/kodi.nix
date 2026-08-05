@@ -48,7 +48,6 @@ let
     inherit lib pkgs;
     screenshotPath = kodiScreenshotPath;
   };
-  kodiContentRoutes = import ./kodi-content-routes { inherit pkgs; };
   kodiPerformanceSnapshot = import ./kodi-performance-snapshot { inherit pkgs; };
   simplejson = kodiPackages.simplejson;
   bingieHelper = import ./bingie-helper {
@@ -317,13 +316,11 @@ let
 in
 {
   environment.systemPackages = [
-    kodiContentRoutes
     kodiPerformanceSnapshot
     kodiScreenshotEvidence
     kodiSettingsWatchdog
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
-  system.build.kodiContentRoutes = kodiContentRoutes;
   system.build.kodiPerformanceSnapshot = kodiPerformanceSnapshot;
   system.build.kodiAddonReconciler = kodiAddonReconciler;
   system.build.kodiCore = kodiCore;
@@ -344,34 +341,6 @@ in
     "d /var/lib/nix-htpc 0755 root root - -"
     "d ${kodiAddonReconciler.backupRoot} 0700 root root - -"
   ];
-
-  systemd.services.kodi-content-routes = {
-    description = "Publish stable Kodi aliases for Jellyfin libraries";
-    wantedBy = [ "multi-user.target" ];
-    before = [ "greetd.service" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      User = "htpc";
-      Group = "users";
-      ExecStart = "${kodiContentRoutes}/bin/kodi-content-routes --library-root /home/htpc/.kodi/userdata/library/video";
-      NoNewPrivileges = true;
-      PrivateDevices = true;
-      PrivateTmp = true;
-      ProtectSystem = "strict";
-      ReadWritePaths = [ "/home/htpc/.kodi/userdata/library/video" ];
-    };
-  };
-
-  systemd.timers.kodi-content-routes = {
-    description = "Refresh stable Kodi content aliases";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "30s";
-      OnUnitActiveSec = "60s";
-      Unit = "kodi-content-routes.service";
-    };
-  };
 
   # BINGIE must be writable because Skin Shortcuts generates an include inside
   # the skin directory. Install it from greetd's pre-start so Kodi is always
@@ -456,6 +425,28 @@ in
           "$generated_shortcuts"
       fi
       chown -R htpc:users "$target_skin"
+
+      shortcuts_root=/home/htpc/.kodi/userdata/addon_data/script.skinshortcuts
+      install -d -m 0755 -o htpc -g users "$shortcuts_root"
+      install -m 0644 -o htpc -g users \
+        "$target_skin/shortcuts/mainmenu.DATA.xml" \
+        "$shortcuts_root/skin.bingie-mainmenu.DATA.xml"
+      install -m 0644 -o htpc -g users \
+        "$target_skin/shortcuts/10000-1.DATA.xml" \
+        "$shortcuts_root/skin.bingie-10000-1.DATA.xml"
+      install -m 0644 -o htpc -g users \
+        "$target_skin/shortcuts/moviehub.DATA.xml" \
+        "$shortcuts_root/skin.bingie-moviehub.DATA.xml"
+      install -m 0644 -o htpc -g users \
+        "$target_skin/shortcuts/tvshowhub.DATA.xml" \
+        "$shortcuts_root/skin.bingie-tvshowhub.DATA.xml"
+      install -m 0644 -o htpc -g users \
+        "$target_skin/shortcuts/htpc.properties.json" \
+        "$shortcuts_root/skin.bingie.properties"
+      # This is a generated cache key, not user data. Removing it makes Skin
+      # Shortcuts rebuild the include from the managed contract on next launch.
+      find "$shortcuts_root" -maxdepth 1 -type f \
+        -name 'skin.bingie.hash' -delete
 
       profile_uid="$(id -u htpc)"
       profile_gid="$(id -g htpc)"

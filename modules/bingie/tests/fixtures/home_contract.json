@@ -1,466 +1,72 @@
 {
-  "schema_version": 1,
-  "deployed_observation": {
-    "evidence": {
-      "repository_revision": "4af2a6bfd89ba9fd4cdf5b21176f97ba74b8951a",
-      "skin_version": "2.0.2.9",
-      "generated_include": {
-        "name": "script-skinshortcuts-includes.xml",
-        "sha256": "13764d5acca15d539889034f761964b021d8e8e11626939762124eedf0c60932",
-        "lines": 3290,
-        "bytes": 162787
-      }
-    },
-    "settings": {
-      "explicit": {
-        "MovieDetailsHome": true,
-        "EnableFixedFrameWidgets": true,
-        "widgetstyle": "poster",
-        "WidgetsGlobalLimit": 15
-      },
-      "absent_effective_values": {
-        "DisableAllSubmenus": false,
-        "AutoShowSubmenu": false,
-        "DisableSpotlightContent": false
-      }
-    },
-    "controls": {
-      "spotlight": 1508,
-      "sidebar": 900,
-      "widget_group": 77777
-    },
-    "home_entry_trace": {
-      "window": 10000,
-      "focus": "spotlight_first_item",
-      "spotlight_info": "empty",
-      "item_ready": true
-    },
-    "sidebar": [
-      {
-        "label": "Search",
-        "destination": {
-          "kind": "custom_window",
-          "target": 1109
-        }
-      },
-      {
-        "label": "Home",
-        "destination": {
-          "kind": "builtin_window",
-          "target": "home"
-        }
-      },
-      {
-        "label": "Anime",
-        "destination": {
-          "kind": "library_role",
-          "target": "anime"
-        }
-      },
-      {
-        "label": "Movies",
-        "destination": {
-          "kind": "library_role",
-          "target": "movies"
-        }
-      },
-      {
-        "label": "TV Shows",
-        "destination": {
-          "kind": "library_role",
-          "target": "tvshows"
-        }
-      },
-      {
-        "label": "Settings",
-        "destination": {
-          "kind": "builtin_window",
-          "target": "settings"
-        }
-      },
-      {
-        "label": "Power",
-        "destination": {
-          "kind": "builtin_window",
-          "target": "shutdownmenu"
-        }
-      }
+  "schema_version": 2,
+  "sidebar": [
+    [
+      "$LOCALIZE[137]",
+      "ActivateWindow(1109,return)"
     ],
-    "interaction_traces": {
-      "sidebar_right": [
-        {
-          "item": "Movies",
-          "start_window": 10000,
-          "start_control": 900,
-          "result_window": 10000,
-          "result_focus_group": 77777,
-          "submenu_visible": false
-        },
-        {
-          "item": "TV Shows",
-          "start_window": 10000,
-          "start_control": 900,
-          "result_window": 10000,
-          "result_focus_group": 77777,
-          "submenu_visible": false
-        }
-      ]
-    },
-    "rows": [
-      {
-        "key": "continue_watching_movies",
-        "id": 23003,
-        "label": "Continue Watching Movies",
-        "art": "landscape",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "movie",
-          "target": "inprogress",
-          "role": "movies"
-        }
-      },
-      {
-        "key": "next_anime_episodes",
-        "id": 23004,
-        "label": "Next Anime Episodes",
-        "art": "landscape",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "nextepisodes",
-          "role": "anime"
-        }
-      },
-      {
-        "key": "next_tv_episodes",
-        "id": 23005,
-        "label": "Next TV Episodes",
-        "art": "landscape",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "nextepisodes",
-          "role": "tvshows"
-        }
-      },
-      {
-        "key": "recently_added_movies",
-        "id": 23006,
-        "label": "Recently Added Movies",
-        "art": "poster",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "movie",
-          "target": "recentlyadded",
-          "role": "movies"
-        }
-      },
-      {
-        "key": "recently_added_anime",
-        "id": 23007,
-        "label": "Recently Added Anime",
-        "art": "poster",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "recentlyadded",
-          "role": "anime"
-        }
-      },
-      {
-        "key": "recently_added_tv_shows",
-        "id": 23008,
-        "label": "Recently Added TV Shows",
-        "art": "poster",
-        "limit": 15,
-        "normalized_locator": {
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "recentlyadded",
-          "role": "tvshows"
-        }
-      }
-    ]
-  },
-  "transitional_source_snapshot": {
-    "menu_provider": "skin_shortcuts",
-    "home_rows_provider": "skin_shortcuts",
-    "home_bootstrap_control": 1000,
-    "sidebar_right_source_action": "clear_submenu_then_focus_widget_group",
-    "generated_movies_tv_submenus": true,
-    "skin_shortcuts_build_groups": [
-      "mainmenu",
-      "powermenu",
-      "searchmenu",
-      "tmdbsearchmenu",
-      "moviehub",
-      "tvshowhub",
-      "newhub",
-      "musichub",
-      "customhub",
-      "somethinghub",
-      "mylisthub"
+    [
+      "$LOCALIZE[10000]",
+      "ActivateWindow(home,return)"
     ],
-    "checked_in_default_mainmenu": [
-      {
-        "label": "$LOCALIZE[137]",
-        "default_id": null,
-        "action": "ActivateWindow(1109,return)"
-      },
-      {
-        "label": "$LOCALIZE[10000]",
-        "default_id": null,
-        "action": "ActivateWindow(home,return)"
-      },
-      {
-        "label": "$LOCALIZE[31227]",
-        "default_id": null,
-        "action": "ActivateWindow(1112,return)"
-      },
-      {
-        "label": "$LOCALIZE[31566]",
-        "default_id": "shows",
-        "action": "ActivateWindow(1110,return)"
-      },
-      {
-        "label": "$LOCALIZE[342]",
-        "default_id": "movies",
-        "action": "ActivateWindow(1111,return)"
-      },
-      {
-        "label": "$LOCALIZE[31025]",
-        "default_id": null,
-        "action": "ActivateWindow(1119,return)"
-      },
-      {
-        "label": "$LOCALIZE[31534]",
-        "default_id": null,
-        "action": "ActivateWindow(1114,return)"
-      }
+    [
+      "TV Shows",
+      "ActivateWindow(1110,return)"
+    ],
+    [
+      "$LOCALIZE[342]",
+      "ActivateWindow(1111,return)"
+    ],
+    [
+      "$LOCALIZE[10004]",
+      "ActivateWindow(Settings)"
+    ],
+    [
+      "Power",
+      "ActivateWindow(shutdownmenu)"
     ]
-  },
-  "intended_declarative_contract": {
-    "controls": {
-      "spotlight": 1508,
-      "sidebar": 900,
-      "widget_group": 77777
-    },
-    "navigation": {
-      "provider": "fork_owned",
-      "sidebar_right_behavior": {
-        "inactive_destination": "activate_selected_destination",
-        "active_destination": "close_sidebar_and_restore_content_focus"
-      },
-      "focus_restoration": {
-        "sidebar_selection": "preserve_selected_entry",
-        "destination_content": "preserve_last_focused_item"
-      },
-      "submenu_policy": {
-        "Movies": "disabled",
-        "TV Shows": "disabled"
-      },
-      "sidebar": [
-        {
-          "label": "Search",
-          "destination": {
-            "kind": "custom_window",
-            "target": 1109
-          }
-        },
-        {
-          "label": "Home",
-          "destination": {
-            "kind": "builtin_window",
-            "target": "home"
-          }
-        },
-        {
-          "label": "Anime",
-          "destination": {
-            "kind": "library_role",
-            "target": "anime"
-          }
-        },
-        {
-          "label": "Movies",
-          "destination": {
-            "kind": "custom_window",
-            "target": 1111
-          }
-        },
-        {
-          "label": "TV Shows",
-          "destination": {
-            "kind": "custom_window",
-            "target": 1110
-          }
-        },
-        {
-          "label": "Settings",
-          "destination": {
-            "kind": "builtin_window",
-            "target": "settings"
-          }
-        },
-        {
-          "label": "Power",
-          "destination": {
-            "kind": "builtin_window",
-            "target": "shutdownmenu"
-          }
-        }
-      ]
-    },
-    "home": {
-      "rows_provider": "fork_owned",
-      "bootstrap_control": 1000,
-      "default_focus": {
-        "control": 1508,
-        "primary_state": "play",
-        "activation_by_media_type": {
-          "playable_video": "play_resume",
-          "tvshow": "open_show",
-          "music_container": "open_music"
-        }
-      },
-      "rows": [
-        {
-          "key": "continue_watching_movies",
-          "label": "Continue Watching Movies",
-          "art": "landscape",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "movie",
-          "target": "inprogress",
-          "role": "movies",
-          "empty_behavior": "omit_row"
-        },
-        {
-          "key": "next_anime_episodes",
-          "label": "Next Anime Episodes",
-          "art": "landscape",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "nextepisodes",
-          "role": "anime",
-          "empty_behavior": "omit_row"
-        },
-        {
-          "key": "next_tv_episodes",
-          "label": "Next TV Episodes",
-          "art": "landscape",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "nextepisodes",
-          "role": "tvshows",
-          "empty_behavior": "omit_row"
-        },
-        {
-          "key": "recently_added_movies",
-          "label": "Recently Added Movies",
-          "art": "poster",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "movie",
-          "target": "recentlyadded",
-          "role": "movies",
-          "empty_behavior": "omit_row"
-        },
-        {
-          "key": "recently_added_anime",
-          "label": "Recently Added Anime",
-          "art": "poster",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "recentlyadded",
-          "role": "anime",
-          "empty_behavior": "omit_row"
-        },
-        {
-          "key": "recently_added_tv_shows",
-          "label": "Recently Added TV Shows",
-          "art": "poster",
-          "limit": 15,
-          "provider": "jellyfin",
-          "operation": "browse",
-          "media_type": "episode",
-          "target": "recentlyadded",
-          "role": "tvshows",
-          "empty_behavior": "omit_row"
-        }
-      ]
-    },
-    "library_hubs": {
-      "movies": {
-        "window": 1111,
-        "genre_row": {
-          "id": 19501,
-          "path": "videodb://movies/genres/"
-        }
-      },
-      "tvshows": {
-        "window": 1110,
-        "genre_row": {
-          "id": 19502,
-          "path": "videodb://tvshows/genres/"
-        }
-      }
-    }
-  },
-  "current_state_to_intent_deltas": [
-    {
-      "area": "sidebar_right_inactive_destination",
-      "basis": "checked_in_source",
-      "current": "clear_submenu_then_focus_widget_group",
-      "intended": "activate_selected_destination",
-      "disposition": "replace_at_declarative_cutover"
-    },
-    {
-      "area": "movies_tv_destination",
-      "basis": "deployed_observation",
-      "current": "direct_library",
-      "intended": "fork_hub",
-      "disposition": "replace_at_declarative_cutover"
-    },
-    {
-      "area": "menu_provider",
-      "basis": "checked_in_source",
-      "current": "skin_shortcuts",
-      "intended": "fork_owned",
-      "disposition": "replace_at_declarative_cutover"
-    },
-    {
-      "area": "home_rows_provider",
-      "basis": "checked_in_source",
-      "current": "skin_shortcuts",
-      "intended": "fork_owned",
-      "disposition": "replace_at_declarative_cutover"
-    },
-    {
-      "area": "generated_movies_tv_submenus",
-      "basis": "checked_in_source",
-      "current": true,
-      "intended": false,
-      "disposition": "remove_at_declarative_cutover"
-    }
+  ],
+  "home_rows": [
+    [
+      "Continue Watching",
+      "plugin://script.bingie.widgets/?action=inprogressnextepisode&mediatype=media&limit=25",
+      "landscape"
+    ],
+    [
+      "Next Episodes",
+      "plugin://script.bingie.widgets/?action=nextinprogress&mediatype=episodes&limit=25",
+      "landscape"
+    ],
+    [
+      "Playlists",
+      "plugin://script.bingie.widgets/?action=serverplaylists&mediatype=media&limit=25",
+      "poster"
+    ],
+    [
+      "Recently Added Movies",
+      "library://video/movies/recentlyaddedmovies.xml",
+      "poster"
+    ],
+    [
+      "Recently Added TV Shows",
+      "library://video/tvshows/recentlyaddedepisodes.xml",
+      "poster"
+    ],
+    [
+      "Collections",
+      "library://video/movies/sets.xml",
+      "poster"
+    ]
+  ],
+  "movie_hub": [
+    "Continue Watching",
+    "Recently Added Movies",
+    "Collections",
+    "All Movies"
+  ],
+  "tv_hub": [
+    "Next Episodes",
+    "Recently Added TV Shows",
+    "All TV Shows"
   ]
 }

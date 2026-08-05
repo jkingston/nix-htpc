@@ -1,26 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BINGIE -->
 <shortcuts>
     <shortcut>
-        <label>$VAR[DefTVShowHubName]</label>
+        <label>Next Episodes</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefTVShowHubContent]</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=nextinprogress&amp;mediatype=episodes&amp;limit=25,return)</action>
+        <property name="widgetstyle">landscape</property>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefTVShowHub1Name]</label>
+        <label>Recently Added TV Shows</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefTVShowHub1Content]</action>
+        <action>ActivateWindow(Videos,library://video/tvshows/recentlyaddedepisodes.xml,return)</action>
+        <property name="widgetstyle">poster</property>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefTVShowHub2Name]</label>
+        <label>All TV Shows</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefTVShowHub2Content]</action>
+        <action>ActivateWindow(Videos,library://video/tvshows/titles.xml,return)</action>
+        <property name="widgetstyle">poster</property>
     </shortcut>
-    
 </shortcuts>

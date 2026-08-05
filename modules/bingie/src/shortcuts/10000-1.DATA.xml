@@ -1,47 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BINGIE -->
+<!-- Stable Kodi routes; the playlist adapter discovers Jellyfin at runtime. -->
 <shortcuts>
     <shortcut>
-        <label>$VAR[DefWidgetName]</label>
+        <label>Continue Watching</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidgetContent]</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=inprogressnextepisode&amp;mediatype=media&amp;limit=25,return)</action>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefWidget1Name]</label>
+        <label>Next Episodes</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidget1Content]</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=nextinprogress&amp;mediatype=episodes&amp;limit=25,return)</action>
     </shortcut>
     <shortcut>
-        <label>$VAR[DefWidget2Name]</label>
+        <label>Playlists</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidget2Content]</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=serverplaylists&amp;mediatype=media&amp;limit=25,return)</action>
     </shortcut>
-	<shortcut>
-        <label>$VAR[DefWidget3Name]</label>
+    <shortcut>
+        <label>Recently Added Movies</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidget3Content]</action>
+        <action>ActivateWindow(Videos,library://video/movies/recentlyaddedmovies.xml,return)</action>
     </shortcut>
-	<shortcut>
-        <label>$VAR[DefWidget4Name]</label>
+    <shortcut>
+        <label>Recently Added TV Shows</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidget4Content]</action>
+        <action>ActivateWindow(Videos,library://video/tvshows/recentlyaddedepisodes.xml,return)</action>
     </shortcut>
-	<shortcut>
-        <label>$VAR[DefWidget5Name]</label>
+    <shortcut>
+        <label>Collections</label>
         <label2 />
         <icon />
         <thumb />
-        <action>$VAR[DefWidget5Content]</action>
+        <action>ActivateWindow(Videos,library://video/movies/sets.xml,return)</action>
     </shortcut>
-    
 </shortcuts>
