@@ -66,6 +66,7 @@ kodiPackages.buildKodiAddon {
       1080i/IncludesDefaultSkinSettings.xml \
       1080i/IncludesFunctions.xml \
       1080i/IncludesHomeBingie.xml \
+      1080i/IncludesHomeWidgets.xml \
       1080i/IncludesHTPCPlayback.xml \
       1080i/IncludesHTPCVideoOSD.xml \
       1080i/IncludesOSD.xml \

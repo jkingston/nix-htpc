@@ -627,7 +627,6 @@
                 <include>widget_header_leftalign</include>
 				<textcolor>$INFO[Skin.String(BingieHeaderTextColor)]</textcolor>
                 <label>$PARAM[widgetName]</label>
-                <animation effect="slide" end="50" time="0" condition="Container($PARAM[widgetid]).IsUpdating + Integer.IsEqual(Container($PARAM[widgetid]).NumItems,0)">Conditional</animation>
                 <visible>String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(similartitle)) + String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(genretitle))</visible>
 			</control>
             <control type="label">
@@ -638,20 +637,66 @@
                 <include>widget_header_leftalign</include>
 				<textcolor>$INFO[Skin.String(BingieHeaderTextColor)]</textcolor>
                 <label>$INFO[Container($PARAM[widgetid]).ListItem.Property(similartitle),$LOCALIZE[31333] ,]$INFO[Container($PARAM[widgetid]).ListItem.Property(genretitle)]</label>
-                <animation effect="slide" end="50" time="0" condition="Container($PARAM[widgetid]).IsUpdating + Integer.IsEqual(Container($PARAM[widgetid]).NumItems,0)">Conditional</animation>
                 <visible>!String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(similartitle)) | !String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(genretitle))</visible>
 			</control>
-            <control type="multiimage">
+        </control>
+    </include>
+
+    <include name="WidgetSkeletonCard">
+        <control type="image">
+            <width>$PARAM[width]</width>
+            <height>$PARAM[height]</height>
+            <texture border="12">diffuse/panel2.png</texture>
+            <colordiffuse>ff242424</colordiffuse>
+        </control>
+    </include>
+
+    <include name="WidgetSkeletonCards">
+        <control type="group">
+            <!-- A zero-height sibling overlays the empty dynamic container
+                 without changing the established vertical focus geometry. -->
+            <height>0</height>
+            <visible>Container($PARAM[widgetid]).IsUpdating + Integer.IsEqual(Container($PARAM[widgetid]).NumItems,0)</visible>
+            <control type="grouplist">
+                <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_poster)</visible>
+                <left>69</left>
                 <width>100%</width>
-                <height>30</height>
-                <top>5</top>
-                <include>widget_header_leftalign</include>
-                <aspectratio align="left">keep</aspectratio>
-                <imagepath background="true">spinner/widgets_busy_loader/</imagepath>
-                <timeperimage>85</timeperimage>
-                <colordiffuse>$INFO[Skin.String(WidgetSpinnerTextureColor)]</colordiffuse>
-                <fadetime>0</fadetime>
-                <visible>Container($PARAM[widgetid]).IsUpdating + Integer.IsEqual(Container($PARAM[widgetid]).NumItems,0)</visible>
+                <height>340</height>
+                <orientation>horizontal</orientation>
+                <itemgap>10</itemgap>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+            </control>
+            <control type="grouplist">
+                <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_landscape)</visible>
+                <left>69</left>
+                <width>100%</width>
+                <height>242</height>
+                <orientation>horizontal</orientation>
+                <itemgap>10</itemgap>
+                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+            </control>
+            <control type="grouplist">
+                <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_square)</visible>
+                <left>69</left>
+                <width>100%</width>
+                <height>280</height>
+                <orientation>horizontal</orientation>
+                <itemgap>10</itemgap>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
             </control>
         </control>
     </include>
@@ -700,6 +745,10 @@
     </include>
 
     <include name="widget_base_normal">
+        <include content="WidgetSkeletonCards">
+            <param name="widgetid" value="$PARAM[widgetid]" />
+            <param name="widgetStyle" value="$PARAM[widgetStyle]" />
+        </include>
         <control type="$PARAM[container]" id="$PARAM[widgetid]">
             <visible>Container($PARAM[widgetid]).IsUpdating + Control.IsVisible($PARAM[widgetid]) | Integer.IsGreater(Container($PARAM[widgetid]).NumItems,0)</visible>
             <orientation>$PARAM[position]</orientation>
