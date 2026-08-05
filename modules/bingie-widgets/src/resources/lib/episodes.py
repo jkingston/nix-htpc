@@ -6,7 +6,12 @@ from datetime import datetime, timedelta
 from operator import itemgetter
 import xbmc
 from widgetshelper import kodi_constants
-from resources.lib.episode_progress import CONTINUE, UP_NEXT, resolve_series_progress
+from resources.lib.episode_progress import (
+    CONTINUE,
+    UP_NEXT,
+    resolve_series_primary,
+    resolve_series_progress,
+)
 from resources.lib.utils import create_main_entry,log_msg
 
 class Episodes(object):
@@ -140,6 +145,10 @@ class Episodes(object):
         ''' get the most recently played unfinished episode for each show '''
         return self._progress_items(CONTINUE)
 
+    def seriesprogress(self):
+        ''' get the resolved resume/next item for one TV show '''
+        return self._progress_items(None)
+
     def nextinprogress(self):
         """Get the immediate successor of each show's latest completed play."""
         return self._progress_items(UP_NEXT)
@@ -161,6 +170,7 @@ class Episodes(object):
 
         episode_state = self.widgetshelper.kodidb.episodes(
             filters=filters,
+            tvshowid=self.options.get("tvshowid"),
             fields=[
                 "tvshowid", "season", "episode", "playcount",
                 "lastplayed", "resume",
@@ -174,13 +184,33 @@ class Episodes(object):
             episode_state,
             include_specials=include_specials,
         )
-        decisions = [decision for decision in decisions if decision.state == state]
+        if state is None:
+            primary = resolve_series_primary(
+                episode_state,
+                include_specials=include_specials,
+            )
+            decisions = [primary] if primary is not None else []
+        else:
+            decisions = [
+                decision for decision in decisions if decision.state == state
+            ]
         if state == UP_NEXT:
             decisions = self._within_next_episode_age(decisions)
         decisions = decisions[:self.options["limit"]]
-        return self.widgetshelper.kodidb.episode_details(
+        items = self.widgetshelper.kodidb.episode_details(
             [decision.target_episodeid for decision in decisions]
         )
+        decisions_by_episode = {
+            decision.target_episodeid: decision for decision in decisions
+        }
+        for item in items:
+            decision = decisions_by_episode.get(item.get("episodeid"))
+            if decision is None:
+                continue
+            properties = item.setdefault("extraproperties", {})
+            properties["BingieEpisodeIndex"] = str(decision.target_index)
+            properties["BingieSeriesProgress"] = decision.state
+        return items
 
     def _within_next_episode_age(self, decisions):
         max_days = self.options.get("jellyfin_max_days", 0)

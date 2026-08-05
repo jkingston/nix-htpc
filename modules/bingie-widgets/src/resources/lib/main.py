@@ -130,6 +130,11 @@ class Main(object):
                 self.options.get("jellyfin_max_days", 0),
                 self.options.get("jellyfin_ignore_specials", False),
             )
+        elif self.options["action"] == "seriesprogress":
+            cache_id = "%s|tvshowid=%s" % (
+                cache_id or "",
+                self.options.get("tvshowid", ""),
+            )
         # set cache_str
         cache_str = "Bingie.Widgets.%s.%s.%s.%s.%s" % \
             (media_type, action, self.options["limit"], self.options.get("path"), cache_id)

@@ -1,6 +1,11 @@
 import unittest
 
-from resources.lib.episode_progress import CONTINUE, UP_NEXT, resolve_series_progress
+from resources.lib.episode_progress import (
+    CONTINUE,
+    UP_NEXT,
+    resolve_series_primary,
+    resolve_series_progress,
+)
 
 
 def episode(
@@ -100,6 +105,7 @@ class EpisodeProgressTests(unittest.TestCase):
         ])
 
         self.assertEqual(decisions[0].target_episodeid, 2)
+        self.assertEqual(decisions[0].target_index, 2)
 
     def test_decisions_are_ordered_by_series_activity(self):
         decisions = resolve_series_progress([
@@ -109,6 +115,23 @@ class EpisodeProgressTests(unittest.TestCase):
         ])
 
         self.assertEqual([decision.tvshowid for decision in decisions], [2, 1])
+
+    def test_show_primary_falls_back_to_first_normal_episode(self):
+        decision = resolve_series_primary([
+            episode(100, 1, season=0),
+            episode(1, 1),
+            episode(2, 2),
+        ])
+
+        self.assertEqual(decision.target_episodeid, 1)
+        self.assertEqual(decision.target_index, 1)
+
+    def test_show_primary_restarts_after_series_finale(self):
+        decision = resolve_series_primary([
+            episode(1, 1, played=1, lastplayed="2026-01-01 10:00:00"),
+        ])
+
+        self.assertEqual(decision.target_episodeid, 1)
 
 
 if __name__ == "__main__":
