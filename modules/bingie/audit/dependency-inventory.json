@@ -38,10 +38,10 @@
     {
       "classification": "nix_only",
       "id": "script.bingie.widgets",
-      "minimum_version": "1.0.2",
+      "minimum_version": "1.0.3",
       "nix_closure": {
-        "addon_xml_sha256": "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f",
-        "version": "1.0.2"
+        "addon_xml_sha256": "3957ad5d2296cfd8f058bbd1746e051a287eee68eef9afbabd15ee77588edbcd",
+        "version": "1.0.3"
       },
       "optional": false,
       "planned_resolution": "package_in_nix_m0_9",
@@ -152,6 +152,6 @@
     "addon_id": "skin.bingie",
     "addon_version": "2.0.2.13",
     "declaration": "addon.xml",
-    "declaration_sha256": "db2a3c810a6559ae6efce5c3fdef5c063ae8846b81c1b3239c00b39142286ed2"
+    "declaration_sha256": "cfc7d413f6f2551b1008924fd5e0ce95f2bd4605bfba27705aeb1553e5429078"
   }
 }

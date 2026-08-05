@@ -50,13 +50,14 @@ class KodiDb(object):
         return self.tvshow_watchedcounts(tvshow)
 
     def tvshows(self, sort=None, filters=None, limits=None, filtertype=None,
-                fields=FIELDS_TVSHOWS):
+                fields=FIELDS_TVSHOWS, enrich=True):
         ''' get tvshows from kodi db '''
         tvshows = self.get_json("VideoLibrary.GetTvShows", sort=sort, filters=filters,
                                 fields=fields, limits=limits, returntype="tvshows", filtertype=filtertype)
         # append watched counters
-        for tvshow in tvshows:
-            self.tvshow_watchedcounts(tvshow)
+        if enrich:
+            for tvshow in tvshows:
+                self.tvshow_watchedcounts(tvshow)
         return tvshows
 
     def tvshow_by_imdbid(self, imdb_id):

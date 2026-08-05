@@ -63,6 +63,18 @@ class Main(object):
         options["next_inprogress_only"] = self.addon.getSetting("nextup_inprogressonly") == "true"
         options["episodes_enable_specials"] = self.addon.getSetting("episodes_enable_specials") == "true"
         options["group_episodes"] = self.addon.getSetting("episodes_grouping") == "true"
+        if options.get("action") == "nextinprogress":
+            try:
+                jellyfin = xbmcaddon.Addon("plugin.video.jellyfin")
+                options["jellyfin_max_days"] = int(
+                    jellyfin.getSetting("maxDaysInNextEpisodes") or 0
+                )
+                options["jellyfin_ignore_specials"] = (
+                    jellyfin.getSetting("ignoreSpecialsNextEpisodes") == "true"
+                )
+            except Exception:
+                options["jellyfin_max_days"] = 0
+                options["jellyfin_ignore_specials"] = False
         if "limit" in options:
             options["limit"] = int(options["limit"])
         else:
@@ -112,6 +124,12 @@ class Main(object):
         else:
             # use tag otherwise
             cache_id = self.options.get("tag")
+        if self.options["action"] == "nextinprogress":
+            cache_id = "%s|maxdays=%s|ignore_specials=%s" % (
+                cache_id or "",
+                self.options.get("jellyfin_max_days", 0),
+                self.options.get("jellyfin_ignore_specials", False),
+            )
         # set cache_str
         cache_str = "Bingie.Widgets.%s.%s.%s.%s.%s" % \
             (media_type, action, self.options["limit"], self.options.get("path"), cache_id)
@@ -129,6 +147,7 @@ class Main(object):
                     % (media_type, action, self.options.get("path"), self.options.get("tag"), cache_checksum))
 
             # dynamically import and load the correct module, class and function
+            query_succeeded = True
             try:
                 media_module = __import__(media_type)
                 media_class = getattr(
@@ -137,17 +156,23 @@ class Main(object):
                 all_items = getattr(media_class, action)()
                 del media_class
             except AttributeError:
+                query_succeeded = False
                 log_exception(__name__, "Incorrect widget action or type called")
             except Exception as exc:
+                query_succeeded = False
                 log_exception(__name__, exc)
 
-            # randomize output if requested by skinner or user
-            if self.options.get("randomize", "") == "true":
-                all_items = sorted(all_items, key=lambda k: random.random())
+            if query_succeeded:
+                # randomize output if requested by skinner or user
+                if self.options.get("randomize", "") == "true":
+                    all_items = sorted(all_items, key=lambda k: random.random())
 
-            # prepare listitems and store in cache
-            all_items = self.widgetshelper.process_method_on_list(self.widgetshelper.kodidb.prepare_listitem, all_items)
-            self.widgetshelper.cache.set(cache_str, all_items, checksum=cache_checksum)
+                # Publish only a complete successful result as the new cache.
+                all_items = self.widgetshelper.process_method_on_list(self.widgetshelper.kodidb.prepare_listitem, all_items)
+                self.widgetshelper.cache.set(cache_str, all_items, checksum=cache_checksum)
+            else:
+                stale = self.widgetshelper.cache.get(cache_str, checksum=None)
+                all_items = stale or []
 
         # fill that listing...
         xbmcplugin.addSortMethod(int(sys.argv[1]), xbmcplugin.SORT_METHOD_UNSORTED)

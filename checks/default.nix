@@ -61,8 +61,8 @@ let
   };
   expectedBingieWidgetsIdentity = {
     manifest_sha256 =
-      "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f";
-    version = "1.0.2";
+      "3957ad5d2296cfd8f058bbd1746e051a287eee68eef9afbabd15ee77588edbcd";
+    version = "1.0.3";
   };
   kodiAddonReconcilerConfiguration =
     kodiAddonReconciler.configuration;
@@ -364,7 +364,7 @@ in
         "sha256-3FRQLYSUp4lNMBruMUP+sDFIN/pD20iariHHGxni7QQ=";
     };
     assert kodiBingieHelper.requiredKodiAddons == [ kodiSimplejson ];
-    assert kodiBingieWidgets.version == "1.0.2";
+    assert kodiBingieWidgets.version == "1.0.3";
     assert kodiBingieWidgets.namespace == "script.bingie.widgets";
     assert kodiBingieWidgets.manifestIdentity == {
       inherit (expectedBingieWidgetsIdentity) version;
@@ -409,7 +409,7 @@ in
       }
       {
         addonId = "script.bingie.widgets";
-        version = "1.0.2";
+        version = "1.0.3";
       }
       {
         addonId = "service.htpc.settings";
@@ -423,7 +423,7 @@ in
     assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
       enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
       enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
-      enable_managed_addon script.bingie.widgets 1.0.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.widgets/
+      enable_managed_addon script.bingie.widgets 1.0.3 ${kodiWithAddons}/share/kodi/addons/script.bingie.widgets/
       enable_managed_addon service.htpc.settings 2.1.21 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
       enable_managed_addon script.htpc.osd-review 0.1.3 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
     '') kodiSettingsServiceScriptText;

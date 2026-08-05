@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 
 
@@ -17,6 +18,10 @@ ROLE_TAGS = {
 }
 REQUIRED_ENDPOINTS = ("all.xml", "nextepisodes.xml", "recent.xml")
 MAX_NODE_BYTES = 64 * 1024
+CACHED_NEXT_ROUTE = (
+    "plugin://script.bingie.widgets/?action=nextinprogress"
+    "&mediatype=episodes&tag=%s&limit=25"
+)
 
 
 class RouteError(RuntimeError):
@@ -103,6 +108,41 @@ def publish_alias(alias: Path, target: Path) -> bool:
     return True
 
 
+def publish_cached_next_route(node_path: Path, tag: str) -> bool:
+    """Replace only the dynamic provider behind a generated Jellyfin node."""
+    try:
+        root = ET.fromstring(_regular_node_file(node_path))
+    except ET.ParseError as error:
+        raise RouteError("invalid next-episode node: %s" % node_path) from error
+    path = root.find("path")
+    if root.tag != "node" or root.get("type") != "folder" or path is None:
+        raise RouteError("unexpected next-episode node: %s" % node_path)
+    desired = CACHED_NEXT_ROUTE % tag
+    if path.text == desired:
+        return False
+    path.text = desired
+    payload = ET.tostring(root, encoding="utf-8")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".nextepisodes.",
+        suffix=".xml",
+        dir=node_path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, node_path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    return True
+
+
 def reconcile(library_root: Path) -> dict[str, str]:
     library_root.mkdir(parents=True, exist_ok=True)
     routes = discover_routes(library_root)
@@ -114,6 +154,10 @@ def reconcile(library_root: Path) -> dict[str, str]:
             raise RouteError("refusing to replace non-symlink route: %s" % alias)
     published: dict[str, str] = {}
     for role, target in sorted(routes.items()):
+        publish_cached_next_route(
+            target / "nextepisodes.xml",
+            ROLE_TAGS[role],
+        )
         alias = aliases[role]
         publish_alias(alias, target)
         published[role] = alias.name

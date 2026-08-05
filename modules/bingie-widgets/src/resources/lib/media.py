@@ -221,6 +221,7 @@ class Media(object):
             filters=tvshow_filters,
             limits=(0, candidate_limit),
             fields=["season", "episode", "watchedepisodes"],
+            enrich=False,
         )
         candidates = [
             ("movie", item["movieid"]) for item in movies

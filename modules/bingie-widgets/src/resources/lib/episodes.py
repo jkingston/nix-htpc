@@ -145,6 +145,53 @@ class Episodes(object):
         return self.widgetshelper.process_method_on_list(self.get_next_episode_for_show,
                                                          [d['tvshowid'] for d in all_shows])
 
+    def nextinprogress(self):
+        """Match Jellyfin's synced-library Next Episodes ordering."""
+        filters = [kodi_constants.FILTER_INPROGRESS]
+        if self.options.get("tag"):
+            filters.append({
+                "operator": "contains",
+                "field": "tag",
+                "value": self.options["tag"],
+            })
+        max_days = self.options.get("jellyfin_max_days", 0)
+        if max_days:
+            filters.append({
+                "operator": "inthelast",
+                "field": "lastplayed",
+                "value": "%s days" % max_days,
+            })
+        shows = self.widgetshelper.kodidb.tvshows(
+            sort=kodi_constants.SORT_LASTPLAYED,
+            filters=filters,
+            limits=(0, self.options["limit"]),
+            fields=[],
+            enrich=False,
+        )
+        episodes = []
+        for show in shows:
+            episode_filters = [kodi_constants.FILTER_UNWATCHED]
+            if self.options.get("jellyfin_ignore_specials"):
+                episode_filters.append({
+                    "operator": "greaterthan",
+                    "field": "season",
+                    "value": "0",
+                })
+            candidates = self.widgetshelper.kodidb.episodes(
+                sort=kodi_constants.SORT_EPISODE,
+                filters=episode_filters,
+                limits=(0, 1),
+                tvshowid=show["tvshowid"],
+                fields=[],
+            )
+            if candidates:
+                episodes.append(
+                    self.widgetshelper.kodidb.episode(
+                        candidates[0]["episodeid"]
+                    )
+                )
+        return episodes
+
     def get_next_episode_for_show(self, show_id):
         '''
         get last played watched episode for show,
