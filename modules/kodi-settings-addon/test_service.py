@@ -149,6 +149,8 @@ from seek_controller import (
 )
 from service import (
     CORE_SETTINGS,
+    INTERACTIVE_TICK_SECONDS,
+    MAINTENANCE_TICK_SECONDS,
     ManagedSettings,
     PLAYBACK_MODES,
     SeekService,
@@ -2908,6 +2910,14 @@ class ChapterNavigationFilterTest(unittest.TestCase):
 
 
 class ServiceMonitorTest(unittest.TestCase):
+    def test_queued_work_wakes_long_idle_wait_immediately(self):
+        monitor = ServiceMonitor()
+        monitor.abortRequested = lambda: False
+        monitor.post_input("right")
+
+        self.assertFalse(monitor.wait_for_work(60.0))
+        self.assertEqual(monitor.drain()[0][1], "right")
+
     def test_only_htpc_seek_notifications_enter_input_queue(self):
         monitor = ServiceMonitor()
         monitor.onNotification(
@@ -3436,6 +3446,15 @@ class SeekServiceRunTest(unittest.TestCase):
         service.router.pending_transition_generation = None
         service.chapters = mock.Mock()
         service.settings = mock.Mock()
+        service.playback_active = False
+        service.interactive_until = 0.0
+        service.next_playback_tick = 0.0
+        service.monitor.clock.side_effect = (
+            lambda: service.monitor.clock.call_count * 3.0
+        )
+        service.controller.active = False
+        service.chapters.is_open = False
+        service.router.pending_transition = None
 
         snapshot = {"generation": 7, "target_seconds": 120}
         player_snapshot = {"playing": True}
@@ -3524,7 +3543,7 @@ class SeekServiceRunTest(unittest.TestCase):
 
     def test_startup_revokes_readiness_then_clears_without_advertising(self):
         service, trace = self._service()
-        service.monitor.waitForAbort.return_value = True
+        service.monitor.wait_for_work.return_value = True
 
         with mock.patch("service.log"):
             service.run()
@@ -3536,7 +3555,7 @@ class SeekServiceRunTest(unittest.TestCase):
 
     def test_successful_cycles_publish_readiness_last_with_force_then_cadence(self):
         service, trace = self._service()
-        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.wait_for_work.side_effect = [False, False, True]
         service.monitor.drain.return_value = []
         service.settings.tick.side_effect = self._effect(trace, "settings.tick")
 
@@ -3556,10 +3575,36 @@ class SeekServiceRunTest(unittest.TestCase):
             [mock.call(force=True), mock.call()],
         )
 
+    def test_idle_maintenance_does_not_repeat_full_playback_cycle(self):
+        service, trace = self._service()
+        service.monitor.clock.side_effect = None
+        service.monitor.clock.return_value = 0.0
+        service.monitor.wait_for_work.side_effect = [False, False, True]
+        service.monitor.drain.return_value = []
+        service.settings.tick.side_effect = self._effect(trace, "settings.tick")
+
+        with mock.patch("service.log"):
+            service.run()
+
+        self.assertEqual(service.controller.tick.call_count, 1)
+        self.assertEqual(service.settings.tick.call_count, 2)
+        self.assertEqual(
+            service.lease.refresh.call_args_list,
+            [mock.call(force=True), mock.call()],
+        )
+        self.assertEqual(
+            service.monitor.wait_for_work.call_args_list,
+            [
+                mock.call(INTERACTIVE_TICK_SECONDS),
+                mock.call(MAINTENANCE_TICK_SECONDS),
+                mock.call(MAINTENANCE_TICK_SECONDS),
+            ],
+        )
+
     def test_unexpected_input_dispatch_failure_stops_before_cycle_or_ready(self):
         service, trace = self._service()
         event = ("input", "right", {}, 1.0, 0)
-        service.monitor.waitForAbort.side_effect = [False, True]
+        service.monitor.wait_for_work.side_effect = [False, True]
         service.monitor.drain.return_value = [event]
         service._dispatch_event = mock.Mock(
             side_effect=self._effect(
@@ -3579,14 +3624,14 @@ class SeekServiceRunTest(unittest.TestCase):
         service.controller.tick.assert_not_called()
         service.lease.refresh.assert_not_called()
         service.settings.tick.assert_not_called()
-        self.assertEqual(service.monitor.waitForAbort.call_count, 1)
+        self.assertEqual(service.monitor.wait_for_work.call_count, 1)
         self.assertIn("stopping input router", logger.call_args.args[0])
         self.assertEqual(logger.call_args.args[1], fake_xbmc.LOGERROR)
 
     def test_stale_input_generation_is_benign_and_cycle_becomes_ready(self):
         service, _trace = self._service()
         event = ("input", "right", {}, 1.0, 0)
-        service.monitor.waitForAbort.side_effect = [False, True]
+        service.monitor.wait_for_work.side_effect = [False, True]
         service.monitor.drain.return_value = [event]
         service._dispatch_event = mock.Mock(return_value=False)
 
@@ -3603,7 +3648,7 @@ class SeekServiceRunTest(unittest.TestCase):
         for failed_stage in self.CRITICAL_STAGES:
             with self.subTest(stage=failed_stage):
                 service, trace = self._service(failure=failed_stage)
-                service.monitor.waitForAbort.side_effect = [False, True]
+                service.monitor.wait_for_work.side_effect = [False, True]
                 service.monitor.drain.return_value = []
                 with mock.patch("service.log") as logger:
                     service.run()
@@ -3615,7 +3660,7 @@ class SeekServiceRunTest(unittest.TestCase):
                 )
                 service.controller.cancel.assert_not_called()
                 service.settings.tick.assert_not_called()
-                self.assertEqual(service.monitor.waitForAbort.call_count, 1)
+                self.assertEqual(service.monitor.wait_for_work.call_count, 1)
                 self.assertIn(
                     "critical playback cycle failed",
                     logger.call_args.args[0],
@@ -3633,7 +3678,7 @@ class SeekServiceRunTest(unittest.TestCase):
                 service, trace = self._service(
                     failure=(failed_stage, 2),
                 )
-                service.monitor.waitForAbort.side_effect = [
+                service.monitor.wait_for_work.side_effect = [
                     False,
                     False,
                     True,
@@ -3675,7 +3720,7 @@ class SeekServiceRunTest(unittest.TestCase):
     def test_boundary_failure_after_ready_stops_and_closes_without_new_work(self):
         service, _trace = self._service()
         boundary = ("player", "started", {}, 2.0, 1)
-        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.wait_for_work.side_effect = [False, False, True]
         service.monitor.drain.side_effect = [[], [boundary]]
         service.chapters.close.side_effect = RuntimeError("chapter close")
 
@@ -3711,7 +3756,7 @@ class SeekServiceRunTest(unittest.TestCase):
 
     def test_managed_settings_failure_is_logged_and_next_cycle_remains_ready(self):
         service, _trace = self._service()
-        service.monitor.waitForAbort.side_effect = [False, False, True]
+        service.monitor.wait_for_work.side_effect = [False, False, True]
         service.monitor.drain.return_value = []
         service.settings.tick.side_effect = [
             RuntimeError("settings unavailable"),

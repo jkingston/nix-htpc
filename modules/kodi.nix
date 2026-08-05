@@ -3,7 +3,7 @@ let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
   kodiCore = rpiPackages.kodi-gbm;
   kodiPackages = kodiCore.packages;
-  kodiSettingsAddonVersion = "2.1.20";
+  kodiSettingsAddonVersion = "2.1.21";
   kodiOsdReviewAddonVersion = "0.1.3";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
   productionSkin = "skin.bingie";

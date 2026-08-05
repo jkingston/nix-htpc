@@ -2,7 +2,7 @@
 <addon
   id="service.htpc.settings"
   name="HTPC Settings"
-  version="2.1.20"
+  version="2.1.21"
   provider-name="NixOS HTPC">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>

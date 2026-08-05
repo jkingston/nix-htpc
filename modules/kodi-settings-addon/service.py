@@ -53,6 +53,11 @@ SCREENSHOT_RETRY_INITIAL = 1.0
 SCREENSHOT_RETRY_MAX = 30.0
 SUPPORTED_HTPC_SKINS = frozenset(("skin.bingie", "skin.htpc"))
 PLAYER_BOUNDARY_EVENTS = frozenset(("started", "stopped", "ended"))
+INTERACTIVE_TICK_SECONDS = 0.05
+PLAYBACK_TICK_SECONDS = 0.25
+IDLE_TICK_SECONDS = 2.0
+INTERACTIVE_GRACE_SECONDS = 1.0
+MAINTENANCE_TICK_SECONDS = 0.5
 
 
 def log(message, level=xbmc.LOGINFO):
@@ -284,6 +289,7 @@ class ServiceMonitor(xbmc.Monitor):
         self.input_last_seen = {}
         self.latest_direction = None
         self.latest_direction_seen = None
+        self.work_ready = threading.Event()
 
     def post_input(self, action, payload=None):
         with self.event_lock:
@@ -312,11 +318,13 @@ class ServiceMonitor(xbmc.Monitor):
                     self.input_generation,
                 )
             )
+            self.work_ready.set()
 
     def post_player(self, kind, payload=None):
         if kind not in PLAYER_BOUNDARY_EVENTS:
             with self.event_lock:
                 self._append_player_locked(kind, payload)
+                self.work_ready.set()
             return
 
         with self.dispatch_lock:
@@ -336,6 +344,7 @@ class ServiceMonitor(xbmc.Monitor):
                     )
                 )
                 self._append_player_locked(kind, boundary_payload)
+                self.work_ready.set()
 
     def _input_watermark_locked(self):
         latest_direction = None
@@ -393,6 +402,19 @@ class ServiceMonitor(xbmc.Monitor):
             self.events.clear()
         return events
 
+    def wait_for_work(self, timeout):
+        """Wait until queued work, a cadence deadline, or Kodi shutdown.
+
+        ``xbmc.Monitor.waitForAbort`` is not a general notification wake-up.
+        A separate event keeps remote input responsive while allowing the
+        service to sleep for much longer on Home.
+        """
+        if self.abortRequested():
+            return True
+        self.work_ready.wait(float(timeout))
+        self.work_ready.clear()
+        return self.abortRequested()
+
 
 class SeekService(object):
     def __init__(self, monitor, addon_path=None):
@@ -417,6 +439,22 @@ class SeekService(object):
             clock=monitor.clock,
         )
         self.settings = ManagedSettings()
+        self.playback_active = False
+        self.interactive_until = 0.0
+        self.next_playback_tick = 0.0
+
+    def _tick_interval(self):
+        now = self.monitor.clock()
+        if (
+            self.controller.active
+            or self.chapters.is_open
+            or self.router.pending_transition is not None
+            or now < self.interactive_until
+        ):
+            return INTERACTIVE_TICK_SECONDS
+        if self.playback_active:
+            return PLAYBACK_TICK_SECONDS
+        return IDLE_TICK_SECONDS
 
     def run(self):
         # Revoke both sides of the previous process contract before doing any
@@ -424,9 +462,16 @@ class SeekService(object):
         self.lease.stop()
         self.publisher.clear()
         first_ready = True
-        while not self.monitor.waitForAbort(0.05):
-            for event in self.monitor.drain():
+        wait_seconds = INTERACTIVE_TICK_SECONDS
+        while not self.monitor.wait_for_work(wait_seconds):
+            events = self.monitor.drain()
+            for event in events:
                 event_type, name, payload, timestamp, _generation = event
+                if event_type == "input":
+                    self.interactive_until = max(
+                        self.interactive_until,
+                        timestamp + INTERACTIVE_GRACE_SECONDS,
+                    )
                 try:
                     self._dispatch_event(event)
                 except Exception as error:
@@ -437,26 +482,46 @@ class SeekService(object):
                     )
                     return
 
-            try:
-                self._tick_playback()
-                if first_ready:
-                    self.lease.refresh(force=True)
-                    first_ready = False
-                    log("input router ready; managed settings scheduled")
-                else:
+            now = self.monitor.clock()
+            playback_due = bool(events) or now >= self.next_playback_tick
+            became_ready = False
+            if playback_due:
+                try:
+                    self._tick_playback()
+                    self.next_playback_tick = now + self._tick_interval()
+                    if first_ready:
+                        self.lease.refresh(force=True)
+                        first_ready = False
+                        became_ready = True
+                        log("input router ready; managed settings scheduled")
+                except Exception as error:
+                    log(
+                        "critical playback cycle failed; stopping input router: %s"
+                        % error,
+                        xbmc.LOGERROR,
+                    )
+                    return
+
+            if not first_ready and not became_ready:
+                try:
                     self.lease.refresh()
-            except Exception as error:
-                log(
-                    "critical playback cycle failed; stopping input router: %s"
-                    % error,
-                    xbmc.LOGERROR,
-                )
-                return
+                except Exception as error:
+                    log(
+                        "critical playback cycle failed; stopping input router: %s"
+                        % error,
+                        xbmc.LOGERROR,
+                    )
+                    return
 
             try:
                 self.settings.tick()
             except Exception as error:
                 log("managed settings retry failed: %s" % error, xbmc.LOGERROR)
+            until_playback = max(
+                0.0,
+                self.next_playback_tick - self.monitor.clock(),
+            )
+            wait_seconds = min(MAINTENANCE_TICK_SECONDS, until_playback)
 
     def _tick_playback(self):
         """Publish one complete playback-control cycle or raise."""
@@ -504,6 +569,10 @@ class SeekService(object):
         )
 
     def _handle_player_event(self, name, payload, timestamp):
+        if name == "started":
+            self.playback_active = True
+        elif name in ("stopped", "ended"):
+            self.playback_active = False
         if name not in PLAYER_BOUNDARY_EVENTS:
             # Register the controller's current operation watermark before its
             # callback can reset/advance the transaction.
