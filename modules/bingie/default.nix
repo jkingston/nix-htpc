@@ -24,7 +24,6 @@ let
 
     test ! -e "$out/1080i/script-skinshortcuts-includes.xml"
     for retired_path in \
-      1080i/mainWindow.xml \
       1080i/service-LibreELEC-Settings-mainWindow.xml \
       1080i/service-OpenELEC-Settings-mainWindow.xml \
       extras/openelec
@@ -58,6 +57,8 @@ kodiPackages.buildKodiAddon {
       1080i/DialogBusy.xml \
       1080i/DialogButtonMenu.xml \
       1080i/Home.xml \
+      1080i/mainWindow.xml \
+      1080i/script-skinshortcuts-bootstrap.xml \
       1080i/Includes.xml \
       1080i/IncludesAnimations.xml \
       1080i/IncludesVariables.xml \
@@ -82,6 +83,8 @@ kodiPackages.buildKodiAddon {
       extras/bingiesettings.xml
 
     test ! -e 1080i/script-skinshortcuts-includes.xml
+    test "$(xmllint --xpath 'name(/*)' \
+      1080i/script-skinshortcuts-bootstrap.xml)" = includes
     test "$(grep -c 'SetProperty(BingiePlaybackStarting' \
       1080i/IncludesDialogVideoInfo.xml)" -eq 10
     test "$(grep -c 'AlarmClock(PlayMovie.*00:00,silent)' \
@@ -124,6 +127,8 @@ kodiPackages.buildKodiAddon {
       1080i/Custom_1102_StartUp2.xml \
       1080i/Custom_1103_StartUpMask.xml \
       1080i/Home.xml \
+      1080i/mainWindow.xml \
+      1080i/script-skinshortcuts-bootstrap.xml \
       1080i/DialogSeekBar.xml \
       1080i/Includes.xml \
       1080i/IncludesHTPCPlayback.xml \
@@ -155,7 +160,6 @@ kodiPackages.buildKodiAddon {
     done
     test ! -e "$addon_dir/1080i/script-skinshortcuts-includes.xml"
     for retired_path in \
-      1080i/mainWindow.xml \
       1080i/service-LibreELEC-Settings-mainWindow.xml \
       1080i/service-OpenELEC-Settings-mainWindow.xml \
       extras/openelec

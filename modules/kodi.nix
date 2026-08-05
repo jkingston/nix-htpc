@@ -17,6 +17,11 @@ let
     manifestSha256 =
       "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
   };
+  bingieWidgetsIdentity = {
+    version = "1.0.1";
+    manifestSha256 =
+      "8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123";
+  };
   managedAddonEnableSpecs = [
     {
       addonId = "script.module.simplejson";
@@ -25,6 +30,10 @@ let
     {
       addonId = "script.bingie.helper";
       version = bingieHelperIdentity.version;
+    }
+    {
+      addonId = "script.bingie.widgets";
+      version = bingieWidgetsIdentity.version;
     }
     {
       addonId = "service.htpc.settings";
@@ -42,6 +51,9 @@ let
   kodiContentRoutes = import ./kodi-content-routes { inherit pkgs; };
   simplejson = kodiPackages.simplejson;
   bingieHelper = import ./bingie-helper {
+    inherit kodiPackages lib pkgs;
+  };
+  bingieWidgets = import ./bingie-widgets {
     inherit kodiPackages lib pkgs;
   };
   kodiAddonReconciler = import ./kodi-addon-reconciler {
@@ -176,6 +188,7 @@ let
   };
   baseKodiAddonRoots = [
     jellyfinHtpc
+    bingieWidgets
     kodiSettingsAddon
     kodiOsdReviewAddon
   ];
@@ -199,6 +212,7 @@ let
     assert simplejson.version == simplejsonIdentity.version;
     assert bingieHelper.manifestIdentity == bingieHelperIdentity;
     assert bingieHelper.requiredKodiAddons == [ simplejson ];
+    assert bingieWidgets.manifestIdentity == bingieWidgetsIdentity;
     assert kodiAddonReconciler.managedAddons == [
       simplejson
       bingieHelper
@@ -206,6 +220,7 @@ let
     assert lib.drop (builtins.length baseKodiAddonRoots) kodiAddonRoots
       == kodiAddonReconciler.managedAddons;
     assert builtins.elem bingieHelper kodiRuntimeAddons;
+    assert builtins.elem bingieWidgets kodiRuntimeAddons;
     assert builtins.elem simplejson kodiRuntimeAddons;
     assert builtins.elem
       kodiCore.pythonPackages.pillow
@@ -222,6 +237,9 @@ let
       helper_manifest=${
         bingieHelper
       }/share/kodi/addons/script.bingie.helper/addon.xml
+      widgets_manifest=${
+        bingieWidgets
+      }/share/kodi/addons/script.bingie.widgets/addon.xml
       pil_manifest=${
         kodiCore
       }/share/kodi/addons/script.module.pil/addon.xml
@@ -248,6 +266,11 @@ let
         script.bingie.helper \
         ${lib.escapeShellArg bingieHelperIdentity.version} \
         ${lib.escapeShellArg bingieHelperIdentity.manifestSha256}
+      check_manifest \
+        "$widgets_manifest" \
+        script.bingie.widgets \
+        ${lib.escapeShellArg bingieWidgetsIdentity.version} \
+        ${lib.escapeShellArg bingieWidgetsIdentity.manifestSha256}
       test "$(xmllint --xpath 'string(/addon/@id)' "$pil_manifest")" = \
         script.module.pil
       test "$(xmllint --xpath 'string(/addon/@version)' "$pil_manifest")" = \
@@ -259,6 +282,9 @@ let
       test -f "${
         kodiWithAddons
       }/share/kodi/addons/script.bingie.helper/addon.xml"
+      test -f "${
+        kodiWithAddons
+      }/share/kodi/addons/script.bingie.widgets/addon.xml"
       propagated_inputs=()
       while IFS= read -r propagated_line || test -n "$propagated_line"; do
         line_inputs=()
@@ -301,6 +327,7 @@ in
   system.build.kodiBingieDependenciesCheck =
     kodiBingieDependenciesCheck;
   system.build.kodiBingieHelper = bingieHelper;
+  system.build.kodiBingieWidgets = bingieWidgets;
   system.build.kodiSimplejson = simplejson;
   system.build.kodiWithAddons = kodiWithAddons;
   system.build.kodiSettingsAddon = kodiSettingsAddon;
@@ -417,6 +444,14 @@ in
         -a --checksum --delete --chmod=Du+rwx,Fu+rw \
         --exclude=/1080i/script-skinshortcuts-includes.xml \
         "$staged_skin/" "$target_skin/"
+
+      generated_shortcuts="$target_skin/1080i/script-skinshortcuts-includes.xml"
+      if ! test -e "$generated_shortcuts"; then
+        install \
+          -m 0644 -o htpc -g users \
+          "$target_skin/1080i/script-skinshortcuts-bootstrap.xml" \
+          "$generated_shortcuts"
+      fi
       chown -R htpc:users "$target_skin"
 
       profile_uid="$(id -u htpc)"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -15,14 +16,12 @@ UPSTREAM_ASSETS = Path(
 )
 
 RETIRED_WINDOWS = (
-    "mainWindow.xml",
     "service-LibreELEC-Settings-mainWindow.xml",
     "service-OpenELEC-Settings-mainWindow.xml",
 )
 RETIRED_REFERENCES = (
     "extras/openelec",
     "libreelec.settings",
-    "mainWindow.xml",
     "openelec.settings",
     "openelec_logo",
     "service-LibreELEC-Settings-mainWindow.xml",
@@ -31,6 +30,15 @@ RETIRED_REFERENCES = (
 
 
 class PlatformScopeContractTest(unittest.TestCase):
+    def test_inert_main_window_compatibility_entry_point_is_present(self):
+        window = ET.parse(SKIN_ROOT / "1080i" / "mainWindow.xml").getroot()
+
+        self.assertEqual(window.tag, "window")
+        self.assertEqual(window.get("id"), "5534")
+        controls = window.find("controls")
+        self.assertIsNotNone(controls)
+        self.assertEqual(list(controls), [])
+
     def test_retired_elec_windows_and_references_are_absent(self):
         for filename in RETIRED_WINDOWS:
             with self.subTest(filename=filename):
