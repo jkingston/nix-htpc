@@ -45,74 +45,121 @@ def _is_notification(value):
     )
 
 
-def socket_transport(payload, timeout, expected_id):
-    deadline = time.monotonic() + float(timeout)
-    connection = socket.create_connection(
-        (RPC_HOST, RPC_PORT),
-        timeout=float(timeout),
-    )
-    try:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise JsonRpcError("JSON-RPC connection deadline expired")
-        connection.settimeout(remaining)
-        connection.sendall(payload)
-        utf8 = codecs.getincrementaldecoder("utf-8")("strict")
-        decoder = json.JSONDecoder()
-        text = ""
-        total = 0
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise JsonRpcError("JSON-RPC response deadline expired")
-            connection.settimeout(remaining)
-            chunk = connection.recv(4096)
-            if not chunk:
+class PersistentSocketTransport(object):
+    """One strict JSON stream reused across healthy watchdog probes."""
+
+    def __init__(self):
+        self.connection = None
+        self.utf8 = None
+        self.decoder = json.JSONDecoder()
+        self.text = ""
+
+    def close(self):
+        if self.connection is not None:
+            try:
+                self.connection.close()
+            finally:
+                self.connection = None
+        self.utf8 = None
+        self.text = ""
+
+    def _connect(self, timeout):
+        self.connection = socket.create_connection(
+            (RPC_HOST, RPC_PORT),
+            timeout=float(timeout),
+        )
+        self.utf8 = codecs.getincrementaldecoder("utf-8")("strict")
+        self.text = ""
+
+    @staticmethod
+    def _matches(value, expected_ids):
+        expected = set(expected_ids)
+        if isinstance(value, dict):
+            return len(expected) == 1 and value.get("id") in expected
+        if not isinstance(value, list) or len(value) != len(expected):
+            return False
+        response_ids = [
+            item.get("id") if isinstance(item, dict) else None
+            for item in value
+        ]
+        return len(set(response_ids)) == len(response_ids) and set(
+            response_ids
+        ) == expected
+
+    def __call__(self, payload, timeout, expected_ids):
+        expected_ids = (
+            (expected_ids,)
+            if isinstance(expected_ids, str)
+            else tuple(expected_ids)
+        )
+        deadline = time.monotonic() + float(timeout)
+        if self.connection is None:
+            self._connect(timeout)
+        try:
+            self.connection.sendall(payload)
+            total = 0
+            while True:
+                while True:
+                    stripped = self.text.lstrip()
+                    if not stripped:
+                        self.text = ""
+                        break
+                    try:
+                        value, end = self.decoder.raw_decode(stripped)
+                    except ValueError:
+                        self.text = stripped
+                        break
+                    self.text = stripped[end:]
+                    if self._matches(value, expected_ids):
+                        return json.dumps(value, separators=(",", ":"))
+                    if not _is_notification(value):
+                        raise JsonRpcError(
+                            "JSON-RPC stream returned an unexpected value"
+                        )
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise JsonRpcError("JSON-RPC response deadline expired")
+                self.connection.settimeout(remaining)
+                chunk = self.connection.recv(4096)
+                if not chunk:
+                    try:
+                        self.text += self.utf8.decode(b"", final=True)
+                    except UnicodeDecodeError as error:
+                        raise JsonRpcError(
+                            "JSON-RPC response ended within UTF-8: %s" % error
+                        )
+                    raise JsonRpcError(
+                        "JSON-RPC stream closed before a complete response"
+                    )
+                total += len(chunk)
+                if total > MAX_RESPONSE_BYTES:
+                    raise JsonRpcError("JSON-RPC response exceeds size limit")
                 try:
-                    text += utf8.decode(b"", final=True)
+                    self.text += self.utf8.decode(chunk, final=False)
                 except UnicodeDecodeError as error:
                     raise JsonRpcError(
-                        "JSON-RPC response ended within UTF-8: %s" % error
+                        "JSON-RPC response is not UTF-8: %s" % error
                     )
-                raise JsonRpcError(
-                    "JSON-RPC stream closed before a complete response"
-                )
-            total += len(chunk)
-            if total > MAX_RESPONSE_BYTES:
-                raise JsonRpcError("JSON-RPC response exceeds size limit")
-            try:
-                text += utf8.decode(chunk, final=False)
-            except UnicodeDecodeError as error:
-                raise JsonRpcError(
-                    "JSON-RPC response is not UTF-8: %s" % error
-                )
-            while True:
-                stripped = text.lstrip()
-                if not stripped:
-                    text = ""
-                    break
-                try:
-                    value, end = decoder.raw_decode(stripped)
-                except ValueError:
-                    text = stripped
-                    break
-                text = stripped[end:]
-                if (
-                    isinstance(value, dict)
-                    and value.get("id") == expected_id
-                ):
-                    return json.dumps(value, separators=(",", ":"))
-                if not _is_notification(value):
-                    raise JsonRpcError(
-                        "JSON-RPC stream returned an unexpected value"
-                    )
+        except Exception:
+            self.close()
+            raise
+
+
+def socket_transport(payload, timeout, expected_id):
+    """Compatibility one-shot transport used by focused protocol tests."""
+    transport = PersistentSocketTransport()
+    try:
+        return transport(payload, timeout, expected_id)
     finally:
-        connection.close()
+        transport.close()
 
 
 class KodiJsonRpcClient(object):
     def __init__(self, transport=None, timeout=RPC_TIMEOUT_SECONDS):
-        self.transport = socket_transport if transport is None else transport
+        self.transport = (
+            PersistentSocketTransport() if transport is None else transport
+        )
         self.timeout = float(timeout)
         self.next_request_id = 1
 
@@ -158,14 +205,75 @@ class KodiJsonRpcClient(object):
             raise JsonRpcError("%s returned no result" % method)
         return response["result"]
 
-    def addon_enabled(self, addon_id, expected_version):
-        result = self.call(
-            "Addons.GetAddonDetails",
-            {
-                "addonid": addon_id,
-                "properties": ["enabled", "version"],
-            },
+    def health(self, addon_id, expected_version):
+        requests = []
+        for method, params in (
+            (
+                "Addons.GetAddonDetails",
+                {
+                    "addonid": addon_id,
+                    "properties": ["enabled", "version"],
+                },
+            ),
+            ("XBMC.GetInfoLabels", {"labels": [READY_LABEL]}),
+        ):
+            request_id = "htpc-settings-watchdog-%d" % self.next_request_id
+            self.next_request_id += 1
+            requests.append(
+                {
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "params": params,
+                    "id": request_id,
+                }
+            )
+        payload = (
+            json.dumps(requests, separators=(",", ":"), sort_keys=True)
+            + "\n"
+        ).encode("utf-8")
+        try:
+            raw_response = self.transport(
+                payload,
+                self.timeout,
+                tuple(request["id"] for request in requests),
+            )
+            responses = json.loads(raw_response)
+        except JsonRpcError:
+            raise
+        except Exception as error:
+            raise JsonRpcError("health transport failed: %s" % error)
+        if not isinstance(responses, list):
+            raise JsonRpcError("health returned a non-array response")
+        if len(responses) != len(requests):
+            raise JsonRpcError("health returned the wrong response count")
+        by_id = dict(
+            (response.get("id"), response)
+            for response in responses
+            if isinstance(response, dict)
         )
+        results = []
+        for request in requests:
+            response = by_id.get(request["id"])
+            if (
+                not isinstance(response, dict)
+                or response.get("jsonrpc") != "2.0"
+                or "error" in response
+                or "result" not in response
+            ):
+                raise JsonRpcError(
+                    "%s returned an invalid batch response"
+                    % request["method"]
+                )
+            results.append(response["result"])
+        return (
+            self._addon_enabled_result(
+                results[0], addon_id, expected_version
+            ),
+            self._ready_result(results[1]),
+        )
+
+    @staticmethod
+    def _addon_enabled_result(result, addon_id, expected_version):
         if not isinstance(result, dict):
             raise JsonRpcError("Addons.GetAddonDetails result is not an object")
         addon = result.get("addon")
@@ -183,19 +291,32 @@ class KodiJsonRpcClient(object):
             raise JsonRpcError("addon enabled state is not boolean")
         return enabled
 
+    @staticmethod
+    def _ready_result(result):
+        if not isinstance(result, dict):
+            raise JsonRpcError("XBMC.GetInfoLabels result is not an object")
+        if READY_LABEL not in result or not isinstance(
+            result[READY_LABEL], str
+        ):
+            raise JsonRpcError("XBMC.GetInfoLabels returned no readiness label")
+        return result[READY_LABEL] == "true"
+
+    def addon_enabled(self, addon_id, expected_version):
+        result = self.call(
+            "Addons.GetAddonDetails",
+            {
+                "addonid": addon_id,
+                "properties": ["enabled", "version"],
+            },
+        )
+        return self._addon_enabled_result(result, addon_id, expected_version)
+
     def ready(self):
         result = self.call(
             "XBMC.GetInfoLabels",
             {"labels": [READY_LABEL]},
         )
-        if not isinstance(result, dict):
-            raise JsonRpcError("XBMC.GetInfoLabels result is not an object")
-        if READY_LABEL not in result or not isinstance(
-            result[READY_LABEL],
-            str,
-        ):
-            raise JsonRpcError("XBMC.GetInfoLabels returned no readiness label")
-        return result[READY_LABEL] == "true"
+        return self._ready_result(result)
 
     def set_enabled(self, addon_id, enabled):
         result = self.call(
@@ -250,7 +371,7 @@ class Watchdog(object):
     def step(self, now=None):
         now_override = None if now is None else float(now)
         try:
-            enabled = self.client.addon_enabled(
+            enabled, ready = self.client.health(
                 ADDON_ID,
                 self.expected_version,
             )
@@ -261,7 +382,7 @@ class Watchdog(object):
                 self.logger("enabled %s" % ADDON_ID)
                 return HEALTHY_POLL_SECONDS, "enabled"
 
-            if self.client.ready():
+            if ready:
                 self._success()
                 self.lease_observed = True
                 self.grace_deadline = None

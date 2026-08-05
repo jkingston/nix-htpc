@@ -14,6 +14,11 @@ class ResponseTransport(object):
 
     def __call__(self, payload, timeout, expected_id):
         request = json.loads(payload.decode("utf-8"))
+        if isinstance(request, list):
+            if tuple(item["id"] for item in request) != expected_id:
+                raise AssertionError("transport expected wrong batch ids")
+            self.calls.append((request, timeout))
+            return json.dumps([self.responder(item) for item in request])
         if request["id"] != expected_id:
             raise AssertionError("transport expected the wrong response id")
         self.calls.append((request, timeout))
@@ -29,6 +34,34 @@ def response(request, result):
 
 
 class JsonRpcClientTest(unittest.TestCase):
+    def test_health_batches_details_and_readiness_in_one_transport_call(self):
+        def respond(request):
+            if request["method"] == "Addons.GetAddonDetails":
+                return response(
+                    request,
+                    {
+                        "addon": {
+                            "addonid": watchdog.ADDON_ID,
+                            "enabled": True,
+                            "version": "9.8.7",
+                        }
+                    },
+                )
+            return response(request, {watchdog.READY_LABEL: "true"})
+
+        transport = ResponseTransport(respond)
+        client = watchdog.KodiJsonRpcClient(transport=transport)
+
+        self.assertEqual(
+            client.health(watchdog.ADDON_ID, "9.8.7"),
+            (True, True),
+        )
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(
+            [request["method"] for request in transport.calls[0][0]],
+            ["Addons.GetAddonDetails", "XBMC.GetInfoLabels"],
+        )
+
     def test_exact_details_label_and_mutation_contracts(self):
         def respond(request):
             if request["method"] == "Addons.GetAddonDetails":
@@ -244,6 +277,28 @@ class SocketTransportTest(unittest.TestCase):
         with self.assertRaises(watchdog.JsonRpcError):
             self.invoke((oversized,))
 
+    def test_persistent_transport_reuses_one_connection(self):
+        connection = FakeSocket(
+            [
+                b'{"jsonrpc":"2.0","id":"one","result":true}',
+                b'{"jsonrpc":"2.0","id":"two","result":true}',
+            ]
+        )
+        transport = watchdog.PersistentSocketTransport()
+        with mock.patch(
+            "watchdog.socket.create_connection",
+            return_value=connection,
+        ) as connect:
+            first = transport(b"first", 7.0, "one")
+            second = transport(b"second", 7.0, "two")
+            transport.close()
+
+        self.assertTrue(json.loads(first)["result"])
+        self.assertTrue(json.loads(second)["result"])
+        connect.assert_called_once()
+        self.assertEqual(connection.sent, [b"first", b"second"])
+        self.assertTrue(connection.closed)
+
 
 class FakeClient(object):
     def __init__(self, enabled=True, ready=True):
@@ -262,6 +317,11 @@ class FakeClient(object):
         self.calls.append(("details", addon_id, version))
         self._fail()
         return self.enabled
+
+    def health(self, addon_id, version):
+        self.calls.append(("health", addon_id, version))
+        self._fail()
+        return self.enabled, self.ready_value
 
     def ready(self):
         self.calls.append(("ready",))
@@ -301,10 +361,9 @@ class WatchdogStateTest(unittest.TestCase):
         self.assertEqual(state.step(), (1.0, "restarted"))
 
         self.assertEqual(
-            client.calls[-4:],
+            client.calls[-3:],
             [
-                ("details", watchdog.ADDON_ID, "2.2.0"),
-                ("ready",),
+                ("health", watchdog.ADDON_ID, "2.2.0"),
                 ("set", watchdog.ADDON_ID, False),
                 ("set", watchdog.ADDON_ID, True),
             ],
@@ -331,7 +390,7 @@ class WatchdogStateTest(unittest.TestCase):
         self.assertEqual(
             client.calls,
             [
-                ("details", watchdog.ADDON_ID, "2.2.0"),
+                ("health", watchdog.ADDON_ID, "2.2.0"),
                 ("set", watchdog.ADDON_ID, True),
             ],
         )
@@ -339,15 +398,14 @@ class WatchdogStateTest(unittest.TestCase):
 
     def test_disable_without_ack_never_issues_blind_enable(self):
         client = FakeClient(enabled=True, ready=False)
-        client.failures = [None, None, RuntimeError("no disable ack")]
+        client.failures = [None, RuntimeError("no disable ack")]
         state = self.make_watchdog(client, grace=0.0)
 
         self.assertEqual(state.step(), (1.0, "error"))
         self.assertEqual(
             client.calls,
             [
-                ("details", watchdog.ADDON_ID, "2.2.0"),
-                ("ready",),
+                ("health", watchdog.ADDON_ID, "2.2.0"),
                 ("set", watchdog.ADDON_ID, False),
             ],
         )
@@ -370,14 +428,14 @@ class WatchdogStateTest(unittest.TestCase):
         client = FakeClient(enabled=True, ready=False)
         state = self.make_watchdog(client)
 
-        original_ready = client.ready
+        original_health = client.health
 
-        def delayed_ready():
-            result = original_ready()
+        def delayed_health(addon_id, version):
+            result = original_health(addon_id, version)
             self.now[0] = 110.0
             return result
 
-        client.ready = delayed_ready
+        client.health = delayed_health
         self.assertEqual(state.step(), (1.0, "restarted"))
 
 
