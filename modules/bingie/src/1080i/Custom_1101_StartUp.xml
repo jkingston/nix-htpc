@@ -86,7 +86,6 @@
 						<onclick>SetProperty(finishBingieStartup1,1,Home)</onclick>
 						<onclick condition="System.GetBool(filelists.showparentdiritems)">RunScript(script.bingie.toolbox,action=togglekodisetting,setting=filelists.showparentdiritems)</onclick>
 						<onclick condition="System.GetBool(input.enablemouse)">RunScript(script.bingie.toolbox,action=togglekodisetting,setting=input.enablemouse)</onclick>
-						<onclick>RunScript(script.bingie.toolbox,action=setkodisetting,setting=videolibrary.tvshowsselectfirstunwatcheditem,value=2)</onclick>
 						<onclick>RunScript(script.bingie.toolbox,action=setkodisetting,setting=videolibrary.flattentvshows,value=2)</onclick>
 						<onclick>RunScript(script.bingie.toolbox,action=setkodisetting,setting=myvideos.selectaction,value=2)</onclick>
 						<onclick>AlarmClock(clear_property,ClearProperty(finishBingieStartup1,Home),00:02,silent)</onclick>

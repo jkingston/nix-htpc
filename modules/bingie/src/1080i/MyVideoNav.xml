@@ -5,6 +5,8 @@
     <include>allViewIds</include>
 	<onload condition="System.HasAddon(script.tv.show.next.aired)">RunScript(script.tv.show.next.aired,backend=True)</onload>
     <onload condition="System.HasAlarm(preview_delay)">CancelAlarm(preview_delay,silent)</onload>
+	<onload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocus,SetFocus(525,$INFO[Window(Home).Property(BingieEpisodeFocus)],absolute),00:01,silent)</onload>
+	<onload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocusClear,ClearProperty(BingieEpisodeFocus,Home),00:02,silent)</onload>
 	<onload>ClearProperty(ShowViewSubMenu,Home)</onload>
     <onunload>ClearProperty(ShowViewSubMenu,Home)</onunload>
     <!-- return to infodialog if previous window -->
@@ -20,6 +22,7 @@
 	<onunload condition="!String.IsEmpty(Window(Home).Property(FadeFanart))">AlarmClock(FadeFanart,ClearProperty(FadeFanart,home),00:01,silent)</onunload>
 	<onunload condition="!String.IsEmpty(Window(Home).Property(AnimationRight))">AlarmClock(AnimationRight,ClearProperty(AnimationRight,home),00:01,silent)</onunload>
 	<onunload condition="!String.IsEmpty(Window(Home).Property(NoFadeOut))">ClearProperty(NoFadeOut,home)</onunload>
+	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">ClearProperty(BingieEpisodeFocus,Home)</onunload>
     
 	<controls>
 		<include>Defs_TMDbBingieHelper_Loader</include>

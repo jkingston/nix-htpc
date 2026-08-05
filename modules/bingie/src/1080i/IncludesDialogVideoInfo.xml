@@ -48,7 +48,7 @@
 					<preloaditems>1</preloaditems>
 					<itemlayout/>
 					<focusedlayout/>
-					<content sortorder="ascending" sortby="playcount" limit="1">$VAR[InfoDialogNextUpContent]</content>
+					<content limit="1">$VAR[InfoDialogNextUpContent]</content>
 				</control>
 				
 				<!-- hiddenlist to get first/next episode with tmdb helper -->
@@ -551,6 +551,8 @@
 								<onclick>SetProperty(NoFadeOut,1,Home)</onclick>
 								<onclick>SetProperty(AnimationRight,1,Home)</onclick>
 								<onclick condition="!String.IsEmpty(Window(Home).Property(FullImage))">SetProperty(EpisodesAnimation,1,Home)</onclick>
+								<onclick condition="String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.Property(BingieEpisodeIndex))">SetProperty(BingieEpisodeFocus,$INFO[ListItem.Property(BingieEpisodeIndex)],Home)</onclick>
+								<onclick condition="String.IsEqual(ListItem.DBTYPE,tvshow) + !Container(5050).IsUpdating + !String.IsEmpty(Container(5050).ListItem.Property(BingieEpisodeIndex))">SetProperty(BingieEpisodeFocus,$INFO[Container(5050).ListItem.Property(BingieEpisodeIndex)],Home)</onclick>
                                 <onclick condition="!Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">Dialog.Close(movieinformation)</onclick>
                                 <!-- activate ALL EPISODES view -->
                                 <!-- from episode infodialog -->
@@ -1243,7 +1245,7 @@
 					<preloaditems>1</preloaditems>
 					<itemlayout/>
 					<focusedlayout/>
-					<content sortorder="ascending" sortby="playcount" limit="1">$VAR[InfoDialogNextUpContent]</content>
+					<content limit="1">$VAR[InfoDialogNextUpContent]</content>
 				</control>
 				
 				<!-- hiddenlist to get first/next episode with tmdb helper -->
@@ -1827,6 +1829,8 @@
 								<onclick>SetProperty(NoFadeOut,1,Home)</onclick>
 								<onclick>SetProperty(AnimationRight,1,Home)</onclick>
 								<onclick condition="!String.IsEmpty(Window(Home).Property(FullImage))">SetProperty(EpisodesAnimation,1,Home)</onclick>
+								<onclick condition="String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.Property(BingieEpisodeIndex))">SetProperty(BingieEpisodeFocus,$INFO[ListItem.Property(BingieEpisodeIndex)],Home)</onclick>
+								<onclick condition="String.IsEqual(ListItem.DBTYPE,tvshow) + !Container(5050).IsUpdating + !String.IsEmpty(Container(5050).ListItem.Property(BingieEpisodeIndex))">SetProperty(BingieEpisodeFocus,$INFO[Container(5050).ListItem.Property(BingieEpisodeIndex)],Home)</onclick>
                                 <onclick condition="!Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">Dialog.Close(movieinformation)</onclick>
                                 <!-- activate ALL EPISODES view -->
                                 <!-- from episode infodialog -->
@@ -3788,8 +3792,7 @@
 
     <!-- next-up content for info dialog -->
     <variable name="InfoDialogNextUpContent">
-        <value condition="[String.IsEqual(ListItem.DBType,tvshow) | Container.Content(tvshows)] + !String.IsEmpty(ListItem.DBID)">videodb://inprogresstvshows/$INFO[ListItem.DBID]/-2/?tvshowid=$INFO[ListItem.DBID]</value>
-        <value condition="[String.IsEqual(ListItem.DBType,episode) | Container.Content(episodes)] + !String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">videodb://inprogresstvshows/$INFO[Window(Home).Property(ListItem.TVShowID)]/-2/?tvshowid=$INFO[Window(Home).Property(ListItem.TVShowID)]</value>
+		<value condition="[String.IsEqual(ListItem.DBType,tvshow) | Container.Content(tvshows)] + !String.IsEmpty(ListItem.DBID)">plugin://script.bingie.widgets/?action=seriesprogress&amp;mediatype=episodes&amp;tvshowid=$INFO[ListItem.DBID]&amp;limit=1&amp;reload=$INFO[Window(Home).Property(widgetreload)]</value>
     </variable>
 	
 	<!-- next-up content for info dialog -->
