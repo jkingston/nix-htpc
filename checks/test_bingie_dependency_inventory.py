@@ -209,7 +209,7 @@ class DependencyInventoryTest(unittest.TestCase):
                 "mandatory_addons_found": NIX_ONLY_IDS,
                 "method": "nix-store --query --requisites /run/current-system",
                 "system_closure_basename": (
-                    "1lw18bydgk2xxa4gygkiph89zgc6sp78-"
+                    "la9bs74dz5q7hkwr7alx8f0h69ac7yhm-"
                     "nixos-system-htpc-pi-sd-card-26.05.20260724.597283a"
                 ),
             },
