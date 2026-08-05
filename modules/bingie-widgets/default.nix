@@ -13,10 +13,7 @@ kodiPackages.buildKodiAddon rec {
   namespace = addonId;
   version = "1.0.1";
 
-  src = pkgs.fetchzip {
-    url = "https://raw.githubusercontent.com/matke-84/repository.bingie/main/omega/script.bingie.widgets/script.bingie.widgets-${version}.zip";
-    hash = "sha256-Q7cnpEmxzrOgoXQJ2H+xpT1gWJ4Lr2txpPytqF9YAu8=";
-  };
+  src = ./src;
 
   nativeCheckInputs = [
     pkgs.buildPackages.coreutils
