@@ -6,6 +6,7 @@ let
   kodiSettingsAddonVersion = "2.1.20";
   kodiOsdReviewAddonVersion = "0.1.3";
   kodiScreenshotPath = "/tmp/kodi-screenshots";
+  productionSkin = "skin.bingie";
   simplejsonIdentity = {
     version = "3.19.1+matrix.1";
     manifestSha256 =
@@ -133,6 +134,7 @@ let
     inherit lib pkgs;
     addonVersion = kodiSettingsAddonVersion;
   };
+  kodiProductionSkin = import ./kodi-production-skin { inherit pkgs; };
   kodiOsdReviewAddon = kodiPackages.buildKodiAddon {
     pname = "htpc-osd-review";
     namespace = "script.htpc.osd-review";
@@ -304,6 +306,7 @@ in
   system.build.kodiSettingsAddon = kodiSettingsAddon;
   system.build.kodiOsdReviewAddon = kodiOsdReviewAddon;
   system.build.kodiSettingsWatchdog = kodiSettingsWatchdog;
+  system.build.kodiProductionSkin = kodiProductionSkin;
 
   systemd.tmpfiles.rules = [
     "d ${kodiScreenshotPath} 0700 htpc users - -"
@@ -415,6 +418,15 @@ in
         --exclude=/1080i/script-skinshortcuts-includes.xml \
         "$staged_skin/" "$target_skin/"
       chown -R htpc:users "$target_skin"
+
+      profile_uid="$(id -u htpc)"
+      profile_gid="$(id -g htpc)"
+      ${pkgs.util-linux}/bin/runuser -u htpc -- \
+        ${kodiProductionSkin}/bin/kodi-production-skin \
+        --path /home/htpc/.kodi/userdata/guisettings.xml \
+        --skin ${lib.escapeShellArg productionSkin} \
+        --uid "$profile_uid" \
+        --gid "$profile_gid"
     '';
 
     restartTriggers = [
@@ -423,6 +435,7 @@ in
       kodiAddonReconciler
       kodiSettingsAddon
       kodiOsdReviewAddon
+      kodiProductionSkin
     ];
   };
 
