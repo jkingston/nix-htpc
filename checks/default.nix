@@ -21,8 +21,8 @@ let
     htpcConfiguration.home-manager.users.htpc.home.file.${
       integratedCecPeripheralData.homeRelativePath
     };
-  cecWakeUnit =
-    htpcConfiguration.systemd.units."cec-tv-wake.service";
+  cecWakeUnitPresent =
+    htpcConfiguration.systemd.units ? "cec-tv-wake.service";
   settingsWatchdog =
     htpcConfiguration.systemd.services.kodi-settings-watchdog;
   kodiSettingsService =
@@ -172,10 +172,7 @@ in
     assert integratedCecHomeFile.onChange == "";
     assert integratedCecHomeFile.recursive == false;
     assert integratedCecHomeFile.text == null;
-    assert cecWakeUnit.name == "cec-tv-wake.service";
-    assert builtins.hashString "sha256" (
-      builtins.unsafeDiscardStringContext cecWakeUnit.text
-    ) == "b62a875c878d8d690ad7595d980a29b6fb2d0408d6359a2658dd24f72d724e1e";
+    assert !cecWakeUnitPresent;
     pkgs.runCommand "kodi-cec-policy-check" { } ''
     expectedHomeRelativePath=".kodi/userdata/peripheral_data/cec_CEC_Adapter.xml"
     expectedByteCount=663
