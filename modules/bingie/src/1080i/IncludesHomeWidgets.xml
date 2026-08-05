@@ -745,10 +745,6 @@
     </include>
 
     <include name="widget_base_normal">
-        <include content="WidgetSkeletonCards">
-            <param name="widgetid" value="$PARAM[widgetid]" />
-            <param name="widgetStyle" value="$PARAM[widgetStyle]" />
-        </include>
         <control type="$PARAM[container]" id="$PARAM[widgetid]">
             <visible>Container($PARAM[widgetid]).IsUpdating + Control.IsVisible($PARAM[widgetid]) | Integer.IsGreater(Container($PARAM[widgetid]).NumItems,0)</visible>
             <orientation>$PARAM[position]</orientation>
@@ -775,6 +771,12 @@
                 <param name="widgetLimit" value="$PARAM[widgetLimit]" />
             </include>
         </control>
+        <!-- Draw loading cards after the real container so this decorative
+             sibling never sits between adjacent focusable Home rows. -->
+        <include content="WidgetSkeletonCards">
+            <param name="widgetid" value="$PARAM[widgetid]" />
+            <param name="widgetStyle" value="$PARAM[widgetStyle]" />
+        </include>
     </include>
 	
 	<include name="widget_base_categories">

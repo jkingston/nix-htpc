@@ -44,6 +44,12 @@ class WidgetSkeletonTest(unittest.TestCase):
         widget = self.include("widget_base_normal")
         skeleton_include = widget.find("./include[@content='WidgetSkeletonCards']")
         self.assertIsNotNone(skeleton_include)
+        children = list(widget)
+        row_index = next(
+            index for index, node in enumerate(children)
+            if node.tag == "control" and node.get("id") == "$PARAM[widgetid]"
+        )
+        self.assertGreater(children.index(skeleton_include), row_index)
         skeletons = self.include("WidgetSkeletonCards")
         self.assertFalse(skeletons.findall(".//onleft"))
         self.assertFalse(skeletons.findall(".//onright"))
