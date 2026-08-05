@@ -13,6 +13,7 @@ SKIN_ROOT = Path(
     )
 )
 WIDGETS_XML = SKIN_ROOT / "1080i" / "IncludesHomeWidgets.xml"
+SHORTCUT_TEMPLATE_XML = SKIN_ROOT / "shortcuts" / "template.xml"
 
 
 class WidgetSkeletonTest(unittest.TestCase):
@@ -42,18 +43,30 @@ class WidgetSkeletonTest(unittest.TestCase):
 
     def test_dynamic_widget_installs_skeleton_without_focusable_controls(self):
         widget = self.include("widget_base_normal")
-        skeleton_include = widget.find("./include[@content='WidgetSkeletonCards']")
-        self.assertIsNotNone(skeleton_include)
-        children = list(widget)
-        row_index = next(
-            index for index, node in enumerate(children)
-            if node.tag == "control" and node.get("id") == "$PARAM[widgetid]"
+        self.assertIsNotNone(
+            widget.find("./control[@id='$PARAM[widgetid]']")
         )
-        self.assertGreater(children.index(skeleton_include), row_index)
+        self.assertFalse(widget.findall(".//include[@content='WidgetSkeletonCards']"))
+        header = self.include("widget_header_multi")
+        skeleton_include = header.find(".//include[@content='WidgetSkeletonCards']")
+        self.assertIsNotNone(skeleton_include)
         skeletons = self.include("WidgetSkeletonCards")
+        self.assertFalse(skeletons.findall(".//control[@type='grouplist']"))
         self.assertFalse(skeletons.findall(".//onleft"))
         self.assertFalse(skeletons.findall(".//onright"))
         self.assertFalse(skeletons.findall(".//animation"))
+
+    def test_generated_headers_receive_their_widget_style(self):
+        template = ET.parse(SHORTCUT_TEMPLATE_XML).getroot()
+        headers = template.findall(".//include[@content='widget_header_multi']")
+        self.assertTrue(headers)
+        for header in headers:
+            styles = header.findall("./param[@name='widgetStyle']")
+            self.assertEqual(len(styles), 1)
+            self.assertEqual(
+                styles[0].get("value"),
+                "widget_layout_$SKINSHORTCUTS[widgetStyle]",
+            )
 
     def test_row_header_has_no_continuously_animated_spinner(self):
         header = self.include("widget_header_multi")

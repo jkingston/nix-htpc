@@ -639,11 +639,22 @@
                 <label>$INFO[Container($PARAM[widgetid]).ListItem.Property(similartitle),$LOCALIZE[31333] ,]$INFO[Container($PARAM[widgetid]).ListItem.Property(genretitle)]</label>
                 <visible>!String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(similartitle)) | !String.IsEmpty(Container($PARAM[widgetid]).ListItem.Property(genretitle))</visible>
 			</control>
+            <!-- The header is already one non-focusable grouplist child for
+                 this row. Paint loading cards from inside it so skeletons do
+                 not add another child to the Home vertical focus order. -->
+            <control type="group">
+                <top>42</top>
+                <include content="WidgetSkeletonCards">
+                    <param name="widgetid" value="$PARAM[widgetid]" />
+                    <param name="widgetStyle" value="$PARAM[widgetStyle]" />
+                </include>
+            </control>
         </control>
     </include>
 
     <include name="WidgetSkeletonCard">
         <control type="image">
+            <left>$PARAM[left]</left>
             <width>$PARAM[width]</width>
             <height>$PARAM[height]</height>
             <texture border="12">diffuse/panel2.png</texture>
@@ -657,46 +668,40 @@
                  without changing the established vertical focus geometry. -->
             <height>0</height>
             <visible>Container($PARAM[widgetid]).IsUpdating + Integer.IsEqual(Container($PARAM[widgetid]).NumItems,0)</visible>
-            <control type="grouplist">
+            <control type="group">
                 <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_poster)</visible>
                 <left>69</left>
                 <width>100%</width>
                 <height>340</height>
-                <orientation>horizontal</orientation>
-                <itemgap>10</itemgap>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="0"/><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="239"/><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="478"/><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="717"/><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="956"/><param name="width" value="229"/><param name="height" value="329"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="1195"/><param name="width" value="229"/><param name="height" value="329"/></include>
             </control>
-            <control type="grouplist">
+            <control type="group">
                 <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_landscape)</visible>
                 <left>69</left>
                 <width>100%</width>
                 <height>242</height>
-                <orientation>horizontal</orientation>
-                <itemgap>10</itemgap>
-                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="0"/><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="419"/><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="838"/><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="1257"/><param name="width" value="409"/><param name="height" value="232"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="1676"/><param name="width" value="409"/><param name="height" value="232"/></include>
             </control>
-            <control type="grouplist">
+            <control type="group">
                 <visible>String.IsEqual($PARAM[widgetStyle],widget_layout_square)</visible>
                 <left>69</left>
                 <width>100%</width>
                 <height>280</height>
-                <orientation>horizontal</orientation>
-                <itemgap>10</itemgap>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
-                <include content="WidgetSkeletonCard"><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="0"/><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="280"/><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="560"/><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="840"/><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="1120"/><param name="width" value="270"/><param name="height" value="270"/></include>
+                <include content="WidgetSkeletonCard"><param name="left" value="1400"/><param name="width" value="270"/><param name="height" value="270"/></include>
             </control>
         </control>
     </include>
@@ -771,12 +776,6 @@
                 <param name="widgetLimit" value="$PARAM[widgetLimit]" />
             </include>
         </control>
-        <!-- Draw loading cards after the real container so this decorative
-             sibling never sits between adjacent focusable Home rows. -->
-        <include content="WidgetSkeletonCards">
-            <param name="widgetid" value="$PARAM[widgetid]" />
-            <param name="widgetStyle" value="$PARAM[widgetStyle]" />
-        </include>
     </include>
 	
 	<include name="widget_base_categories">

@@ -54,6 +54,7 @@
                 <param name="widgetid" value="$PYTHON[int(mainmenuid)]$PYTHON[int(widgetid) + 3002]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>
             <include content="widget_base" condition="$PYTHON['true' if widgetPath else 'false']">
                 <param name="contentStyle" value="$SKINSHORTCUTS[contentStyle]" />
@@ -383,6 +384,7 @@
                 <param name="widgetid" value="$PYTHON[int(widgetid) + 6040]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>			
         </controls>  
 		</items>		
@@ -454,6 +456,7 @@
                 <param name="widgetid" value="$PYTHON[int(widgetid) + 6050]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>			
         </controls>  
 		</items>		
@@ -525,6 +528,7 @@
                 <param name="widgetid" value="$PYTHON[int(widgetid) + 6050]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>			
         </controls>  
 		</items>		
@@ -596,6 +600,7 @@
                 <param name="widgetid" value="$PYTHON[int(widgetid) + 6060]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>			
         </controls>  
 		</items>		
@@ -667,6 +672,7 @@
                 <param name="widgetid" value="$PYTHON[int(widgetid) + 6070]" />
                 <param name="submenuid" value="$SKINSHORTCUTS[submenuid]" />
                 <param name="widgetName" value="$SKINSHORTCUTS[widgetName]" />
+                <param name="widgetStyle" value="widget_layout_$SKINSHORTCUTS[widgetStyle]" />
             </include>			
         </controls>  
 		</items>		
