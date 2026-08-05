@@ -18,9 +18,9 @@ let
       "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
   };
   bingieWidgetsIdentity = {
-    version = "1.0.1";
+    version = "1.0.2";
     manifestSha256 =
-      "8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123";
+      "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f";
   };
   managedAddonEnableSpecs = [
     {

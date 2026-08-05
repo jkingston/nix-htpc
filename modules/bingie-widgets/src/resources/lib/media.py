@@ -195,6 +195,48 @@ class Media(object):
         all_items += self.tvshows.random()
         return sorted(all_items, key=lambda k: random.random())[:self.options["limit"]]
 
+    def spotlight(self):
+        """Choose one mixed candidate before fetching its full metadata."""
+        movie_filters = []
+        tvshow_filters = []
+        if self.options["hide_watched"]:
+            movie_filters.append(kodi_constants.FILTER_UNWATCHED)
+        if self.options.get("tag"):
+            tag_filter = {
+                "operator": "contains",
+                "field": "tag",
+                "value": self.options["tag"],
+            }
+            movie_filters.append(tag_filter)
+            tvshow_filters.append(tag_filter)
+        candidate_limit = max(1, self.options["limit"])
+        movies = self.widgetshelper.kodidb.movies(
+            sort=kodi_constants.SORT_RANDOM,
+            filters=movie_filters,
+            limits=(0, candidate_limit),
+            fields=[],
+        )
+        tvshows = self.widgetshelper.kodidb.tvshows(
+            sort=kodi_constants.SORT_RANDOM,
+            filters=tvshow_filters,
+            limits=(0, candidate_limit),
+            fields=["season", "episode", "watchedepisodes"],
+        )
+        candidates = [
+            ("movie", item["movieid"]) for item in movies
+        ] + [
+            ("tvshow", item["tvshowid"]) for item in tvshows
+        ]
+        if not candidates:
+            return []
+        media_type, db_id = random.choice(candidates)
+        if media_type == "movie":
+            item = self.widgetshelper.kodidb.movie(db_id)
+        else:
+            item = self.widgetshelper.kodidb.tvshow(db_id)
+            item = self.tvshows.process_tvshow(item)
+        return [item] if item else []
+
     def inprogress(self):
         ''' get in progress movies and episodes '''
         all_items = self.movies.inprogress()

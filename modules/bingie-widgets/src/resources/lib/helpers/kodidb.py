@@ -19,10 +19,11 @@ class KodiDb(object):
         return self.get_json("VideoLibrary.GetMovieDetails", returntype="moviedetails",
                              fields=FIELDS_MOVIES, optparam=("movieid", try_parse_int(db_id)))
 
-    def movies(self, sort=None, filters=None, limits=None, filtertype=None):
+    def movies(self, sort=None, filters=None, limits=None, filtertype=None,
+               fields=FIELDS_MOVIES):
         ''' get moviedetails from kodi db '''
         return self.get_json("VideoLibrary.GetMovies", sort=sort, filters=filters,
-                             fields=FIELDS_MOVIES, limits=limits, returntype="movies", filtertype=filtertype)
+                             fields=fields, limits=limits, returntype="movies", filtertype=filtertype)
 
     def movie_by_imdbid(self, imdb_id):
         ''' gets a movie from kodidb by imdbid. '''
@@ -48,10 +49,11 @@ class KodiDb(object):
                                fields=FIELDS_TVSHOWS, optparam=("tvshowid", try_parse_int(db_id)))
         return self.tvshow_watchedcounts(tvshow)
 
-    def tvshows(self, sort=None, filters=None, limits=None, filtertype=None):
+    def tvshows(self, sort=None, filters=None, limits=None, filtertype=None,
+                fields=FIELDS_TVSHOWS):
         ''' get tvshows from kodi db '''
         tvshows = self.get_json("VideoLibrary.GetTvShows", sort=sort, filters=filters,
-                                fields=FIELDS_TVSHOWS, limits=limits, returntype="tvshows", filtertype=filtertype)
+                                fields=fields, limits=limits, returntype="tvshows", filtertype=filtertype)
         # append watched counters
         for tvshow in tvshows:
             self.tvshow_watchedcounts(tvshow)

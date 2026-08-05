@@ -18,12 +18,6 @@ class KodiMonitor(xbmc.Monitor):
         self.win = kwargs.get("win")
         self.addon = kwargs.get("addon")
 
-    def onDatabaseUpdated(self, database):
-        ''' builtin function for the xbmc.Monitor class '''
-        log_msg("Kodi_Monitor: %s database updated" % database)
-
-        self.refresh_video_widgets("")
-
     def onNotification(self, sender, method, data):
         ''' builtin function for the xbmc.Monitor class '''
         try:
@@ -56,7 +50,12 @@ class KodiMonitor(xbmc.Monitor):
         timestr = time.strftime("%Y%m%d%H%M%S", time.gmtime())
         self.win.setProperty("widgetreload", timestr)
         if media_type:
-            self.win.setProperty("widgetreload-%ss" % media_type, timestr)
+            property_type = {
+                "movie": "movies",
+                "episode": "episodes",
+                "tvshow": "tvshows",
+            }.get(media_type, media_type)
+            self.win.setProperty("widgetreload-%s" % property_type, timestr)
             if "episode" in media_type:
                 self.win.setProperty("widgetreload-tvshows", timestr)
 

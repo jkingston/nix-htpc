@@ -38,10 +38,10 @@
     {
       "classification": "nix_only",
       "id": "script.bingie.widgets",
-      "minimum_version": "1.0.1",
+      "minimum_version": "1.0.2",
       "nix_closure": {
-        "addon_xml_sha256": "8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123",
-        "version": "1.0.1"
+        "addon_xml_sha256": "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f",
+        "version": "1.0.2"
       },
       "optional": false,
       "planned_resolution": "package_in_nix_m0_9",

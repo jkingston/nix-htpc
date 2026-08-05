@@ -1,7 +1,9 @@
 # BINGIE Widgets provenance
 
-`src/` is a functionally unchanged import of `script.bingie.widgets` 1.0.1
-from the BINGIE Omega repository.
+`src/` began as an import of `script.bingie.widgets` 1.0.1 and is now the
+HTPC-maintained 1.0.2 fork. The fork adds generation-aware widget caching,
+session-stable spotlight selection, and correct media-specific invalidation.
+The base source came from the BINGIE Omega repository.
 
 - Upstream repository: `https://github.com/matke-84/repository.bingie`
 - Archive path: `omega/script.bingie.widgets/script.bingie.widgets-1.0.1.zip`
@@ -12,10 +14,12 @@ from the BINGIE Omega repository.
 - `addon.xml` SHA-256:
   `8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123`
 
-The only local source normalization is removal of trailing whitespace from
-text files. There are no behavioural changes from the upstream archive.
+The original import normalized trailing whitespace in text files. Local
+behavioural changes are versioned and tested in this directory.
 
 The source is vendored so the HTPC build does not depend on the mutable
 upstream repository remaining available. Update it by importing a complete
 new archive, updating these identities and the package version together, then
-running the package and flake checks.
+running the package and flake checks. Keep the original archive identities
+above as provenance; the current fork manifest identity lives in
+`default.nix`.

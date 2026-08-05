@@ -10,6 +10,7 @@ import xbmcaddon
 import xbmcgui
 from resources.lib.widgetshelper import WidgetsHelper
 from resources.lib.utils import log_msg, log_exception, ADDON_ID, create_main_entry
+from resources.lib.cache_policy import WidgetCachePolicy
 
 ADDON_HANDLE = int(sys.argv[1])
 
@@ -23,6 +24,7 @@ class Main(object):
         self.widgetshelper = WidgetsHelper()
         self.addon = xbmcaddon.Addon(ADDON_ID)
         self.win = xbmcgui.Window(10000)
+        self.cache_policy = WidgetCachePolicy(self.win)
         self.options = self.get_options()
 
         # skip if shutdown requested
@@ -78,19 +80,14 @@ class Main(object):
                     options["action"] = options["action"].replace(item[1], "").replace(item[0], "")
                     break
 
-        # prefer reload param for the mediatype
+        # Normalize legacy random genre routes.
         if "mediatype" in options:
-            alt_reload = self.win.getProperty("widgetreload-%s" % options["mediatype"])
-            if "listing" in options["action"]:
-                options["skipcache"] = "true"
             if options["action"] == "browsegenres" and options["mediatype"] == "randommovies":
                 options["mediatype"] = "movies"
                 options["random"] = True
             elif options["action"] == "browsegenres" and options["mediatype"] == "randomtvshows":
                 options["mediatype"] = "tvshows"
                 options["random"] = True
-
-        options["skipcache"] = "true"
 
         return options
 
@@ -118,14 +115,8 @@ class Main(object):
         # set cache_str
         cache_str = "Bingie.Widgets.%s.%s.%s.%s.%s" % \
             (media_type, action, self.options["limit"], self.options.get("path"), cache_id)
-        if not self.win.getProperty("widgetreload2"):
-            # at startup we simply accept whatever is in the cache
-            cache_checksum = None
-        else:
-            # we use a checksum based on the reloadparam to make sure we have the most recent data
-            cache_checksum = self.options.get("reload", "")
-        # only check cache if not "skipcache"
-        if not self.options.get("skipcache") == "true":
+        cache_checksum = self.cache_policy.checksum(self.options)
+        if self.cache_policy.should_read(self.options):
             cache = self.widgetshelper.cache.get(cache_str, checksum=cache_checksum)
             if cache:
                 log_msg("MEDIATYPE: %s - ACTION: %s - PATH: %s - TAG: %s -- got items from cache - CHECKSUM: %s"

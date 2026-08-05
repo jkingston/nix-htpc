@@ -46,17 +46,19 @@ EXPECTED_OBSERVATIONS = {
         "6d5155d7c6ac758faf82ee27c93406be6026a56285fabe35ecdbf1d83a88d07f",
     ),
     "script.bingie.widgets": (
-        "1.0.1",
-        "8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123",
+        "1.0.2",
+        "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f",
     ),
     "script.skinshortcuts": (
         "2.0.3",
         "1a6ca7fefcbe2550fda02795681537e01931bbd55259999545159ebf1c888141",
     ),
 }
-NIX_ONLY_ID = "script.bingie.helper"
+NIX_ONLY_IDS = ["script.bingie.helper", "script.bingie.widgets"]
 USERDATA_ONLY_IDS = [
-    addon_id for addon_id in inventory.MANDATORY_IDS if addon_id != NIX_ONLY_ID
+    addon_id
+    for addon_id in inventory.MANDATORY_IDS
+    if addon_id not in NIX_ONLY_IDS
 ]
 
 
@@ -109,7 +111,7 @@ class DependencyInventoryTest(unittest.TestCase):
             with self.subTest(addon_id=dependency["id"]):
                 observation = (
                     dependency["nix_closure"]
-                    if dependency["id"] == NIX_ONLY_ID
+                    if dependency["id"] in NIX_ONLY_IDS
                     else dependency["userdata"]
                 )
                 self.assertEqual(
@@ -121,7 +123,7 @@ class DependencyInventoryTest(unittest.TestCase):
                 )
                 self.assertTrue(dependency["runtime_enabled"])
                 self.assertNotIn("enabled", observation)
-                if dependency["id"] == NIX_ONLY_ID:
+                if dependency["id"] in NIX_ONLY_IDS:
                     self.assertIsNone(dependency["userdata"])
                     self.assertEqual(dependency["classification"], "nix_only")
                     self.assertEqual(
@@ -204,7 +206,7 @@ class DependencyInventoryTest(unittest.TestCase):
             self.report["nix_closure_evidence"],
             {
                 "coverage": "all_addon_manifests_in_recursive_requisites",
-                "mandatory_addons_found": [NIX_ONLY_ID],
+                "mandatory_addons_found": NIX_ONLY_IDS,
                 "method": "nix-store --query --requisites /run/current-system",
                 "system_closure_basename": (
                     "1lw18bydgk2xxa4gygkiph89zgc6sp78-"
@@ -218,7 +220,7 @@ class DependencyInventoryTest(unittest.TestCase):
                 for dependency in self.report["dependencies"]
                 if dependency["nix_closure"] is not None
             ],
-            [NIX_ONLY_ID],
+            NIX_ONLY_IDS,
         )
         self.assertEqual(
             [
@@ -249,7 +251,7 @@ class DependencyInventoryTest(unittest.TestCase):
                 report = copy.deepcopy(self.report)
                 dependency = report["dependencies"][1]
                 report["nix_closure_evidence"]["mandatory_addons_found"] = sorted(
-                    [NIX_ONLY_ID, dependency["id"]]
+                    NIX_ONLY_IDS + [dependency["id"]]
                 )
                 dependency["nix_closure"] = copy.deepcopy(dependency["userdata"])
                 if userdata_mode is None:

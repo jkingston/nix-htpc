@@ -6,12 +6,12 @@
 let
   addonId = "script.bingie.widgets";
   manifestSha256 =
-    "8c9bd5fe40b1027da3888677c5320cde351cbaee517ee95e1073a3c5dd4e8123";
+    "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f";
 in
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-widgets";
   namespace = addonId;
-  version = "1.0.1";
+  version = "1.0.2";
 
   src = ./src;
 
@@ -53,6 +53,8 @@ kodiPackages.buildKodiAddon rec {
     find . -name '*.py' -type f -print0 \
       | xargs -0 -n1 python3 -c \
         'import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_bytes(), filename=sys.argv[1])'
+    PYTHONDONTWRITEBYTECODE=1 \
+      python3 -B -m unittest discover -s . -p 'test_*.py'
 
     runHook postCheck
   '';
