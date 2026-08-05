@@ -37,6 +37,8 @@ let
     htpcConfiguration.system.build.kodiBingieDependenciesCheck;
   kodiBingieHelper =
     htpcConfiguration.system.build.kodiBingieHelper;
+  kodiBingieWidgets =
+    htpcConfiguration.system.build.kodiBingieWidgets;
   kodiSimplejson =
     htpcConfiguration.system.build.kodiSimplejson;
   kodiWithAddons =
@@ -56,6 +58,11 @@ let
     manifest_sha256 =
       "79ea0d00b20513105445bf6e16a0424ca816f77cf4cc26822dcd86874d83cdb6";
     version = "1.1.2";
+  };
+  expectedBingieWidgetsIdentity = {
+    manifest_sha256 =
+      "a89854ec8f370b3f04a52f180a8e502125da21e21e89e9db2d03864c9d5f345f";
+    version = "1.0.2";
   };
   kodiAddonReconcilerConfiguration =
     kodiAddonReconciler.configuration;
@@ -357,14 +364,23 @@ in
         "sha256-3FRQLYSUp4lNMBruMUP+sDFIN/pD20iariHHGxni7QQ=";
     };
     assert kodiBingieHelper.requiredKodiAddons == [ kodiSimplejson ];
+    assert kodiBingieWidgets.version == "1.0.2";
+    assert kodiBingieWidgets.namespace == "script.bingie.widgets";
+    assert kodiBingieWidgets.manifestIdentity == {
+      inherit (expectedBingieWidgetsIdentity) version;
+      manifestSha256 =
+        expectedBingieWidgetsIdentity.manifest_sha256;
+    };
     assert map (addon: addon.namespace) kodiWithAddons.kodiAddonRoots == [
       "plugin.video.jellyfin"
+      "script.bingie.widgets"
       "service.htpc.settings"
       "script.htpc.osd-review"
       "script.module.simplejson"
       "script.bingie.helper"
     ];
     assert builtins.elem kodiBingieHelper kodiWithAddons.kodiRuntimeAddons;
+    assert builtins.elem kodiBingieWidgets kodiWithAddons.kodiRuntimeAddons;
     assert builtins.elem kodiSimplejson kodiWithAddons.kodiRuntimeAddons;
     assert kodiJellyfin.namespace == "plugin.video.jellyfin";
     assert builtins.elem
@@ -392,6 +408,10 @@ in
         version = "1.1.2";
       }
       {
+        addonId = "script.bingie.widgets";
+        version = "1.0.2";
+      }
+      {
         addonId = "service.htpc.settings";
         version = "2.1.21";
       }
@@ -403,6 +423,7 @@ in
     assert lib.hasInfix (builtins.unsafeDiscardStringContext ''
       enable_managed_addon script.module.simplejson 3.19.1+matrix.1 ${kodiWithAddons}/share/kodi/addons/script.module.simplejson/
       enable_managed_addon script.bingie.helper 1.1.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.helper/
+      enable_managed_addon script.bingie.widgets 1.0.2 ${kodiWithAddons}/share/kodi/addons/script.bingie.widgets/
       enable_managed_addon service.htpc.settings 2.1.21 ${kodiWithAddons}/share/kodi/addons/service.htpc.settings/
       enable_managed_addon script.htpc.osd-review 0.1.3 ${kodiWithAddons}/share/kodi/addons/script.htpc.osd-review/
     '') kodiSettingsServiceScriptText;
