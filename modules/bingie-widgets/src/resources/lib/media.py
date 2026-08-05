@@ -260,9 +260,9 @@ class Media(object):
         return sorted(all_items, key=itemgetter("lastplayed"), reverse=True)[:self.options["limit"]]
 
     def inprogressnextepisode(self):
-        ''' get in-progress/next episodes AS TV Shows and in-progress movies '''
+        ''' get actual resumable movies and one episode per TV show '''
         all_items = self.movies.inprogress()
-        all_items += self.episodes.nextepisode()
+        all_items += self.episodes.continuewatching()
         return sorted(all_items, key=itemgetter("lastplayed"), reverse=True)[:self.options["limit"]]
 
     def similar(self):

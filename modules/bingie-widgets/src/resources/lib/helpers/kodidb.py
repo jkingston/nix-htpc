@@ -84,6 +84,41 @@ class KodiDb(object):
         return self.get_json("VideoLibrary.GetEpisodeDetails", returntype="episodedetails",
                              fields=FIELDS_EPISODES, optparam=("episodeid", try_parse_int(db_id)))
 
+    def episode_details(self, db_ids):
+        ''' get multiple episode details with one JSON-RPC round trip '''
+        ordered_ids = []
+        seen_ids = set()
+        for db_id in db_ids:
+            db_id = try_parse_int(db_id)
+            if db_id not in seen_ids:
+                ordered_ids.append(db_id)
+                seen_ids.add(db_id)
+        if not ordered_ids:
+            return []
+
+        requests = []
+        for db_id in ordered_ids:
+            requests.append({
+                "jsonrpc": "2.0",
+                "method": "VideoLibrary.GetEpisodeDetails",
+                "params": {
+                    "episodeid": db_id,
+                    "properties": FIELDS_EPISODES,
+                },
+                "id": db_id,
+            })
+        response = xbmc.executeJSONRPC(try_encode(json.dumps(requests)))
+        decoded = json.loads(response)
+        if not isinstance(decoded, list):
+            decoded = [decoded]
+
+        details_by_id = {}
+        for item in decoded:
+            details = item.get("result", {}).get("episodedetails")
+            if details:
+                details_by_id[details.get("episodeid")] = details
+        return [details_by_id[db_id] for db_id in ordered_ids if db_id in details_by_id]
+
     def episodes(self, sort=None, filters=None, limits=None, filtertype=None, tvshowid=None, fields=FIELDS_EPISODES):
         ''' get episodes from kodi db '''
         if tvshowid:

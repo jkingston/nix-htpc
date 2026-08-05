@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
+from datetime import datetime, timedelta
 from operator import itemgetter
 import xbmc
 from widgetshelper import kodi_constants
+from resources.lib.episode_progress import CONTINUE, UP_NEXT, resolve_series_progress
 from resources.lib.utils import create_main_entry,log_msg
 
 class Episodes(object):
@@ -131,109 +133,72 @@ class Episodes(object):
         return all_items[:self.options["limit"]]
 
     def nextepisode(self):
-        ''' get next episode '''
-        filters = [kodi_constants.FILTER_UNWATCHED]
-        if self.options["next_inprogress_only"]:
-            filters = [kodi_constants.FILTER_INPROGRESS]
-        if self.options.get("tag"):
-            filters.append({"operator": "contains", "field": "tag", "value": self.options["tag"]})
-        if self.options.get("path"):
-            filters.append({"operator": "startswith", "field": "path", "value": self.options["path"]})
-        # First we get a list of all the inprogress/unwatched TV shows ordered by lastplayed
-        all_shows = self.widgetshelper.kodidb.tvshows(sort=kodi_constants.SORT_LASTPLAYED, filters=filters,
-                                                      limits=(0, self.options["limit"]))
-        return self.widgetshelper.process_method_on_list(self.get_next_episode_for_show,
-                                                         [d['tvshowid'] for d in all_shows])
+        ''' compatibility alias for the sequence-based Up Next listing '''
+        return self._progress_items(UP_NEXT)
+
+    def continuewatching(self):
+        ''' get the most recently played unfinished episode for each show '''
+        return self._progress_items(CONTINUE)
 
     def nextinprogress(self):
-        """Match Jellyfin's synced-library Next Episodes ordering."""
-        filters = [kodi_constants.FILTER_INPROGRESS]
+        """Get the immediate successor of each show's latest completed play."""
+        return self._progress_items(UP_NEXT)
+
+    def _progress_items(self, state):
+        filters = []
         if self.options.get("tag"):
             filters.append({
                 "operator": "contains",
                 "field": "tag",
                 "value": self.options["tag"],
             })
-        max_days = self.options.get("jellyfin_max_days", 0)
-        if max_days:
+        if self.options.get("path"):
             filters.append({
-                "operator": "inthelast",
-                "field": "lastplayed",
-                "value": "%s days" % max_days,
+                "operator": "startswith",
+                "field": "path",
+                "value": self.options["path"],
             })
-        shows = self.widgetshelper.kodidb.tvshows(
-            sort=kodi_constants.SORT_LASTPLAYED,
+
+        episode_state = self.widgetshelper.kodidb.episodes(
             filters=filters,
-            limits=(0, self.options["limit"]),
-            fields=[],
-            enrich=False,
+            fields=[
+                "tvshowid", "season", "episode", "playcount",
+                "lastplayed", "resume",
+            ],
         )
-        episodes = []
-        for show in shows:
-            episode_filters = [kodi_constants.FILTER_UNWATCHED]
-            if self.options.get("jellyfin_ignore_specials"):
-                episode_filters.append({
-                    "operator": "greaterthan",
-                    "field": "season",
-                    "value": "0",
-                })
-            candidates = self.widgetshelper.kodidb.episodes(
-                sort=kodi_constants.SORT_EPISODE,
-                filters=episode_filters,
-                limits=(0, 1),
-                tvshowid=show["tvshowid"],
-                fields=[],
-            )
-            if candidates:
-                episodes.append(
-                    self.widgetshelper.kodidb.episode(
-                        candidates[0]["episodeid"]
-                    )
-                )
-        return episodes
+        include_specials = (
+            self.options["episodes_enable_specials"]
+            and not self.options.get("jellyfin_ignore_specials")
+        )
+        decisions = resolve_series_progress(
+            episode_state,
+            include_specials=include_specials,
+        )
+        decisions = [decision for decision in decisions if decision.state == state]
+        if state == UP_NEXT:
+            decisions = self._within_next_episode_age(decisions)
+        decisions = decisions[:self.options["limit"]]
+        return self.widgetshelper.kodidb.episode_details(
+            [decision.target_episodeid for decision in decisions]
+        )
 
-    def get_next_episode_for_show(self, show_id):
-        '''
-        get last played watched episode for show,
-        return next unwatched episode after that,
-        unless nothing after that, then return first episode
-        '''
-        filters = []
-        fields = ["playcount", "season"]
-        next_episode = None
-        if not self.options["episodes_enable_specials"]:
-            filters.append({"field": "season", "operator": "greaterthan", "value": "0"})
-
-        # get the next unwatched episode after the last played episode
-        last_played_episode = self.widgetshelper.kodidb.episodes(sort=kodi_constants.SORT_LASTPLAYED,
-                    filters=filters + [kodi_constants.FILTER_WATCHED], limits=(0, 1), tvshowid=show_id, fields=fields)
-        if last_played_episode:
-            last_played_episode = last_played_episode[0]
-            filter_season = last_played_episode["season"] - 1
-            filter_season = [{"field": "season", "operator": "greaterthan", "value": "%s" % filter_season}]
-            all_episodes = self.widgetshelper.kodidb.episodes(sort=kodi_constants.SORT_EPISODE,
-                    filters=filters + filter_season, tvshowid=show_id, fields=fields)
-            # find index of last_played_episode in the list all_episodes
+    def _within_next_episode_age(self, decisions):
+        max_days = self.options.get("jellyfin_max_days", 0)
+        if not max_days:
+            return decisions
+        cutoff = datetime.now() - timedelta(days=max_days)
+        recent = []
+        for decision in decisions:
             try:
-                for index, episode in enumerate(all_episodes):
-                    if episode['episodeid'] == last_played_episode['episodeid']:
-                        i = 1
-                        while True:
-                            if int(all_episodes[index + i]['playcount']) < 1:
-                                next_episode = all_episodes[index + i]
-                                break
-                            i += 1
-            except IndexError:
-                # no unplayed episodes left
-                next_episode = None
-        # just get the first unwatched episode (e.g. when we simply do not yet have any fully played episodes)
-        if not next_episode:
-            next_episode = self.widgetshelper.kodidb.episodes(
-                sort=kodi_constants.SORT_EPISODE, filters=filters + [kodi_constants.FILTER_UNWATCHED],
-                limits=(0, 1), tvshowid=show_id, fields=fields)
-            next_episode = next_episode[0] if next_episode else None
-        # return full details for our episode
-        return self.widgetshelper.kodidb.episode(next_episode["episodeid"]) if next_episode else None
+                played_at = datetime.strptime(
+                    decision.lastplayed,
+                    "%Y-%m-%d %H:%M:%S",
+                )
+            except (TypeError, ValueError):
+                continue
+            if played_at >= cutoff:
+                recent.append(decision)
+        return recent
 
     @staticmethod
     def create_grouped_entry(tvshow_episodes):
