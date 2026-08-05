@@ -6,12 +6,12 @@
 let
   addonId = "script.bingie.widgets";
   manifestSha256 =
-    "3957ad5d2296cfd8f058bbd1746e051a287eee68eef9afbabd15ee77588edbcd";
+    "ca757c052b8e0b68b7934452617fa020ebca6967bd94d59d8102f9a29eacff13";
 in
 kodiPackages.buildKodiAddon rec {
   pname = "bingie-widgets";
   namespace = addonId;
-  version = "1.0.3";
+  version = "1.0.4";
 
   src = ./src;
 

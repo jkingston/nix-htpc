@@ -1,7 +1,7 @@
 # BINGIE Widgets provenance
 
 `src/` began as an import of `script.bingie.widgets` 1.0.1 and is now the
-HTPC-maintained 1.0.3 fork. The fork adds generation-aware widget caching,
+HTPC-maintained 1.0.4 fork. The fork adds generation-aware widget caching,
 session-stable spotlight selection, and correct media-specific invalidation.
 The base source came from the BINGIE Omega repository.
 

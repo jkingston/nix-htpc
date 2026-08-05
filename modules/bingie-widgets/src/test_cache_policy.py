@@ -45,6 +45,17 @@ class WidgetCachePolicyTest(unittest.TestCase):
         self.assertEqual(policy.checksum(options), "session-a")
         self.assertEqual(window.properties[SESSION_PROPERTY], "session-a")
 
+    def test_runtime_playlists_are_stable_for_one_kodi_session(self):
+        window = FakeWindow()
+        policy = WidgetCachePolicy(window, token_factory=lambda: "session-a")
+
+        self.assertEqual(
+            policy.checksum(
+                {"action": "serverplaylists", "mediatype": "media"}
+            ),
+            "session-a",
+        )
+
     def test_only_explicit_and_listing_requests_bypass_cache(self):
         policy = WidgetCachePolicy(FakeWindow())
 

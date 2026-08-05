@@ -1,15 +1,20 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from datetime import date
 from operator import itemgetter
 import random
-from widgetshelper import kodi_constants
-from resources.lib.utils import create_main_entry
-from resources.lib.movies import Movies
-from resources.lib.tvshows import Tvshows
-from resources.lib.episodes import Episodes
-from datetime import date
 from random import randint
+
+import xbmcgui
+
+from widgetshelper import kodi_constants
+from resources.lib.episodes import Episodes
+from resources.lib.movies import Movies
+from resources.lib.playlist_sources import discover_playlist_routes, merge_playlists
+from resources.lib.tvshows import Tvshows
+from resources.lib.utils import create_main_entry, log_exception
+
 
 class Media(object):
     ''' all media (mixed) widgets provided by the script '''
@@ -77,6 +82,16 @@ class Media(object):
                                "DefaultMovies.png")
             all_items.append(create_main_entry(details))
         return all_items
+
+    def serverplaylists(self):
+        """List playlists exposed by connected Jellyfin servers at runtime."""
+        groups = []
+        for route in discover_playlist_routes(xbmcgui.Window(10000)):
+            try:
+                groups.append(self.widgetshelper.kodidb.files(route))
+            except Exception as exc:
+                log_exception(__name__, exc)
+        return merge_playlists(groups, self.options["limit"])
 
     def playlist(self):
         ''' get items in both playlists, sorted by recommended score '''

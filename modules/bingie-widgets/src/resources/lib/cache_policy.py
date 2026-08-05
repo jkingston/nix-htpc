@@ -5,7 +5,7 @@ import uuid
 
 
 SESSION_PROPERTY = "Bingie.Widgets.Session"
-SESSION_SCOPED_ACTIONS = frozenset(("spotlight",))
+SESSION_SCOPED_ACTIONS = frozenset(("serverplaylists", "spotlight"))
 
 
 class WidgetCachePolicy(object):
