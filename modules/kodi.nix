@@ -1,14 +1,7 @@
 { lib, nixos-raspberrypi, pkgs, ... }:
 let
   rpiPackages = nixos-raspberrypi.packages.aarch64-linux;
-  kodiBase = rpiPackages.kodi-gbm;
-  kodiTcpServerRaceBackport =
-    ./kodi/patches/7c574313-tcpserver-lock-connections.patch;
-  kodiCore = kodiBase.overrideAttrs (oldAttrs: {
-    patches = (oldAttrs.patches or [ ]) ++ [
-      kodiTcpServerRaceBackport
-    ];
-  });
+  kodiCore = rpiPackages.kodi-gbm;
   kodiPackages = kodiCore.packages;
   kodiSettingsAddonVersion = "2.1.20";
   kodiOsdReviewAddonVersion = "0.1.3";
@@ -192,7 +185,6 @@ let
       passthru = (oldAttrs.passthru or { }) // {
         inherit
           kodiCore
-          kodiTcpServerRaceBackport
           kodiAddonRoots
           kodiRuntimeAddons
           managedAddonEnableSpecs
@@ -202,7 +194,6 @@ let
   kodiBingieDependenciesCheck =
     assert kodiCore == kodiCore.passthru.kodi;
     assert kodiCore.packages.kodi == kodiCore;
-    assert builtins.elem kodiTcpServerRaceBackport kodiCore.patches;
     assert simplejson.version == simplejsonIdentity.version;
     assert bingieHelper.manifestIdentity == bingieHelperIdentity;
     assert bingieHelper.requiredKodiAddons == [ simplejson ];
@@ -292,9 +283,6 @@ let
       grep -Fq \
         ${lib.escapeShellArg "${kodiCore.pythonPackages.pillow}/"} \
         ${kodiWithAddons}/bin/kodi
-      test "$(
-        sha256sum ${kodiTcpServerRaceBackport} | cut -d ' ' -f 1
-      )" = a9abbd265e7b4c024e4caa75b104c6d1cb08a94ad9843f1a086ee42205d5356b
       touch "$out"
     '';
 in

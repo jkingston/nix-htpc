@@ -47,8 +47,6 @@ let
   kodiOsdReviewAddon =
     htpcConfiguration.system.build.kodiOsdReviewAddon;
   kodiCore = kodiWithAddons.kodiCore;
-  kodiTcpServerRaceBackport =
-    kodiWithAddons.kodiTcpServerRaceBackport;
   expectedSimplejsonIdentity = {
     manifest_sha256 =
       "5f365075e7eb21c1b413dad78f2ef902c8d1c1d6168dd18c04483dbf9f31e1ca";
@@ -344,7 +342,6 @@ in
   kodi-bingie-dependencies =
     assert kodiCore == kodiCore.passthru.kodi;
     assert kodiCore.packages.kodi == kodiCore;
-    assert builtins.elem kodiTcpServerRaceBackport kodiCore.patches;
     assert kodiSimplejson.version == "3.19.1+matrix.1";
     assert kodiSimplejson.namespace == "script.module.simplejson";
     assert kodiSimplejson.pythonPath == "lib";
