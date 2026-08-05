@@ -13,6 +13,7 @@ from resources.lib.utils import log_msg, log_exception, ADDON_ID, create_main_en
 from resources.lib.cache_policy import WidgetCachePolicy
 
 ADDON_HANDLE = int(sys.argv[1])
+PROGRESS_CACHE_SCHEMA = "series-progress-v1"
 
 
 class Main(object):
@@ -134,6 +135,13 @@ class Main(object):
             cache_id = "%s|tvshowid=%s" % (
                 cache_id or "",
                 self.options.get("tvshowid", ""),
+            )
+        if self.options["action"] in (
+                "inprogressnextepisode", "nextepisode", "nextinprogress",
+                "seriesprogress"):
+            cache_id = "%s|schema=%s" % (
+                cache_id or "",
+                PROGRESS_CACHE_SCHEMA,
             )
         # set cache_str
         cache_str = "Bingie.Widgets.%s.%s.%s.%s.%s" % \
