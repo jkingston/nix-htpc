@@ -53,6 +53,13 @@ class WidgetSkeletonTest(unittest.TestCase):
         header = self.include("widget_header_multi")
         self.assertFalse(header.findall(".//multiimage"))
 
+    def test_home_widgets_bound_background_art_preloading(self):
+        values = [
+            node.text for node in self.root.findall(".//preloaditems")
+        ]
+        self.assertTrue(values)
+        self.assertNotIn("5", values)
+
 
 if __name__ == "__main__":
     unittest.main()

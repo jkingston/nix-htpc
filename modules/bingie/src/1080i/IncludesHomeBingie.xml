@@ -869,7 +869,7 @@
                 <height>341</height>
                 <focusedposition>0</focusedposition>
                 <itemgap>0</itemgap>
-                <preloaditems>5</preloaditems>
+                <preloaditems>2</preloaditems>
                 <include>ScrollTime</include>
                 <include>WidgetsBaseAnimation</include>
                 <include content="SetFixedVerticalNavigationProps">
