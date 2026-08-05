@@ -49,6 +49,7 @@ let
     screenshotPath = kodiScreenshotPath;
   };
   kodiContentRoutes = import ./kodi-content-routes { inherit pkgs; };
+  kodiPerformanceSnapshot = import ./kodi-performance-snapshot { inherit pkgs; };
   simplejson = kodiPackages.simplejson;
   bingieHelper = import ./bingie-helper {
     inherit kodiPackages lib pkgs;
@@ -317,11 +318,13 @@ in
 {
   environment.systemPackages = [
     kodiContentRoutes
+    kodiPerformanceSnapshot
     kodiScreenshotEvidence
     kodiSettingsWatchdog
   ];
   system.build.kodiScreenshotEvidence = kodiScreenshotEvidence;
   system.build.kodiContentRoutes = kodiContentRoutes;
+  system.build.kodiPerformanceSnapshot = kodiPerformanceSnapshot;
   system.build.kodiAddonReconciler = kodiAddonReconciler;
   system.build.kodiCore = kodiCore;
   system.build.kodiBingieDependenciesCheck =
