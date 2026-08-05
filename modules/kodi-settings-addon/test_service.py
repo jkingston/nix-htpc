@@ -2910,13 +2910,19 @@ class ChapterNavigationFilterTest(unittest.TestCase):
 
 
 class ServiceMonitorTest(unittest.TestCase):
-    def test_queued_work_wakes_long_idle_wait_immediately(self):
+    def test_wait_for_work_yields_through_kodi_monitor(self):
         monitor = ServiceMonitor()
-        monitor.abortRequested = lambda: False
-        monitor.post_input("right")
+        monitor.waitForAbort = mock.Mock(return_value=False)
 
         self.assertFalse(monitor.wait_for_work(60.0))
-        self.assertEqual(monitor.drain()[0][1], "right")
+        monitor.waitForAbort.assert_called_once_with(INTERACTIVE_TICK_SECONDS)
+
+    def test_wait_for_work_preserves_shorter_deadline(self):
+        monitor = ServiceMonitor()
+        monitor.waitForAbort = mock.Mock(return_value=True)
+
+        self.assertTrue(monitor.wait_for_work(0.01))
+        monitor.waitForAbort.assert_called_once_with(0.01)
 
     def test_only_htpc_seek_notifications_enter_input_queue(self):
         monitor = ServiceMonitor()

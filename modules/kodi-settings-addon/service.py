@@ -289,7 +289,6 @@ class ServiceMonitor(xbmc.Monitor):
         self.input_last_seen = {}
         self.latest_direction = None
         self.latest_direction_seen = None
-        self.work_ready = threading.Event()
 
     def post_input(self, action, payload=None):
         with self.event_lock:
@@ -318,13 +317,11 @@ class ServiceMonitor(xbmc.Monitor):
                     self.input_generation,
                 )
             )
-            self.work_ready.set()
 
     def post_player(self, kind, payload=None):
         if kind not in PLAYER_BOUNDARY_EVENTS:
             with self.event_lock:
                 self._append_player_locked(kind, payload)
-                self.work_ready.set()
             return
 
         with self.dispatch_lock:
@@ -344,7 +341,6 @@ class ServiceMonitor(xbmc.Monitor):
                     )
                 )
                 self._append_player_locked(kind, boundary_payload)
-                self.work_ready.set()
 
     def _input_watermark_locked(self):
         latest_direction = None
@@ -403,17 +399,16 @@ class ServiceMonitor(xbmc.Monitor):
         return events
 
     def wait_for_work(self, timeout):
-        """Wait until queued work, a cadence deadline, or Kodi shutdown.
+        """Yield to Kodi so it can dispatch callbacks, at most 50 ms apart.
 
-        ``xbmc.Monitor.waitForAbort`` is not a general notification wake-up.
-        A separate event keeps remote input responsive while allowing the
-        service to sleep for much longer on Home.
+        Kodi delivers ``Monitor.onNotification`` while an add-on waits through
+        its Monitor API. A normal Python event blocks that dispatch entirely.
+        Keep this cheap callback pump frequent; the service loop separately
+        gates the expensive playback snapshot cadence.
         """
-        if self.abortRequested():
-            return True
-        self.work_ready.wait(float(timeout))
-        self.work_ready.clear()
-        return self.abortRequested()
+        return self.waitForAbort(
+            min(float(timeout), INTERACTIVE_TICK_SECONDS)
+        )
 
 
 class SeekService(object):
