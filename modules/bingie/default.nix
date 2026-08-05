@@ -56,6 +56,7 @@ kodiPackages.buildKodiAddon {
       1080i/Custom_1103_StartUpMask.xml \
       1080i/DialogBusy.xml \
       1080i/DialogButtonMenu.xml \
+      1080i/DialogVideoInfo.xml \
       1080i/Home.xml \
       1080i/mainWindow.xml \
       1080i/script-skinshortcuts-bootstrap.xml \
