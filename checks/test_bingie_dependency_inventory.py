@@ -46,8 +46,8 @@ EXPECTED_OBSERVATIONS = {
         "6d5155d7c6ac758faf82ee27c93406be6026a56285fabe35ecdbf1d83a88d07f",
     ),
     "script.bingie.widgets": (
-        "1.0.4",
-        "ca757c052b8e0b68b7934452617fa020ebca6967bd94d59d8102f9a29eacff13",
+        "1.0.5",
+        "a55099710a32fd99d606ef860a727ac88502860e7db45ea50c6fc8209ac70b9a",
     ),
     "script.skinshortcuts": (
         "2.0.3",

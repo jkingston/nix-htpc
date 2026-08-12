@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
+import time
 from datetime import datetime, timedelta
 from operator import itemgetter
 import xbmc
@@ -10,7 +11,10 @@ from resources.lib.episode_progress import (
     CONTINUE,
     UP_NEXT,
     resolve_series_primary,
-    resolve_series_progress,
+)
+from resources.lib.episode_progress_cache import (
+    EPISODE_STATE_FIELDS,
+    EpisodeProgressCache,
 )
 from resources.lib.utils import create_main_entry,log_msg
 
@@ -154,51 +158,47 @@ class Episodes(object):
         return self._progress_items(UP_NEXT)
 
     def _progress_items(self, state):
-        filters = []
-        if self.options.get("tag"):
-            filters.append({
-                "operator": "contains",
-                "field": "tag",
-                "value": self.options["tag"],
-            })
-        if self.options.get("path"):
-            filters.append({
-                "operator": "startswith",
-                "field": "path",
-                "value": self.options["path"],
-            })
-
-        episode_state = self.widgetshelper.kodidb.episodes(
-            filters=filters,
-            tvshowid=self.options.get("tvshowid"),
-            fields=[
-                "tvshowid", "season", "episode", "playcount",
-                "lastplayed", "resume",
-            ],
-        )
+        resolve_started = time.monotonic()
         include_specials = (
             self.options["episodes_enable_specials"]
             and not self.options.get("jellyfin_ignore_specials")
         )
-        decisions = resolve_series_progress(
-            episode_state,
-            include_specials=include_specials,
+        progress_cache = EpisodeProgressCache(
+            self.widgetshelper.cache,
+            self.widgetshelper.kodidb,
+            self.options,
+            include_specials,
         )
         if state is None:
-            primary = resolve_series_primary(
-                episode_state,
-                include_specials=include_specials,
-            )
+            snapshot = progress_cache.cached()
+            if snapshot is None:
+                primary = self._resolve_series_primary(include_specials)
+            else:
+                primary = snapshot.primary(self.options.get("tvshowid"))
             decisions = [primary] if primary is not None else []
         else:
+            decisions = progress_cache.get_or_build().progress
             decisions = [
                 decision for decision in decisions if decision.state == state
             ]
         if state == UP_NEXT:
             decisions = self._within_next_episode_age(decisions)
         decisions = decisions[:self.options["limit"]]
+        resolved_at = time.monotonic()
         items = self.widgetshelper.kodidb.episode_details(
             [decision.target_episodeid for decision in decisions]
+        )
+        hydrated_at = time.monotonic()
+        log_msg(
+            "Episode progress state=%s snapshot_hit=%s targets=%d "
+            "resolve_ms=%.1f details_ms=%.1f" % (
+                state or "primary",
+                progress_cache.last_cache_hit,
+                len(decisions),
+                (resolved_at - resolve_started) * 1000,
+                (hydrated_at - resolved_at) * 1000,
+            ),
+            xbmc.LOGINFO,
         )
         decisions_by_episode = {
             decision.target_episodeid: decision for decision in decisions
@@ -211,6 +211,17 @@ class Episodes(object):
             properties["BingieEpisodeIndex"] = str(decision.target_index)
             properties["BingieSeriesProgress"] = decision.state
         return items
+
+    def _resolve_series_primary(self, include_specials):
+        """Keep a cold show dialog scoped to that show instead of all TV."""
+        episode_state = self.widgetshelper.kodidb.episodes(
+            tvshowid=self.options.get("tvshowid"),
+            fields=EPISODE_STATE_FIELDS,
+        )
+        return resolve_series_primary(
+            episode_state,
+            include_specials=include_specials,
+        )
 
     def _within_next_episode_age(self, decisions):
         max_days = self.options.get("jellyfin_max_days", 0)

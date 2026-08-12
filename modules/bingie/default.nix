@@ -2,7 +2,7 @@
 
 let
   upstream = import ./upstream-assets.nix { inherit pkgs; };
-  version = "2.0.2.13";
+  version = "2.0.2.14";
 
   # Keep reviewable skin source in this repository. Only the large immutable
   # payloads listed in upstream-assets.nix come from the hash-pinned archive.

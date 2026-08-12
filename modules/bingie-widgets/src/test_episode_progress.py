@@ -4,6 +4,7 @@ from resources.lib.episode_progress import (
     CONTINUE,
     UP_NEXT,
     resolve_series_primary,
+    resolve_series_primaries,
     resolve_series_progress,
 )
 
@@ -132,6 +133,20 @@ class EpisodeProgressTests(unittest.TestCase):
         ])
 
         self.assertEqual(decision.target_episodeid, 1)
+
+    def test_primaries_include_progressed_and_unseen_shows(self):
+        decisions = resolve_series_primaries([
+            episode(1, 1, show_id=1, played=1,
+                    lastplayed="2026-01-01 10:00:00"),
+            episode(2, 2, show_id=1),
+            episode(3, 1, show_id=2),
+        ])
+
+        targets = {
+            decision.tvshowid: decision.target_episodeid
+            for decision in decisions
+        }
+        self.assertEqual(targets, {1: 2, 2: 3})
 
 
 if __name__ == "__main__":

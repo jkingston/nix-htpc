@@ -37,9 +37,15 @@ class KodiMonitor(xbmc.Monitor):
 
             if method == "Player.OnStop":
                 self.last_mediatype = mediatype
-                if mediatype in ["movie", "episode"]:
-                    if self.addon.getSetting("aggresive_refresh") == "true":
-                        self.refresh_video_widgets(mediatype)
+                if mediatype == "episode":
+                    # Episode progress drives Continue, Up Next and show play
+                    # targets, so correctness cannot depend on an optional
+                    # aggressive-refresh setting.
+                    self.refresh_video_widgets(mediatype)
+                elif (
+                        mediatype == "movie"
+                        and self.addon.getSetting("aggresive_refresh") == "true"):
+                    self.refresh_video_widgets(mediatype)
 
         except Exception as exc:
             log_msg("Exception in KodiMonitor: %s" % exc, xbmc.LOGERROR)
@@ -47,7 +53,7 @@ class KodiMonitor(xbmc.Monitor):
     def refresh_video_widgets(self, media_type):
         ''' refresh video widgets '''
         log_msg("Video database changed - type: %s - refreshing widgets...." % media_type)
-        timestr = time.strftime("%Y%m%d%H%M%S", time.gmtime())
+        timestr = self._generation()
         self.win.setProperty("widgetreload", timestr)
         if media_type:
             property_type = {
@@ -61,8 +67,13 @@ class KodiMonitor(xbmc.Monitor):
 
     def onSettingsChanged(self):
         ''' called by Kodi when the addon settings are changed '''
-        timestr = time.strftime("%Y%m%d%H%M%S", time.gmtime())
+        timestr = self._generation()
         self.win.setProperty("widgetreload", timestr)
         self.win.setProperty("widgetreload2", timestr)
         for media_type in ["episodes", "tvshows", "movies"]:
             self.win.setProperty("widgetreload-%s" % media_type, timestr)
+
+    @staticmethod
+    def _generation():
+        """Return a token that remains unique for adjacent Kodi events."""
+        return str(int(time.time() * 1000000))

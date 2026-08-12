@@ -5,6 +5,7 @@ from operator import itemgetter
 import random
 import xbmc
 from widgetshelper import kodi_constants
+from resources.lib.library_row import build_library_row
 from resources.lib.utils import create_main_entry, KODI_VERSION
 
 class Movies(object):
@@ -44,6 +45,14 @@ class Movies(object):
                 (xbmc.getLocalizedString(20459), "tagslisting&mediatype=movies", icon)
             ]
         return self.widgetshelper.process_method_on_list(create_main_entry, all_items)
+
+    def libraryrow(self):
+        ''' alphabetical movie preview ending in a full-library link '''
+        return build_library_row(
+            self.widgetshelper.kodidb,
+            "movies",
+            self.options["limit"],
+        )
 
     def tagslisting(self):
         ''' get tags listing '''

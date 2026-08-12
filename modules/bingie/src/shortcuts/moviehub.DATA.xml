@@ -25,11 +25,11 @@
         <property name="widgetstyle">poster</property>
     </shortcut>
     <shortcut>
-        <label>All Movies</label>
+        <label>Movies</label>
         <label2 />
         <icon />
         <thumb />
-        <action>ActivateWindow(Videos,library://video/movies/titles.xml,return)</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=libraryrow&amp;mediatype=movies&amp;limit=15,return)</action>
         <property name="widgetstyle">poster</property>
     </shortcut>
 </shortcuts>

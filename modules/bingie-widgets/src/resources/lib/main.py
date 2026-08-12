@@ -13,7 +13,7 @@ from resources.lib.utils import log_msg, log_exception, ADDON_ID, create_main_en
 from resources.lib.cache_policy import WidgetCachePolicy
 
 ADDON_HANDLE = int(sys.argv[1])
-PROGRESS_CACHE_SCHEMA = "series-progress-v1"
+PROGRESS_CACHE_SCHEMA = "series-progress-v2"
 
 
 class Main(object):
@@ -137,8 +137,8 @@ class Main(object):
                 self.options.get("tvshowid", ""),
             )
         if self.options["action"] in (
-                "inprogressnextepisode", "nextepisode", "nextinprogress",
-                "seriesprogress"):
+                "continuewatching", "inprogressnextepisode", "nextepisode",
+                "nextinprogress", "seriesprogress"):
             cache_id = "%s|schema=%s" % (
                 cache_id or "",
                 PROGRESS_CACHE_SCHEMA,
@@ -147,6 +147,11 @@ class Main(object):
         cache_str = "Bingie.Widgets.%s.%s.%s.%s.%s" % \
             (media_type, action, self.options["limit"], self.options.get("path"), cache_id)
         cache_checksum = self.cache_policy.checksum(self.options)
+        # Progress consumers can have different outer widget media types, so
+        # give their shared snapshot one episode-specific generation.
+        self.options["_progress_checksum"] = (
+            self.win.getProperty("widgetreload-episodes") or cache_checksum
+        )
         if self.cache_policy.should_read(self.options):
             cache = self.widgetshelper.cache.get(cache_str, checksum=cache_checksum)
             if cache:

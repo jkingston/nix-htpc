@@ -1,8 +1,9 @@
 # BINGIE Widgets provenance
 
 `src/` began as an import of `script.bingie.widgets` 1.0.1 and is now the
-HTPC-maintained 1.0.4 fork. The fork adds generation-aware widget caching,
-session-stable spotlight selection, and correct media-specific invalidation.
+HTPC-maintained 1.0.5 fork. The fork adds generation-aware widget caching,
+session-stable spotlight selection, correct media-specific invalidation, and
+bounded library previews that link to Kodi's complete library views.
 The base source came from the BINGIE Omega repository.
 
 - Upstream repository: `https://github.com/matke-84/repository.bingie`

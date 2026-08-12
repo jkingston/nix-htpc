@@ -5,6 +5,7 @@ from operator import itemgetter
 import random
 import xbmc
 from widgetshelper import kodi_constants
+from resources.lib.library_row import build_library_row
 from resources.lib.utils import create_main_entry, KODI_VERSION, log_msg
 
 class Tvshows(object):
@@ -51,6 +52,15 @@ class Tvshows(object):
                 (label_prefix + self.addon.getLocalizedString(32006), "random&mediatype=episodes&tag=%s" %
                  tag, icon)]
         return self.widgetshelper.process_method_on_list(create_main_entry, all_items)
+
+    def libraryrow(self):
+        ''' alphabetical TV-show preview ending in a full-library link '''
+        return build_library_row(
+            self.widgetshelper.kodidb,
+            "tvshows",
+            self.options["limit"],
+            self.process_tvshow,
+        )
 
     def tagslisting(self):
         ''' get tags listing '''

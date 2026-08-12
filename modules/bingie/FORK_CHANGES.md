@@ -81,3 +81,10 @@ reused.
   asset.
 - Extend the headless OSD review fixtures to cover exact 0% and 100% seek
   positions.
+
+## Version 2.0.2.14
+
+- Replace unbounded Movies and TV Shows hub rows with fast alphabetical
+  previews ending in a BINGIE-styled View All tile.
+- Open View All in Kodi's existing complete library view, preserving the
+  spotlight and poster-wall experience.

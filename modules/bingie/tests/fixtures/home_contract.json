@@ -3,19 +3,19 @@
   "sidebar": [
     [
       "$LOCALIZE[137]",
-      "ActivateWindow(1109,return)"
+      "ReplaceWindow(1109)"
     ],
     [
       "$LOCALIZE[10000]",
-      "ActivateWindow(home,return)"
+      "ReplaceWindow(home)"
     ],
     [
       "TV Shows",
-      "ActivateWindow(1110,return)"
+      "ReplaceWindow(1110)"
     ],
     [
       "$LOCALIZE[342]",
-      "ActivateWindow(1111,return)"
+      "ReplaceWindow(1111)"
     ],
     [
       "$LOCALIZE[10004]",
@@ -49,7 +49,7 @@
     ],
     [
       "Recently Added TV Shows",
-      "library://video/tvshows/recentlyaddedepisodes.xml",
+      "special://skin/extras/widgetplaylists/recentlyaddedtvshows.xsp",
       "poster"
     ],
     [
@@ -62,11 +62,11 @@
     "Continue Watching",
     "Recently Added Movies",
     "Collections",
-    "All Movies"
+    "Movies"
   ],
   "tv_hub": [
     "Next Episodes",
     "Recently Added TV Shows",
-    "All TV Shows"
+    "TV Shows"
   ]
 }

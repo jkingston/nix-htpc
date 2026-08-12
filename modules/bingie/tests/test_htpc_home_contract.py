@@ -49,6 +49,16 @@ class PortableHomeContractTest(unittest.TestCase):
         self.assertEqual(actual, self.contract["sidebar"])
         self.assertNotIn("Anime", [item[0] for item in actual])
 
+    def test_sidebar_peer_destinations_replace_instead_of_stacking(self):
+        actions = {
+            text(item, "label"): text(item, "action")
+            for item in shortcuts("mainmenu.DATA.xml")
+        }
+        for label in ("$LOCALIZE[137]", "$LOCALIZE[10000]", "TV Shows", "$LOCALIZE[342]"):
+            self.assertRegex(actions[label], r"^ReplaceWindow\([^,]+\)$")
+        self.assertEqual(actions["$LOCALIZE[10004]"], "ActivateWindow(Settings)")
+        self.assertEqual(actions["Power"], "ActivateWindow(shutdownmenu)")
+
     def test_home_rows_and_presentation_are_declared_together(self):
         items = shortcuts("10000-1.DATA.xml")
         properties = json.loads(
@@ -84,6 +94,31 @@ class PortableHomeContractTest(unittest.TestCase):
         )
         self.assertIn("HTPC_Movie_Genres_Row", home_xml)
         self.assertIn("HTPC_TV_Genres_Row", home_xml)
+
+    def test_recent_tv_routes_return_shows_not_episodes(self):
+        for shortcut_file in ("10000-1.DATA.xml", "tvshowhub.DATA.xml"):
+            recent = next(
+                item for item in shortcuts(shortcut_file)
+                if text(item, "label") == "Recently Added TV Shows"
+            )
+            action = text(recent, "action")
+            self.assertIn("recentlyaddedtvshows.xsp", action)
+            self.assertNotIn("episodes", action.casefold())
+
+    def test_library_previews_end_with_a_full_library_link(self):
+        for shortcut_file, label, media_type in (
+            ("moviehub.DATA.xml", "Movies", "movies"),
+            ("tvshowhub.DATA.xml", "TV Shows", "tvshows"),
+        ):
+            preview = next(
+                item for item in shortcuts(shortcut_file)
+                if text(item, "label") == label
+            )
+            action = text(preview, "action")
+            self.assertIn("action=libraryrow", action)
+            self.assertIn("mediatype=%s" % media_type, action)
+            self.assertIn("limit=15", action)
+            self.assertEqual(text(preview, "property[@name='widgetLimit']"), "")
 
     def test_navigation_contains_no_instance_specific_identifiers(self):
         managed = [

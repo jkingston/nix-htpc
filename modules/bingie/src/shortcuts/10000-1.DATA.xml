@@ -34,7 +34,7 @@
         <label2 />
         <icon />
         <thumb />
-        <action>ActivateWindow(Videos,library://video/tvshows/recentlyaddedepisodes.xml,return)</action>
+        <action>ActivateWindow(Videos,special://skin/extras/widgetplaylists/recentlyaddedtvshows.xsp,return)</action>
     </shortcut>
     <shortcut>
         <label>Collections</label>

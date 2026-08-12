@@ -61,7 +61,7 @@
 			</control>
 			<include content="Busy_Spinner">
 				<param name="centerleft" value="50%"/>
-				<param name="centertop" value="50%"/>
+				<param name="centertop" value="47%"/>
 				<param name="size" value="100"/>
 			</include>
 		</control>

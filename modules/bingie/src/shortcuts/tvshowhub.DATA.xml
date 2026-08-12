@@ -13,15 +13,15 @@
         <label2 />
         <icon />
         <thumb />
-        <action>ActivateWindow(Videos,library://video/tvshows/recentlyaddedepisodes.xml,return)</action>
+        <action>ActivateWindow(Videos,special://skin/extras/widgetplaylists/recentlyaddedtvshows.xsp,return)</action>
         <property name="widgetstyle">poster</property>
     </shortcut>
     <shortcut>
-        <label>All TV Shows</label>
+        <label>TV Shows</label>
         <label2 />
         <icon />
         <thumb />
-        <action>ActivateWindow(Videos,library://video/tvshows/titles.xml,return)</action>
+        <action>ActivateWindow(Videos,plugin://script.bingie.widgets/?action=libraryrow&amp;mediatype=tvshows&amp;limit=15,return)</action>
         <property name="widgetstyle">poster</property>
     </shortcut>
 </shortcuts>

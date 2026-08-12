@@ -6,14 +6,14 @@
         <label2 />
         <icon>shortcuts/search.png</icon>
         <thumb />
-        <action>ActivateWindow(1109,return)</action>
+        <action>ReplaceWindow(1109)</action>
     </shortcut>
     <shortcut>
         <label>$LOCALIZE[10000]</label>
         <label2 />
         <icon>shortcuts/home.png</icon>
         <thumb />
-        <action>ActivateWindow(home,return)</action>
+        <action>ReplaceWindow(home)</action>
     </shortcut>
     <shortcut>
         <label>TV Shows</label>
@@ -21,7 +21,7 @@
         <defaultID>shows</defaultID>
         <icon>shortcuts/tv.png</icon>
         <thumb />
-        <action>ActivateWindow(1110,return)</action>
+        <action>ReplaceWindow(1110)</action>
     </shortcut>
     <shortcut>
         <label>$LOCALIZE[342]</label>
@@ -29,7 +29,7 @@
         <defaultID>movies</defaultID>
         <icon>shortcuts/clapperboard.png</icon>
         <thumb />
-        <action>ActivateWindow(1111,return)</action>
+        <action>ReplaceWindow(1111)</action>
     </shortcut>
     <shortcut>
         <label>$LOCALIZE[10004]</label>

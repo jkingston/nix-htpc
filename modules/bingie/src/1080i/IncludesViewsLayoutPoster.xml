@@ -87,14 +87,35 @@
             <texture background="true" diffuse="diffuse/poster3.png" fallback="DefaultVideo.png">$VAR[PosterThumbList]</texture>
             <aspectratio scalediffuse="true" aligny="center" align="center">stretch</aspectratio>
             <bordersize>8</bordersize>
-            <visible>[!String.IsEmpty(ListItem.Art(poster)) | !String.IsEmpty(ListItem.Art(tvshow.poster))] + !String.IsEqual(ListItem.Property(tmdb_type),person)</visible>
+            <visible>[!String.IsEmpty(ListItem.Art(poster)) | !String.IsEmpty(ListItem.Art(tvshow.poster))] + !String.IsEqual(ListItem.Property(tmdb_type),person) + !String.IsEqual(ListItem.Property(BingieViewAll),true)</visible>
         </control>
         <control type="image">
             <description>Fallback Poster thumb keep aspect for all other</description>
             <texture background="true" diffuse="diffuse/poster3.png" fallback="DefaultVideo.png">$VAR[PosterThumbList]</texture>
             <aspectratio scalediffuse="false" aligny="center" align="center">scale</aspectratio>
             <bordersize>8</bordersize>
-            <visible>String.IsEmpty(ListItem.Art(poster)) + String.IsEmpty(ListItem.Art(tvshow.poster)) | String.IsEqual(ListItem.Property(tmdb_type),person)</visible>
+            <visible>[String.IsEmpty(ListItem.Art(poster)) + String.IsEmpty(ListItem.Art(tvshow.poster)) | String.IsEqual(ListItem.Property(tmdb_type),person)] + !String.IsEqual(ListItem.Property(BingieViewAll),true)</visible>
+        </control>
+        <control type="group">
+            <visible>String.IsEqual(ListItem.Property(BingieViewAll),true)</visible>
+            <control type="image">
+                <left>8</left>
+                <right>8</right>
+                <top>8</top>
+                <bottom>8</bottom>
+                <texture border="10" colordiffuse="ff181818">diffuse/panel2.png</texture>
+            </control>
+            <control type="label">
+                <left>20</left>
+                <right>20</right>
+                <top>8</top>
+                <bottom>8</bottom>
+                <align>center</align>
+                <aligny>center</aligny>
+                <font>Bold31</font>
+                <textcolor>white</textcolor>
+                <label>VIEW ALL</label>
+            </control>
         </control>
         <control type="progress">
             <description>Netflix-style home resume progress</description>

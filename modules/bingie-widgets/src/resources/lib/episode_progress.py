@@ -25,16 +25,8 @@ def resolve_series_progress(episodes, include_specials=False):
     anchor is resumable; a completed anchor advances to the immediate library
     successor even when that successor has previously been watched.
     """
-    episodes_by_show = defaultdict(list)
-    for episode in episodes:
-        tvshow_id = episode.get("tvshowid")
-        episode_id = episode.get("episodeid")
-        if tvshow_id is None or episode_id is None:
-            continue
-        episodes_by_show[tvshow_id].append(episode)
-
     decisions = []
-    for tvshow_id, show_episodes in episodes_by_show.items():
+    for tvshow_id, show_episodes in _group_by_show(episodes).items():
         library_order = sorted(show_episodes, key=_episode_order)
         ordered = library_order
         if not include_specials:
@@ -68,6 +60,34 @@ def resolve_series_primary(episodes, include_specials=False):
     if decisions:
         return decisions[0]
 
+    return _first_episode_decision(episodes, include_specials)
+
+
+def resolve_series_primaries(
+        episodes, include_specials=False, progress_decisions=None):
+    """Return the playable target for every series in a library snapshot."""
+    if progress_decisions is None:
+        progress_decisions = resolve_series_progress(
+            episodes, include_specials
+        )
+    progress_by_show = {
+        decision.tvshowid: decision for decision in progress_decisions
+    }
+    primaries = []
+    for tvshow_id, show_episodes in _group_by_show(episodes).items():
+        primary = progress_by_show.get(tvshow_id)
+        if primary is None:
+            primary = _first_episode_decision(
+                show_episodes, include_specials
+            )
+        if primary is not None:
+            primaries.append(primary)
+    return primaries
+
+
+def _first_episode_decision(episodes, include_specials):
+    """Return a first-episode fallback without re-running progress resolution."""
+
     library_order = sorted(
         [episode for episode in episodes if episode.get("episodeid") is not None],
         key=_episode_order,
@@ -89,6 +109,17 @@ def resolve_series_primary(episodes, include_specials=False):
         target,
         library_order,
     )
+
+
+def _group_by_show(episodes):
+    episodes_by_show = defaultdict(list)
+    for episode in episodes:
+        tvshow_id = episode.get("tvshowid")
+        episode_id = episode.get("episodeid")
+        if tvshow_id is None or episode_id is None:
+            continue
+        episodes_by_show[tvshow_id].append(episode)
+    return episodes_by_show
 
 
 def _decision(state, tvshow_id, anchor, target, library_order):

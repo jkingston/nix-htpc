@@ -3792,7 +3792,7 @@
 
     <!-- next-up content for info dialog -->
     <variable name="InfoDialogNextUpContent">
-		<value condition="[String.IsEqual(ListItem.DBType,tvshow) | Container.Content(tvshows)] + !String.IsEmpty(ListItem.DBID)">plugin://script.bingie.widgets/?action=seriesprogress&amp;mediatype=episodes&amp;tvshowid=$INFO[ListItem.DBID]&amp;limit=1&amp;reload=$INFO[Window(Home).Property(widgetreload)]</value>
+		<value condition="[String.IsEqual(ListItem.DBType,tvshow) | Container.Content(tvshows)] + !String.IsEmpty(ListItem.DBID)">plugin://script.bingie.widgets/?action=seriesprogress&amp;mediatype=episodes&amp;tvshowid=$INFO[ListItem.DBID]&amp;limit=1&amp;reload=$INFO[Window(Home).Property(widgetreload-episodes)]</value>
     </variable>
 	
 	<!-- next-up content for info dialog -->
