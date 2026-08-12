@@ -8,10 +8,15 @@
 	<onload>ClearProperty(BingiePlaybackStarting,Home)</onload>
 	<onunload condition="![Player.HasVideo + VideoPlayer.Content(livetv)]">ClearProperty(pvrGuideOnFullscreenVideo,Home)</onunload>
 	<onunload condition="!VideoPlayer.Content(livetv) + Skin.HasSetting(ForceVideoPlaybackStop)">AlarmClock(StopPlayback,PlayerControl(Stop),00:00,silent)</onunload>
+	<onunload condition="String.IsEqual(Window(Home).Property(BingieEpisodeFocusContainer),525) + !String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocus525,SetFocus(525,$INFO[Window(Home).Property(BingieEpisodeFocus)],absolute),00:01,silent)</onunload>
+	<onunload condition="String.IsEqual(Window(Home).Property(BingieEpisodeFocusContainer),5027) + !String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocus5027,SetFocus(5027,$INFO[Window(Home).Property(BingieEpisodeFocus)],absolute),00:01,silent)</onunload>
 	<onunload>AlarmClock(LastPlayed,CancelAlarm(preview_delay,silent),00:01,silent)</onunload>
 	<onunload>ClearProperty(DialogMPAATopBar,home)</onunload>
 	<onunload>ClearProperty(HideDialogMPAATopBar,home)</onunload>
 	<onunload>CancelAlarm(OpenMPAATopBar,silent)</onunload>
+	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodePickerContainer))">AlarmClock(BingieEpisodePickerClear,ClearProperty(BingieEpisodePickerContainer,Home),00:02,silent)</onunload>
+	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodePickerPosition))">AlarmClock(BingieEpisodePickerPositionClear,ClearProperty(BingieEpisodePickerPosition,Home),00:02,silent)</onunload>
+	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocusContainer))">AlarmClock(BingieEpisodeFocusContainerClear,ClearProperty(BingieEpisodeFocusContainer,Home),00:02,silent)</onunload>
 
 	<controls>
 		<control type="image">

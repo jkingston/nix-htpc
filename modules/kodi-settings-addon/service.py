@@ -36,6 +36,8 @@ CORE_SETTINGS = (
     ("videoplayer.useprimedecoder", True),
     ("videoplayer.useprimerenderer", 0),
     ("videoplayer.adjustrefreshrate", 2),
+    # Kodi uses a multiselect list here: 2 is the Episodes option.
+    ("videoplayer.autoplaynextitem", [2]),
     ("videoscreen.whitelist", PLAYBACK_MODES),
     ("videoscreen.whitelistpulldown", False),
     ("videoscreen.whitelistdoublerefreshrate", False),

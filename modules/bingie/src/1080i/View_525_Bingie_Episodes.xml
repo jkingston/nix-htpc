@@ -64,6 +64,8 @@
     <include name="View525_Hidden_Button">
         <control type="button">
             <visible allowhiddenfocus="true">false</visible>
+            <onfocus condition="Container(525).Content(episodes)">SetProperty(BingieEpisodePickerContainer,525,Home)</onfocus>
+            <onfocus condition="Container(525).Content(episodes)">SetProperty(BingieEpisodePickerPosition,$INFO[Container(525).Position],Home)</onfocus>
             <onfocus condition="[Container(525).Content(episodes) | String.IsEqual(Container(525).ListItem.DBTYPE,episode)] + !String.IsEmpty(Container(525).ListItem.DBID) + !String.IsEqual(Container(525).ListItem.TVShowTitle,Container(5250).ListItem.TVShowTitle)">RunScript(script.bingie.helper,action=gettvshowid,dbid=$INFO[ListItem.DBID])</onfocus>
         </control>
     </include>

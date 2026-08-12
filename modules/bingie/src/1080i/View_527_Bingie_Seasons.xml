@@ -618,7 +618,12 @@
                     <include>View_527_Landscape_Defs</include>
                     <!-- details content -->
                     <include>View_527_Details_Defs_Focus</include>
-                </focusedlayout>						
+					<control type="button">
+						<visible allowhiddenfocus="true">false</visible>
+						<onfocus>SetProperty(BingieEpisodePickerContainer,5027,Home)</onfocus>
+						<onfocus>SetProperty(BingieEpisodePickerPosition,$INFO[Container(5027).Position],Home)</onfocus>
+					</control>
+				</focusedlayout>					
 				<content target="videos" sortby="episode" sortorder="ascending">$INFO[Container(527).ListItem.FolderPath]</content>
 				</control>
 				<!-- fixed border moving with screen -->

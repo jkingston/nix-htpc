@@ -6,6 +6,7 @@ from resources.lib.utils import log_msg
 import xbmc
 import time
 import json
+from resources.lib.episode_picker import next_picker_position
 
 
 class KodiMonitor(xbmc.Monitor):
@@ -38,6 +39,7 @@ class KodiMonitor(xbmc.Monitor):
             if method == "Player.OnStop":
                 self.last_mediatype = mediatype
                 if mediatype == "episode":
+                    self._advance_episode_picker()
                     # Episode progress drives Continue, Up Next and show play
                     # targets, so correctness cannot depend on an optional
                     # aggressive-refresh setting.
@@ -49,6 +51,22 @@ class KodiMonitor(xbmc.Monitor):
 
         except Exception as exc:
             log_msg("Exception in KodiMonitor: %s" % exc, xbmc.LOGERROR)
+
+    def _advance_episode_picker(self):
+        """Remember the next item when playback returns to a picker."""
+        container = self.win.getProperty("BingieEpisodePickerContainer")
+        if container not in ("525", "5027"):
+            return
+        position = next_picker_position(
+            self.win.getProperty("BingieEpisodePickerPosition")
+        )
+        if not position:
+            return
+        # Update the source position as well so a chain of autoplayed episodes
+        # advances once per stop rather than repeatedly targeting one item.
+        self.win.setProperty("BingieEpisodePickerPosition", position)
+        self.win.setProperty("BingieEpisodeFocus", position)
+        self.win.setProperty("BingieEpisodeFocusContainer", container)
 
     def refresh_video_widgets(self, media_type):
         ''' refresh video widgets '''

@@ -418,6 +418,7 @@ class ManagedCoreSettingsTest(unittest.TestCase):
         ("videoplayer.useprimedecoder", True),
         ("videoplayer.useprimerenderer", 0),
         ("videoplayer.adjustrefreshrate", 2),
+        ("videoplayer.autoplaynextitem", [2]),
         ("videoscreen.whitelist", PLAYBACK_MODES),
         ("videoscreen.whitelistpulldown", False),
         ("videoscreen.whitelistdoublerefreshrate", False),
