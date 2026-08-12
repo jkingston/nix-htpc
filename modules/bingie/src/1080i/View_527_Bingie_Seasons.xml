@@ -88,10 +88,22 @@
 	</variable>
 	
 	<!-- Total episode/s -->
-    <variable name="View527TotalEpisodes">
+	<variable name="View527TotalEpisodes">
         <value condition="Integer.IsGreater(ListItem.Property(TotalEpisodes),1)">$INFO[ListItem.Property(TotalEpisodes),, $LOCALIZE[20453]]</value>
         <value>$INFO[ListItem.Property(TotalEpisodes),, $LOCALIZE[20452]]</value>
     </variable>
+
+	<!-- Keep the episode container on the show-wide list. Season rows are anchors. -->
+	<variable name="View527ShowID">
+		<value condition="!String.IsEmpty(Container(527).ListItem.TVShowDBID)">$INFO[Container(527).ListItem.TVShowDBID]</value>
+		<value condition="!String.IsEmpty(Container(527).ListItem.TVShowID)">$INFO[Container(527).ListItem.TVShowID]</value>
+		<value/>
+	</variable>
+	<variable name="View527EpisodesContent">
+		<value condition="!String.IsEmpty(Container(527).ListItem.TVShowDBID)">$INFO[Container(527).ListItem.TVShowDBID,videodb://tvshows/titles/,/-2/]</value>
+		<value condition="!String.IsEmpty(Container(527).ListItem.TVShowID)">$INFO[Container(527).ListItem.TVShowID,videodb://tvshows/titles/,/-2/]</value>
+		<value/>
+	</variable>
 	
 	<!-- view527 landscape layout -->
     <include name="View_527_Landscape_Defs">
@@ -492,6 +504,12 @@
 				<onright>5027</onright>
 				<onup>527</onup>
 				<ondown>527</ondown>
+				<onfocus condition="!String.IsEmpty($VAR[View527ShowID])">SetProperty(BingieEpisodeAnchorShowID,$VAR[View527ShowID],Home)</onfocus>
+				<onclick condition="!String.IsEmpty($VAR[View527ShowID])">SetProperty(BingieEpisodeAnchorShowID,$VAR[View527ShowID],Home)</onclick>
+				<onclick>SetProperty(BingieEpisodeAnchorContainer,5027,Home)</onclick>
+				<onclick>SetProperty(BingieEpisodeAnchorSeason,$INFO[Container(527).ListItem.Season],Home)</onclick>
+				<!-- Do not open the season FolderPath; the episode list is already present. -->
+				<onclick>noop</onclick>
 				<include>ScrollTime</include>
 				<itemlayout height="70" width="565">
 					<control type="group">
@@ -624,7 +642,7 @@
 						<onfocus>SetProperty(BingieEpisodePickerPosition,$INFO[Container(5027).Position],Home)</onfocus>
 					</control>
 				</focusedlayout>					
-				<content target="videos" sortby="episode" sortorder="ascending">$INFO[Container(527).ListItem.FolderPath]</content>
+				<content target="videos" sortby="episode" sortorder="ascending">$VAR[View527EpisodesContent]</content>
 				</control>
 				<!-- fixed border moving with screen -->
                 <control type="image">

@@ -8,6 +8,7 @@
 	<onload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus)) + !String.IsEqual(Window(Home).Property(BingieEpisodeFocusContainer),5027)">AlarmClock(BingieEpisodeFocus,SetFocus(525,$INFO[Window(Home).Property(BingieEpisodeFocus)],absolute),00:01,silent)</onload>
 	<onload condition="String.IsEqual(Window(Home).Property(BingieEpisodeFocusContainer),5027) + !String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocus5027,SetFocus(5027,$INFO[Window(Home).Property(BingieEpisodeFocus)],absolute),00:01,silent)</onload>
 	<onload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">AlarmClock(BingieEpisodeFocusClear,ClearProperty(BingieEpisodeFocus,Home),00:02,silent)</onload>
+	<onload condition="!String.IsEmpty(Window(Home).Property(ListItem.TVShowID)) + Container.Content(episodes)">SetProperty(BingieEpisodeAnchorShowID,$INFO[Window(Home).Property(ListItem.TVShowID)],Home)</onload>
 	<onload>ClearProperty(ShowViewSubMenu,Home)</onload>
     <onunload>ClearProperty(ShowViewSubMenu,Home)</onunload>
     <!-- return to infodialog if previous window -->
@@ -25,6 +26,10 @@
 	<onunload condition="!String.IsEmpty(Window(Home).Property(NoFadeOut))">ClearProperty(NoFadeOut,home)</onunload>
 	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocus))">ClearProperty(BingieEpisodeFocus,Home)</onunload>
 	<onunload condition="!String.IsEmpty(Window(Home).Property(BingieEpisodeFocusContainer))">ClearProperty(BingieEpisodeFocusContainer,Home)</onunload>
+	<onunload>ClearProperty(BingieEpisodeAnchorShowID,Home)</onunload>
+	<onunload>ClearProperty(BingieEpisodeAnchorSeason,Home)</onunload>
+	<onunload>ClearProperty(BingieEpisodeAnchorContainer,Home)</onunload>
+	<onunload>ClearProperty(BingieEpisodeAnchorReady,Home)</onunload>
     
 	<controls>
 		<include>Defs_TMDbBingieHelper_Loader</include>

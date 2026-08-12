@@ -12,10 +12,12 @@ ADDON = xbmcaddon.Addon(ADDON_ID)
 MONITOR = KodiMonitor(win=WIN, addon=ADDON)
 log_msg('Backgroundservice started', xbmc.LOGINFO)
 
-# keep the kodi monitor alive which processes database updates to refresh widgets
-while not MONITOR.waitForAbort(60):
-    pass
+# Keep the Kodi monitor alive. Picker anchor requests are polled frequently so
+# the initial index build runs in the service worker without blocking input.
+while not MONITOR.waitForAbort(0.25):
+    MONITOR.tick()
 
+MONITOR.stop()
 del MONITOR
 del WIN
 del ADDON

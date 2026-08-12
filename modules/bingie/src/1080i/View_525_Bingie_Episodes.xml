@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- BINGIE -->
 <includes>
-    <!-- seasons content for view525 -->
+    <!-- all-episodes content for view525 -->
+    <variable name="View525EpisodesContent">
+        <value condition="!String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">$INFO[Window(Home).Property(ListItem.TVShowID),videodb://tvshows/titles/,/-2/]</value>
+        <value/>
+    </variable>
+
+    <!-- season-only content for view525; do not inherit the flattened setting -->
     <variable name="View525SeasonsContent">
-        <value condition="[String.IsEqual(ListItem.DBType,episode) | Container.Content(episodes)] + !String.IsEmpty(ListItem.DBID) + !String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">$INFO[Window(Home).Property(ListItem.TVShowID),videodb://tvshows/titles/,/]</value>
+        <value condition="!String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">$INFO[Window(Home).Property(ListItem.TVShowID),videodb://tvshows/titles/,/]</value>
         <value/>
     </variable>
 
@@ -66,6 +72,8 @@
             <visible allowhiddenfocus="true">false</visible>
             <onfocus condition="Container(525).Content(episodes)">SetProperty(BingieEpisodePickerContainer,525,Home)</onfocus>
             <onfocus condition="Container(525).Content(episodes)">SetProperty(BingieEpisodePickerPosition,$INFO[Container(525).Position],Home)</onfocus>
+            <onfocus condition="Container(525).Content(episodes)">SetProperty(BingieEpisodeAnchorContainer,525,Home)</onfocus>
+            <onfocus condition="Container(525).Content(episodes) + !String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">SetProperty(BingieEpisodeAnchorShowID,$INFO[Window(Home).Property(ListItem.TVShowID)],Home)</onfocus>
             <onfocus condition="[Container(525).Content(episodes) | String.IsEqual(Container(525).ListItem.DBTYPE,episode)] + !String.IsEmpty(Container(525).ListItem.DBID) + !String.IsEqual(Container(525).ListItem.TVShowTitle,Container(5250).ListItem.TVShowTitle)">RunScript(script.bingie.helper,action=gettvshowid,dbid=$INFO[ListItem.DBID])</onfocus>
         </control>
     </include>
@@ -556,8 +564,10 @@
                         <ondown>noop</ondown>
 						<onback>525</onback>
                         <onback condition="!String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">ClearProperty(ListItem.TVShowID,Home)</onback>
-                        <onclick condition="!String.IsEmpty(Window(Home).Property(BaseWindow))">ReplaceWindow(Videos,$ESCINFO[Container(5250).ListItem.FolderPath],return)</onclick>
-                        <onclick condition="String.IsEmpty(Window(Home).Property(BaseWindow))">ReplaceWindow(Videos,$ESCINFO[Container(5250).ListItem.FolderPath])</onclick>
+                        <onclick condition="!String.IsEmpty(Window(Home).Property(ListItem.TVShowID))">SetProperty(BingieEpisodeAnchorShowID,$INFO[Window(Home).Property(ListItem.TVShowID)],Home)</onclick>
+                        <onclick>SetProperty(BingieEpisodeAnchorSeason,$INFO[Container(5250).ListItem.Season],Home)</onclick>
+                        <!-- Prevent Kodi's folder default action from opening the season path. -->
+                        <onclick>noop</onclick>
                         <include>ScrollTime</include>
                         <itemlayout height="70" width="565" condition="Control.HasFocus(5250)">
                             <!-- Season x label -->
@@ -657,7 +667,7 @@
                                 <label>[LOWERCASE]$VAR[View525TotalEpisodes][/LOWERCASE]</label>
                             </control>
                         </focusedlayout>
-                        <content sortby="label" sortorder="ascending" target="video">$VAR[View525SeasonsContent]</content>
+                        <content sortby="season" sortorder="ascending" target="video">$VAR[View525SeasonsContent]</content>
                     </control>				
                 </control>
 			</control>
@@ -712,6 +722,7 @@
                         <include>View525_Hidden_Button</include>
 						<include>LibraryAutoTrailerStopButton</include>
                     </focusedlayout>
+                    <content target="videos" sortby="episode" sortorder="ascending">$VAR[View525EpisodesContent]</content>
                 </control>
 
                 <!-- fixed border moving with screen -->

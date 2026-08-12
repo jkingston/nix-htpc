@@ -76,6 +76,8 @@ kodiPackages.buildKodiAddon {
       1080i/IncludesViewsLayoutPoster.xml \
       1080i/IncludesViewsLayoutSquare.xml \
       1080i/MyVideoNav.xml \
+      1080i/View_525_Bingie_Episodes.xml \
+      1080i/View_527_Bingie_Seasons.xml \
       1080i/DialogSeekBar.xml \
       1080i/VideoFullScreen.xml \
       1080i/VideoOSD.xml \
