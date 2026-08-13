@@ -100,7 +100,7 @@ kodiPackages.buildKodiAddon {
     test "$(grep -c 'SetProperty(BingiePlaybackStarting' \
       1080i/IncludesDialogVideoInfo.xml)" -eq 10
     test "$(grep -c 'AlarmClock(PlayMovie.*00:00,silent)' \
-      1080i/IncludesDialogVideoInfo.xml)" -eq 24
+      1080i/IncludesDialogVideoInfo.xml)" -eq 22
     ! grep -q 'AlarmClock(PlayMovie.*00:01,silent)' \
       1080i/IncludesDialogVideoInfo.xml
     test "$(grep -c 'HTPC_Movie_Genres_Row' \
