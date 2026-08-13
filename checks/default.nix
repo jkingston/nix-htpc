@@ -21,8 +21,12 @@ let
     htpcConfiguration.home-manager.users.htpc.home.file.${
       integratedCecPeripheralData.homeRelativePath
     };
-  cecWakeUnitPresent =
-    htpcConfiguration.systemd.units ? "cec-tv-wake.service";
+  cecWakeUnit =
+    htpcConfiguration.systemd.units."cec-tv-wake.service";
+  cecWakeService =
+    htpcConfiguration.systemd.services.cec-tv-wake;
+  cecWakeScript =
+    builtins.unsafeDiscardStringContext cecWakeService.script;
   settingsWatchdog =
     htpcConfiguration.systemd.services.kodi-settings-watchdog;
   kodiSettingsService =
@@ -179,7 +183,23 @@ in
     assert integratedCecHomeFile.onChange == "";
     assert integratedCecHomeFile.recursive == false;
     assert integratedCecHomeFile.text == null;
-    assert !cecWakeUnitPresent;
+    assert cecWakeUnit.name == "cec-tv-wake.service";
+    assert cecWakeService.wantedBy == [ "multi-user.target" ];
+    assert cecWakeService.requires == [ "greetd.service" ];
+    assert cecWakeService.after == [ "greetd.service" ];
+    assert cecWakeService.partOf == [ "greetd.service" ];
+    assert cecWakeService.serviceConfig.Restart == "always";
+    assert cecWakeService.serviceConfig.RestartSec == 5;
+    # Activation is edge-triggered: a service start while the TV is already on
+    # must remain passive until a standby state has first armed it.
+    assert lib.hasInfix "armed=false" cecWakeScript;
+    assert lib.hasInfix ''if [[ "$status" == standby ]]'' cecWakeScript;
+    assert lib.hasInfix
+      ''elif [[ "$status" == on && "$armed" == true ]]''
+      cecWakeScript;
+    assert lib.hasInfix "--give-device-power-status" cecWakeScript;
+    assert lib.hasInfix "/bin/kodi-cec-activate" cecWakeScript;
+    assert !(lib.hasInfix "CECActivateSource" cecWakeScript);
     pkgs.runCommand "kodi-cec-policy-check" { } ''
     expectedHomeRelativePath=".kodi/userdata/peripheral_data/cec_CEC_Adapter.xml"
     expectedByteCount=663

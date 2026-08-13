@@ -59,6 +59,23 @@ class PortableHomeContractTest(unittest.TestCase):
         self.assertEqual(actions["$LOCALIZE[10004]"], "ActivateWindow(Settings)")
         self.assertEqual(actions["Power"], "ActivateWindow(shutdownmenu)")
 
+    def test_sidebar_indicator_recognizes_replace_window_destinations(self):
+        expressions = {
+            node.get("name"): node.text or ""
+            for node in ET.parse(SKIN_ROOT / "1080i" / "Includes.xml")
+            .getroot()
+            .findall("expression")
+        }
+        active_item = expressions["IsMenuEntryActive"]
+
+        for window in ("home", "1110", "1111"):
+            with self.subTest(window=window):
+                self.assertIn(
+                    "String.IsEqual(ListItem.Property(path), ReplaceWindow(%s))"
+                    % window,
+                    active_item,
+                )
+
     def test_home_rows_and_presentation_are_declared_together(self):
         items = shortcuts("10000-1.DATA.xml")
         properties = json.loads(
@@ -119,6 +136,24 @@ class PortableHomeContractTest(unittest.TestCase):
             self.assertIn("mediatype=%s" % media_type, action)
             self.assertIn("limit=15", action)
             self.assertEqual(text(preview, "property[@name='widgetLimit']"), "")
+
+    def test_view_all_opens_as_a_returnable_screen_from_its_hub(self):
+        root = ET.parse(SKIN_ROOT / "1080i" / "IncludesHomeWidgets.xml").getroot()
+        base = next(
+            include
+            for include in root.findall("include")
+            if include.get("name") == "WidgetBaseBingieIncludes"
+        )
+        action = next(
+            node
+            for node in base.findall("onclick")
+            if node.get("condition")
+            == "String.IsEqual(Container($PARAM[widgetid]).ListItem.Property(BingieViewAll),true)"
+        )
+        self.assertEqual(
+            action.text,
+            "ActivateWindow(Videos,$ESCINFO[Container($PARAM[widgetid]).ListItem.FileNameAndPath],return)",
+        )
 
     def test_navigation_contains_no_instance_specific_identifiers(self):
         managed = [

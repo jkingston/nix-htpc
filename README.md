@@ -51,7 +51,7 @@ The managed adapter policy is defined once in
 `htpc.cec.capturePolicy.peripheralData`. Home Manager links its immutable XML at
 `.kodi/userdata/peripheral_data/cec_CEC_Adapter.xml`. A golden-byte check and an
 integrated configuration check lock the path, XML, Home Manager semantics, and
-unchanged wake-service unit. The policy ensures that:
+standby-armed wake-service state machine. The policy ensures that:
 
 - startup, restart, and screensaver dismissal neither wake devices nor claim
   the active source;
@@ -65,8 +65,9 @@ unchanged wake-service unit. The policy ensures that:
 policy. It arms only after observing the TV in standby or a transitional power
 state. If it later observes the TV on, it waits for Kodi's local EventServer,
 sends `CECActivateSource`, and disarms. If Kodi is unavailable, it remains
-armed and retries. Headless capture therefore requires passive CEC and journal
-evidence showing that no source activation occurred during the capture.
+armed and retries. Starting the service while the TV is already on does not
+activate the source. Headless capture therefore requires passive CEC and
+journal evidence showing that no source activation occurred during the capture.
 
 ## Jellyfin
 

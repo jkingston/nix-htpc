@@ -1,6 +1,8 @@
 /keys/
 /nixos.qcow2
 /result
+/result-*
+/.artifacts/
 /*.img.zst
 __pycache__/
 *.py[cod]

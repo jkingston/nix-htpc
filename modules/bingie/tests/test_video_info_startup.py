@@ -57,6 +57,22 @@ class VideoInfoStartupTest(unittest.TestCase):
             r"<onclick[^>]*>Dialog.Close\(movieinformation\)",
         )
 
+    def test_play_from_beginning_uses_resolved_media_path(self):
+        source = (
+            SKIN_ROOT / "1080i" / "IncludesDialogVideoInfo.xml"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("PlayMedia(videodb://movies/$INFO[ListItem.DBID])", source)
+        self.assertNotIn("PlayMedia(videodb://tvshows/$INFO[ListItem.DBID])", source)
+        self.assertEqual(
+            source.count("PlayMedia($ESCINFO[ListItem.FileNameAndPath],noresume)"),
+            4,
+        )
+        self.assertEqual(
+            source.count("PlayMedia($ESCINFO[ListItem.FolderPath],noresume)"),
+            4,
+        )
+
     def test_home_owns_a_visual_playback_transition_surface(self):
         home_root = ET.parse(SKIN_ROOT / "1080i" / "Home.xml").getroot()
         serialized = ET.tostring(home_root, encoding="unicode")

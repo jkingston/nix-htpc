@@ -498,12 +498,9 @@
                                 <onclick>SetProperty(BingiePlaybackStarting,1,Home)</onclick>
                                 <onclick>AlarmClock(BingiePlaybackTimeout,ClearProperty(BingiePlaybackStarting,Home),00:30,silent)</onclick>
                                 <onclick condition="!Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">Dialog.Close(movieinformation)</onclick>
-                                <!-- play episode -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://tvshows/$INFO[ListItem.DBID]),00:00,silent)</onclick>
-                                <!-- play movie -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://movies/$INFO[ListItem.DBID]),00:00,silent)</onclick>
-                                <!-- fallback to native play button -->
-                                <onclick condition="!Control.IsVisible(1234) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[ListItem.FileNameAndPath],noresume),00:00,silent)</onclick>
+                                <!-- play standalone item through its resolved Jellyfin/Kodi path -->
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + !String.IsEmpty(ListItem.FileNameAndPath) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FileNameAndPath],noresume),00:00,silent)</onclick>
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.FileNameAndPath) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FolderPath],noresume),00:00,silent)</onclick>
                                 <!-- only if FILE FOLDERS structured with seasons folders -->
                                 <onclick condition="Control.IsVisible(5050) + String.IsEqual(Container(5050).ListItem.Path) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[Container(5050).ListItem.Path],isdir,playoffset=$VAR[NextUpEpisodeMinusOne]),00:00,silent)</onclick>
 								<!-- seasons folders -->
@@ -512,12 +509,9 @@
 								<onclick condition="Control.IsVisible(1234) + String.IsEqual(ListItem.dbtype,tvshow) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[Container(1234).ListItemAbsolute(0).FolderPath],noresume),00:00,silent)</onclick>
 								<!-- close custom 1190 -->
 								<onclick condition="Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">RunScript(plugin.video.tmdb.bingie.helper,close_dialog=1190)</onclick>
-								<!-- play episode -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://tvshows/$INFO[ListItem.DBID]),00:04,silent)</onclick>
-                                <!-- play movie -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://movies/$INFO[ListItem.DBID]),00:04,silent)</onclick>
-                                <!-- fallback to native play button -->
-                                <onclick condition="!Control.IsVisible(1234) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[ListItem.FileNameAndPath],noresume),00:04,silent)</onclick>
+								<!-- play standalone item after closing the TMDb helper -->
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + !String.IsEmpty(ListItem.FileNameAndPath) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FileNameAndPath],noresume),00:04,silent)</onclick>
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.FileNameAndPath) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FolderPath],noresume),00:04,silent)</onclick>
                                 <!-- only if FILE FOLDERS structured with seasons folders -->
                                 <onclick condition="Control.IsVisible(5050) + String.IsEqual(Container(5050).ListItem.Path) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[Container(5050).ListItem.Path],isdir,playoffset=$VAR[NextUpEpisodeMinusOne]),00:04,silent)</onclick>
 								<!-- seasons folders -->
@@ -1784,12 +1778,9 @@
                                 <onclick>SetProperty(BingiePlaybackStarting,1,Home)</onclick>
                                 <onclick>AlarmClock(BingiePlaybackTimeout,ClearProperty(BingiePlaybackStarting,Home),00:30,silent)</onclick>
                                 <onclick condition="!Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">Dialog.Close(movieinformation)</onclick>
-                                <!-- play episode -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://tvshows/$INFO[ListItem.DBID]),00:00,silent)</onclick>
-                                <!-- play movie -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://movies/$INFO[ListItem.DBID]),00:00,silent)</onclick>
-                                <!-- fallback to native play button -->
-                                <onclick condition="!Control.IsVisible(1234) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.DBID) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[ListItem.FileNameAndPath],noresume),00:00,silent)</onclick>
+                                <!-- play standalone item through its resolved Jellyfin/Kodi path -->
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + !String.IsEmpty(ListItem.FileNameAndPath) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FileNameAndPath],noresume),00:00,silent)</onclick>
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.FileNameAndPath) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FolderPath],noresume),00:00,silent)</onclick>
                                 <!-- only if FILE FOLDERS structured with seasons folders -->
                                 <onclick condition="Control.IsVisible(5050) + String.IsEqual(Container(5050).ListItem.Path) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[Container(5050).ListItem.Path],isdir,playoffset=$VAR[NextUpEpisodeMinusOne]),00:00,silent)</onclick>
 								<!-- seasons folders -->
@@ -1798,12 +1789,9 @@
 								<onclick condition="Control.IsVisible(1234) + String.IsEqual(ListItem.dbtype,tvshow) + !Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[Container(1234).ListItemAbsolute(0).FolderPath],noresume),00:00,silent)</onclick>
 								<!-- close custom 1190 -->
 								<onclick condition="Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">RunScript(plugin.video.tmdb.bingie.helper,close_dialog=1190)</onclick>
-								<!-- play episode -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,episode) + !String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://tvshows/$INFO[ListItem.DBID]),00:04,silent)</onclick>
-                                <!-- play movie -->
-                                <onclick condition="!Control.IsVisible(5050) + String.IsEqual(ListItem.DBTYPE,movie) + !String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia(videodb://movies/$INFO[ListItem.DBID]),00:04,silent)</onclick>
-                                <!-- fallback to native play button -->
-                                <onclick condition="!Control.IsVisible(1234) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.DBID) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($INFO[ListItem.FileNameAndPath],noresume),00:04,silent)</onclick>
+								<!-- play standalone item after closing the TMDb helper -->
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + !String.IsEmpty(ListItem.FileNameAndPath) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FileNameAndPath],noresume),00:04,silent)</onclick>
+                                <onclick condition="!Control.IsVisible(5050) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + String.IsEmpty(ListItem.FileNameAndPath) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[ListItem.FolderPath],noresume),00:04,silent)</onclick>
                                 <!-- only if FILE FOLDERS structured with seasons folders -->
                                 <onclick condition="Control.IsVisible(5050) + String.IsEqual(Container(5050).ListItem.Path) + Window.IsActive(Custom_1190_TMDbBingieHelperCast.xml)">AlarmClock(PlayMovie,PlayMedia($ESCINFO[Container(5050).ListItem.Path],isdir,playoffset=$VAR[NextUpEpisodeMinusOne]),00:04,silent)</onclick>
 								<!-- seasons folders -->
